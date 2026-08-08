@@ -2,6 +2,9 @@ import type {
   AgentPingResult,
   AgentStreamEvent,
   ChatRealtyPullResult,
+  ConnectorDef,
+  ConnectorTestResult,
+  ConnectorView,
   PersistedState,
   SecretReport,
   SecretRequest
@@ -25,6 +28,12 @@ export interface Bridge {
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>
     pull(query: string): Promise<ChatRealtyPullResult | null>
+  }
+  connectors: {
+    list(): Promise<ConnectorView[]>
+    save(def: ConnectorDef): Promise<void>
+    delete(id: string): Promise<void>
+    test(id: string): Promise<ConnectorTestResult | null>
   }
   secrets: {
     request(request: SecretRequest): Promise<SecretReport | null>
@@ -81,6 +90,15 @@ function createBrowserMock(): Bridge {
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       })
     },
+    connectors: {
+      list: async () => [],
+      save: async () => {},
+      delete: async () => {},
+      test: async () => ({
+        ok: false,
+        error: 'Connections run in the Electron main process — unavailable in browser preview.'
+      })
+    },
     secrets: {
       request: async () => null,
       list: async () => secrets,
@@ -101,6 +119,7 @@ function createElectronBridge(): Bridge {
     agent: lyme.agent,
     media: lyme.media,
     chatRealty: lyme.chatRealty,
+    connectors: lyme.connectors,
     secrets: lyme.secrets
   }
 }

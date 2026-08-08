@@ -1,25 +1,48 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { ChatRealtyListing, ChatRealtyPullResult } from '@shared/types'
+import type { ChatRealtyListing, ChatRealtyPullResult, ConnectorDef } from '@shared/types'
 import { saveImageAsset } from './asset-store'
 import { readSecretValue } from './credential-vault'
 import { McpStdioClient, type McpContentBlock } from './mcp-client'
 
 export const CHATREALTY_CONNECTOR_ID = 'chatrealty'
 const HOSTED_BASE = 'https://jpsrealtor.com'
+const LOCAL_DIST =
+  'F:\\web-clients\\joseph-sardella\\jpsrealtor\\packages\\mcp-server\\dist\\index.js'
 
 /**
- * Local dev fallback for the ChatRealty MCP server binary. In a shipping build
- * this becomes `npx -y @chatrealty/mcp-server`; on this dev machine the built
- * copy in the sibling jpsrealtor project is used when present.
+ * The built-in ChatRealty connector template — the single source of truth for
+ * how the server is launched, shared by the pull path and the Connections panel.
+ * Local dev uses the built copy in the sibling jpsrealtor project when present;
+ * a shipping build falls back to `npx -y @chatrealty/mcp-server`.
  */
+export function chatRealtyConnectorDef(): ConnectorDef {
+  const launch = existsSync(LOCAL_DIST)
+    ? { command: 'node', args: [LOCAL_DIST] }
+    : { command: 'npx', args: ['-y', '@chatrealty/mcp-server'] }
+  return {
+    id: CHATREALTY_CONNECTOR_ID,
+    name: 'ChatRealty',
+    kind: 'stdio',
+    command: launch.command,
+    args: launch.args,
+    env: { CHATREALTY_API_BASE: HOSTED_BASE },
+    authType: 'bearer',
+    secretKey: 'CHATREALTY_API_TOKEN',
+    secretFieldLabel: 'ChatRealty API token (crt_live_…)',
+    builtin: true,
+    docUrl: 'https://jpsrealtor.com/agent/settings'
+  }
+}
+
 function serverSpec(token: string): { command: string; args: string[]; env: Record<string, string> } {
-  const localDist =
-    'F:\\web-clients\\joseph-sardella\\jpsrealtor\\packages\\mcp-server\\dist\\index.js'
-  const env = { CHATREALTY_API_TOKEN: token, CHATREALTY_API_BASE: HOSTED_BASE }
-  if (existsSync(localDist)) return { command: 'node', args: [localDist], env }
-  return { command: 'npx', args: ['-y', '@chatrealty/mcp-server'], env }
+  const def = chatRealtyConnectorDef()
+  return {
+    command: def.command!,
+    args: def.args ?? [],
+    env: { ...(def.env ?? {}), CHATREALTY_API_TOKEN: token }
+  }
 }
 
 /**

@@ -97,8 +97,10 @@ lyme-hype/
 │   │                     sessions-store.ts (JSON in userData), credential-vault.ts
 │   │                     (safeStorage/DPAPI), secure-credential.ts (native secret modal),
 │   │                     mcp-client.ts (stdio MCP client) + mcp-probe.ts (connection check),
-│   │                     chatrealty.ts (pull listing photos), asset-store.ts (lyme-asset://
-│   │                     protocol for saved media), selftest.ts (LYME_SELFTEST=1 plumbing check).
+│   │                     chatrealty.ts (pull listing photos + the ChatRealty connector
+│   │                     template), connectors-store.ts (generic connector CRUD + live test),
+│   │                     asset-store.ts (lyme-asset:// protocol for saved media),
+│   │                     selftest.ts (LYME_SELFTEST=1 plumbing check).
 │   ├── preload/          index.ts (the narrow `window.lyme` bridge — the studio renderer's whole
 │   │                     world), secure.ts (the modal's even narrower bridge), index.d.ts.
 │   ├── shared/           types.ts + ipc-channels.ts, imported by both sides as @shared/*.

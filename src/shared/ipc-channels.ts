@@ -15,6 +15,11 @@ export const IPC = {
   chatRealtyStatus: 'chatrealty:status',
   chatRealtyPull: 'chatrealty:pull',
 
+  connectorsList: 'connectors:list',
+  connectorsSave: 'connectors:save',
+  connectorsDelete: 'connectors:delete',
+  connectorsTest: 'connectors:test',
+
   secretRequest: 'secret:request',
   secretList: 'secret:list',
   secretDelete: 'secret:delete',

@@ -1,8 +1,10 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type { PersistedState, SecretRequest } from '@shared/types'
+import type { ConnectorDef } from '@shared/types'
 import { runAgentPrompt } from './agent'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import { deleteConnector, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { deleteSecret, listSecretReports } from './credential-vault'
 import { registerSecureCredentialIpc, requestSecret } from './secure-credential'
 import { loadState, saveState } from './sessions-store'
@@ -82,6 +84,20 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.chatRealtyPull, (e, query: string) => {
     if (!isMainSender(e)) return null
     return pullListingPhotos(typeof query === 'string' ? query : '')
+  })
+
+  ipcMain.handle(IPC.connectorsList, (e) => (isMainSender(e) ? listConnectors() : []))
+  ipcMain.handle(IPC.connectorsSave, (e, def: ConnectorDef) => {
+    if (!isMainSender(e)) return
+    saveConnector(def)
+  })
+  ipcMain.handle(IPC.connectorsDelete, (e, id: string) => {
+    if (!isMainSender(e)) return
+    deleteConnector(id)
+  })
+  ipcMain.handle(IPC.connectorsTest, (e, id: string) => {
+    if (!isMainSender(e)) return null
+    return testConnector(id)
   })
 
   ipcMain.handle(IPC.secretRequest, (e, request: SecretRequest) => {

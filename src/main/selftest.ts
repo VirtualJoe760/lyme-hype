@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { BrowserWindow, app, net } from 'electron'
 import { runAgentPrompt } from './agent'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import { deleteConnector, listConnectors, saveConnector } from './connectors-store'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -181,6 +182,35 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     } catch (error) {
       fail(`chatrealty pull: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  // 7. Generic connector store: ChatRealty is a built-in template, and a custom
+  //    connector round-trips through save/list/delete.
+  try {
+    const withBuiltin = listConnectors()
+    const chatRealty = withBuiltin.find((c) => c.id === 'chatrealty')
+    saveConnector({
+      id: 'selftest-conn',
+      name: 'Self Test Connector',
+      kind: 'stdio',
+      command: 'node',
+      args: ['-e', 'process.exit(0)'],
+      authType: 'apiKey',
+      secretKey: 'X_TOKEN',
+      secretFieldLabel: 'API key'
+    })
+    const added = listConnectors().some((c) => c.id === 'selftest-conn')
+    deleteConnector('selftest-conn')
+    const removed = !listConnectors().some((c) => c.id === 'selftest-conn')
+    if (chatRealty?.builtin && added && removed) {
+      log(
+        `connectors: PASS (ChatRealty built-in present [credential=${chatRealty.hasCredential}], custom save/delete round-trip)`
+      )
+    } else {
+      fail(`connectors: builtin=${!!chatRealty?.builtin} added=${added} removed=${removed}`)
+    }
+  } catch (error) {
+    fail(`connectors: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

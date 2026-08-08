@@ -4,6 +4,9 @@ import type {
   AgentPingResult,
   AgentStreamEvent,
   ChatRealtyPullResult,
+  ConnectorDef,
+  ConnectorTestResult,
+  ConnectorView,
   PersistedState,
   SecretReport,
   SecretRequest
@@ -40,6 +43,13 @@ const api = {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),
     pull: (query: string): Promise<ChatRealtyPullResult | null> =>
       ipcRenderer.invoke(IPC.chatRealtyPull, query)
+  },
+  connectors: {
+    list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),
+    save: (def: ConnectorDef): Promise<void> => ipcRenderer.invoke(IPC.connectorsSave, def),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.connectorsDelete, id),
+    test: (id: string): Promise<ConnectorTestResult | null> =>
+      ipcRenderer.invoke(IPC.connectorsTest, id)
   },
   secrets: {
     request: (request: SecretRequest): Promise<SecretReport | null> =>
