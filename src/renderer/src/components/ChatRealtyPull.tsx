@@ -13,9 +13,14 @@ export function ChatRealtyPull(): React.JSX.Element | null {
 
   useEffect(() => {
     let active = true
-    void bridge.chatRealty.status().then((s) => {
-      if (active) setConnected(s?.connected ?? false)
-    })
+    bridge.chatRealty
+      .status()
+      .then((s) => {
+        if (active) setConnected(s?.connected ?? false)
+      })
+      .catch(() => {
+        if (active) setConnected(false)
+      })
     return () => {
       active = false
     }
@@ -28,13 +33,20 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   async function handlePull(): Promise<void> {
     setState('pulling')
     setMessage('')
-    const result = await pull(query)
-    if (result.ok && result.count > 0) {
-      setState('done')
-      setMessage(`Added ${result.count} listing photo${result.count === 1 ? '' : 's'} to the canvas.`)
-    } else {
+    try {
+      const result = await pull(query)
+      if (result.ok && result.count > 0) {
+        setState('done')
+        setMessage(
+          `Added ${result.count} listing photo${result.count === 1 ? '' : 's'} to the canvas.`
+        )
+      } else {
+        setState('error')
+        setMessage(result.error ?? 'Nothing came back.')
+      }
+    } catch (err) {
       setState('error')
-      setMessage(result.error ?? 'Nothing came back.')
+      setMessage(err instanceof Error ? err.message : 'The pull failed.')
     }
   }
 

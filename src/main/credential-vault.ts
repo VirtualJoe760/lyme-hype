@@ -89,5 +89,12 @@ export function deleteSecret(connectorId: string): void {
 export function readSecretValue(connectorId: string): string | null {
   const entry = readVault()[connectorId]
   if (!entry) return null
-  return safeStorage.decryptString(Buffer.from(entry.ciphertext, 'base64'))
+  try {
+    return safeStorage.decryptString(Buffer.from(entry.ciphertext, 'base64'))
+  } catch {
+    // An entry that exists but can't be decrypted (OS keychain/DPAPI changed,
+    // different OS user, corrupted ciphertext) reads as "no credential" — the
+    // caller then falls back to its unconfigured path rather than crashing.
+    return null
+  }
 }

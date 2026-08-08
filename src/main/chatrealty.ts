@@ -100,13 +100,12 @@ function imagesToAssets(
  * Image nodes. Deterministic MCP tool calls (search → photos), not an agent turn.
  */
 export async function pullListingPhotos(query: string): Promise<ChatRealtyPullResult> {
-  const token = resolveChatRealtyToken()
-  if (!token) {
-    return { ok: false, images: [], listings: [], error: 'No ChatRealty token configured.' }
-  }
-
   const client = new McpStdioClient()
   try {
+    const token = resolveChatRealtyToken()
+    if (!token) {
+      return { ok: false, images: [], listings: [], error: 'No ChatRealty token configured.' }
+    }
     await client.start(serverSpec(token))
 
     // Interpret the free-text box loosely: a bare number is a max price, a plain

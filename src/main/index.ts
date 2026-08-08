@@ -17,7 +17,13 @@ registerAssetSchemePrivileges()
  */
 function isOwnAppUrl(url: string): boolean {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
-  if (devUrl && url.startsWith(devUrl)) return true
+  try {
+    // Origin comparison, not a prefix match: startsWith(devUrl) would also accept
+    // http://localhost:5173@evil.com and http://localhost:51730 as "own app".
+    if (devUrl && new URL(url).origin === new URL(devUrl).origin) return true
+  } catch {
+    return false
+  }
   if (url.startsWith('file://')) return true
   return false
 }

@@ -46,6 +46,24 @@ export class McpStdioClient {
     })
     this.child = child
 
+    // Swallow stream 'error' events (EPIPE when writing to a server that just
+    // died, etc.) so they never bubble to an uncaughtException that would take
+    // down the Electron main process. Real failures surface through the exit
+    // handler below and send()'s writability guard.
+    child.stdin.on('error', () => {})
+    child.stdout.on('error', () => {})
+    child.stderr.on('error', () => {})
+
+    // If the server dies mid-flight (after initialize), fail every outstanding
+    // request fast with the real stderr instead of hanging until each timeout.
+    child.on('exit', (code) => {
+      if (this.serverInfo !== null && this.pending.size > 0) {
+        const reason = `MCP server exited (code ${code}). ${this.stderr.slice(0, 300)}`.trim()
+        for (const resolve of this.pending.values()) resolve({ error: { message: reason } })
+        this.pending.clear()
+      }
+    })
+
     child.stderr.on('data', (d: Buffer) => {
       this.stderr += d.toString()
     })
@@ -123,23 +141,42 @@ export class McpStdioClient {
   }
 
   stop(): void {
-    if (this.child && !this.child.killed) this.child.kill()
+    const child = this.child
     this.child = null
-    for (const resolve of this.pending.values()) resolve({ error: { message: 'client stopped' } })
+    if (child && !child.killed) {
+      // On Windows the server runs under a cmd.exe shell (needed to launch npx),
+      // so a plain kill() reaps only the shell and orphans the node grandchild —
+      // kill the whole tree.
+      if (process.platform === 'win32' && child.pid !== undefined) {
+        try {
+          spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'])
+        } catch {
+          child.kill()
+        }
+      } else {
+        child.kill()
+      }
+    }
+    for (const resolve of this.pending.values()) resolve({ error: { message: 'MCP client stopped' } })
     this.pending.clear()
   }
 
   private send(method: string, params: unknown): Promise<Record<string, unknown>> {
-    if (!this.child) return Promise.reject(new Error('MCP client not started'))
+    const child = this.child
+    if (!child || child.exitCode !== null || !child.stdin.writable) {
+      return Promise.reject(new Error('MCP client is not connected'))
+    }
     const id = ++this.nextId
     return new Promise((resolve) => {
       this.pending.set(id, resolve)
-      this.child!.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
+      child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
     })
   }
 
   private notify(method: string): void {
-    this.child?.stdin.write(JSON.stringify({ jsonrpc: '2.0', method }) + '\n')
+    const child = this.child
+    if (!child || child.exitCode !== null || !child.stdin.writable) return
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method }) + '\n')
   }
 
   private rejectAfter(ms: number, label: string): Promise<never> {
