@@ -43,11 +43,13 @@ Build the security boundary before any real connection touches a real key, not a
 - **Done criteria MET:** key never in agent/renderer-visible state or logs (vault + main-process-only resolution), a real query pulls real listing photos onto the canvas as Image nodes, and any MCP connector can be added generically. Phase 3 complete apart from the optional copilot flow.
 - Ref: [connections-and-credentials.md](connections-and-credentials.md).
 
-## Phase 4 — Real generation (video / image / audio)
+## Phase 4 — Real generation (video / image / audio) — IN PROGRESS
 
 Connector landscape researched 2026-08-08 — see [connections-and-credentials.md](connections-and-credentials.md#generation-connectors--researched-landscape-2026-08-08) for the full table and per-tool key pages. **muapi** (one key = image+video+audio incl. Seedance/Midjourney/Kling/Veo/Flux/Suno) is the recommended primary; **ElevenLabs** for voice; **Gemini** for Nano Banana image + Veo video. Midjourney/Seedance/Dreamina are models inside aggregators, not separate keys.
 
-- [x] Built-in connector templates seeded for the stdio + API-key tools that work with today's model: **muapi** and **ElevenLabs** (`src/main/connector-templates.ts`). They appear in the Connections panel; credential via the native secure modal → vault.
+- [x] Suggested-connectors catalog (`src/main/connector-suggestions.ts`) surfaces the generation tools in Settings › Connectors — each with "Open setup page" (drives the browser to its key page) and "Add" (installs + collects the credential via the secure modal → vault). muapi + ElevenLabs install today (stdio + API key); Krea/fal/Gemini/Yapper are listed but await the transport items below.
+- [x] Model-provider switching (`src/main/model-providers.ts`, Settings › Models): the *agent's* LLM can be Claude (default), Kimi K3, or a custom Anthropic-compatible endpoint. Separate from generation connectors.
+- [ ] **Wire Generate to a real connector — the core of this phase, not yet done.** The aside's Generate button still spawns stub nodes. Make it call a connector's generation tool (via `McpStdioClient`, like the ChatRealty pull) and drop a real Image/Video/Audio node with a real async "Rendering…" → ready lifecycle. Start with **muapi** (stdio, works today, funded).
 - [ ] **http-MCP client** — Krea (`api.krea.ai/mcp`) and fal (`mcp.fal.ai/mcp`) are remote http MCP servers; the connector model + `McpStdioClient` are stdio-only today. Add an http/SSE MCP path.
 - [ ] **MCP OAuth** — Yapper (and Krea's no-key option) auth the MCP connection via OAuth, not a stored key. Closer to the publishing-account OAuth mechanism.
 - [ ] **Gemini stdio wrapper** — Google ships no trustworthy first-party media MCP; bundle a thin `@google/genai` stdio server rather than depend on a community package.
