@@ -1,6 +1,7 @@
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyPullResult,
   PersistedState,
   SecretReport,
   SecretRequest
@@ -20,6 +21,10 @@ export interface Bridge {
   }
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
+  }
+  chatRealty: {
+    status(): Promise<{ connected: boolean } | null>
+    pull(query: string): Promise<ChatRealtyPullResult | null>
   }
   secrets: {
     request(request: SecretRequest): Promise<SecretReport | null>
@@ -67,6 +72,15 @@ function createBrowserMock(): Bridge {
     media: {
       pickFile: async () => null
     },
+    chatRealty: {
+      status: async () => ({ connected: false }),
+      pull: async () => ({
+        ok: false,
+        images: [],
+        listings: [],
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      })
+    },
     secrets: {
       request: async () => null,
       list: async () => secrets,
@@ -86,6 +100,7 @@ function createElectronBridge(): Bridge {
     sessions: lyme.sessions,
     agent: lyme.agent,
     media: lyme.media,
+    chatRealty: lyme.chatRealty,
     secrets: lyme.secrets
   }
 }

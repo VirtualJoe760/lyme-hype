@@ -8,8 +8,10 @@ export interface MediaNodeData {
   mediaType: MediaType
   source: SourceMethod
   status: NodeStatus
-  /** Placeholder-thumbnail swatch index (1-6) until real media lands in Phase 4. */
+  /** Placeholder-thumbnail swatch index (1-6) for stub nodes without real media. */
   swatch: number
+  /** Real image source (lyme-asset:// URL), e.g. a ChatRealty listing photo. */
+  src?: string
   /** Motion-graphics flavored video nodes keep a tag so the aside's tab choice isn't lost. */
   motionGfx?: boolean
   sentToTimeline?: boolean
@@ -17,6 +19,9 @@ export interface MediaNodeData {
   filePath?: string
   /** Set for link nodes; download/transcode lands in Phase 4. */
   sourceUrl?: string
+  /** Provenance for connection-sourced nodes (e.g. ChatRealty listing). */
+  detailUrl?: string
+  listingKey?: string
   [key: string]: unknown
 }
 
@@ -58,6 +63,30 @@ export interface AgentPingResult {
   text: string
   costUsd: number | null
   durationMs: number
+  error?: string
+}
+
+export interface ChatRealtyListing {
+  listingKey: string
+  address: string
+  city: string
+  listPrice: number | null
+  beds: number | null
+  baths: number | null
+  detailUrl: string | null
+}
+
+export interface ChatRealtyPulledImage {
+  src: string
+  label: string
+  listingKey: string
+  detailUrl: string | null
+}
+
+export interface ChatRealtyPullResult {
+  ok: boolean
+  images: ChatRealtyPulledImage[]
+  listings: ChatRealtyListing[]
   error?: string
 }
 

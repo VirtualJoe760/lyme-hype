@@ -91,19 +91,23 @@ lyme-hype/
 │       │                                       directions, Storyboard, Play, Connections panel.
 │       └── fonts/                              Bitcount Prop Single + Press Start 2P, self-hosted.
 ├── src/
-│   ├── main/             Electron main process. index.ts (boot/window), ipc.ts (all handlers,
-│   │                     sender-validated), agent.ts (Claude Agent SDK, dynamic import — ESM-only
-│   │                     dep in a CJS bundle), sessions-store.ts (JSON in userData),
-│   │                     credential-vault.ts (safeStorage/DPAPI), secure-credential.ts (the
-│   │                     native secret modal), selftest.ts (LYME_SELFTEST=1 plumbing check).
+│   ├── main/             Electron main process. index.ts (boot/window + navigation lockdown +
+│   │                     asset protocol), ipc.ts (all handlers, sender-validated), agent.ts
+│   │                     (Claude Agent SDK, dynamic import — ESM-only dep in a CJS bundle),
+│   │                     sessions-store.ts (JSON in userData), credential-vault.ts
+│   │                     (safeStorage/DPAPI), secure-credential.ts (native secret modal),
+│   │                     mcp-client.ts (stdio MCP client) + mcp-probe.ts (connection check),
+│   │                     chatrealty.ts (pull listing photos), asset-store.ts (lyme-asset://
+│   │                     protocol for saved media), selftest.ts (LYME_SELFTEST=1 plumbing check).
 │   ├── preload/          index.ts (the narrow `window.lyme` bridge — the studio renderer's whole
 │   │                     world), secure.ts (the modal's even narrower bridge), index.d.ts.
 │   ├── shared/           types.ts + ipc-channels.ts, imported by both sides as @shared/*.
 │   └── renderer/         React UI (Lime Cut skin). index.html + secure.html entries;
 │                         src/store.ts (zustand), src/bridge.ts (real IPC or browser-preview
 │                         mock), src/components/* (TitleBar, Toolbar, SessionsRail, CanvasArea +
-│                         MediaNode, StoryboardView placeholder, AsidePanel + AgentCard, CutRoom,
-│                         CombineDialog, ConnectionsPanel), src/secure/* (modal page).
+│                         MediaNode, StoryboardView placeholder, AsidePanel + AgentCard +
+│                         ChatRealtyPull, CutRoom, CombineDialog, ConnectionsPanel),
+│                         src/secure/* (modal page).
 ├── electron.vite.config.ts   Main/preload/renderer builds; two renderer entries (studio + modal).
 ├── tsconfig.json / .node.json / .web.json   Strict TS; `npm run typecheck` covers both sides.
 └── package.json          electron-vite 2 / Vite 5 / React 18 / Electron 38 — version rationale in

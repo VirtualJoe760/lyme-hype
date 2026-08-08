@@ -3,6 +3,7 @@ import type { MediaType } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { AgentCard } from './AgentCard'
+import { ChatRealtyPull } from './ChatRealtyPull'
 
 type MediaTab = 'video' | 'motion' | 'image' | 'audio'
 type ModeTab = 'reference' | 'keyframe' | 'text'
@@ -209,10 +210,11 @@ export function AsidePanel(): React.JSX.Element {
           }}
         />
         <p className="aside-note">
-          Generation is stubbed — nodes land with placeholder thumbnails until real connections
-          arrive in Phases 3–4.
+          Generation is stubbed — nodes land with placeholder thumbnails until real generation
+          connections arrive in Phase 4.
         </p>
 
+        <ChatRealtyPull />
         <AgentCard />
       </div>
     </div>

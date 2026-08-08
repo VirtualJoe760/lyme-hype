@@ -8,6 +8,8 @@ Generation tools aren't hardcoded integrations. Lyme Hype's agent is a Claude Ag
 
 Concretely, this is what makes "listing video" a real feature: connect ChatRealty, and the agent can search a listing, pull its real photos, and hand them straight to the canvas as image nodes — from one prompt in the aside, no manual download-and-drag. The same pattern applies to any other platform the user connects, generative or data.
 
+**Built (2026-08-08):** the ChatRealty half of this is live. The aside's ChatRealty card takes a query, calls `search_listings` + `get_listing_photos` over the stdio MCP connection, and drops the returned photos on the canvas as real Image nodes (badged `mls`). Current cut uses deterministic tool calls rather than a full agent turn — cheaper and more predictable for a photo pull; the natural-language, agent-chooses-the-tool version is a Phase 4 enhancement.
+
 This also resolves the earlier open question about ElevenLabs being three different providers (voice/music/SFX) — it doesn't matter. Each is just whatever MCP server(s) the user connects; Lyme Hype doesn't special-case any of them.
 
 Full mechanism — the generic connector shape, the agent-as-setup-copilot flow, and how credentials are kept out of the agent's own context entirely — is its own doc now: [connections-and-credentials.md](connections-and-credentials.md).

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
-import { BrowserWindow, app } from 'electron'
+import { BrowserWindow, app, net } from 'electron'
 import { runAgentPrompt } from './agent'
+import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -151,6 +152,34 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
       }
     } catch (error) {
       fail(`chatrealty transport: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  // 6. ChatRealty live pull — the Phase 3 headline. Needs a real hosted token
+  //    (vault or dev .env.local); skips cleanly when none is configured.
+  if (!hasChatRealtyToken()) {
+    log('chatrealty pull: SKIP (no token configured)')
+  } else {
+    try {
+      const result = await pullListingPhotos('')
+      if (result.ok && result.images.length > 0) {
+        log(
+          `chatrealty pull: PASS (${result.images.length} real photos as assets, top listing "${result.listings[0]?.address ?? '?'}")`
+        )
+        // Confirm the custom protocol actually serves a pulled asset — this is
+        // what makes <img src="lyme-asset://…"> render in the renderer.
+        const served = await net.fetch(result.images[0].src)
+        const bytes = served.ok ? (await served.arrayBuffer()).byteLength : 0
+        if (served.ok && bytes > 0) {
+          log(`asset protocol: PASS (served ${result.images[0].src.split('/').pop()}, ${bytes} bytes)`)
+        } else {
+          fail(`asset protocol: served status ${served.status}, ${bytes} bytes`)
+        }
+      } else {
+        fail(`chatrealty pull: ${result.error ?? 'no images returned'}`)
+      }
+    } catch (error) {
+      fail(`chatrealty pull: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

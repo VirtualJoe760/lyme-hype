@@ -12,6 +12,9 @@ export const IPC = {
 
   mediaPickFile: 'media:pick-file',
 
+  chatRealtyStatus: 'chatrealty:status',
+  chatRealtyPull: 'chatrealty:pull',
+
   secretRequest: 'secret:request',
   secretList: 'secret:list',
   secretDelete: 'secret:delete',

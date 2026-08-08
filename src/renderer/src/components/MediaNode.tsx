@@ -39,11 +39,21 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
 
   return (
     <div className={`media-node${selected ? ' selected' : ''}${rendering ? ' rendering' : ''}`}>
-      <span className={`src-badge ${data.source}`}>
-        {data.motionGfx ? 'gfx' : SOURCE_BADGE[data.source]}
+      <span className={`src-badge ${data.listingKey ? 'link' : data.source}`}>
+        {data.listingKey ? 'mls' : data.motionGfx ? 'gfx' : SOURCE_BADGE[data.source]}
       </span>
-      <div className={`thumb${!rendering && data.mediaType !== 'audio' ? ` sw${data.swatch}` : ''}`}>
-        {rendering ? 'Rendering…' : data.mediaType === 'audio' ? <Waveform /> : null}
+      <div
+        className={`thumb${
+          !rendering && !data.src && data.mediaType !== 'audio' ? ` sw${data.swatch}` : ''
+        }`}
+      >
+        {rendering ? (
+          'Rendering…'
+        ) : data.src ? (
+          <img src={data.src} alt={data.label} className="thumb-img" draggable={false} />
+        ) : data.mediaType === 'audio' ? (
+          <Waveform />
+        ) : null}
       </div>
       <span className="cap" title={data.label}>
         {capPrefix}

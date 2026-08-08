@@ -75,6 +75,9 @@ interface StudioStore {
     motionGfx?: boolean
     filePath?: string
     sourceUrl?: string
+    src?: string
+    detailUrl?: string
+    listingKey?: string
     position?: { x: number; y: number }
     startRendering?: boolean
   }): void
@@ -91,6 +94,7 @@ interface StudioStore {
   setConnectionsOpen(open: boolean): void
 
   pingAgent(): Promise<void>
+  pullChatRealtyPhotos(query: string): Promise<{ ok: boolean; count: number; error?: string }>
   flushPersist(): void
 }
 
@@ -303,9 +307,12 @@ export const useStudio = create<StudioStore>((set, get) => {
           source: input.source,
           status: rendering ? 'rendering' : 'ready',
           swatch: pickSwatch(),
+          src: input.src,
           motionGfx: input.motionGfx,
           filePath: input.filePath,
-          sourceUrl: input.sourceUrl
+          sourceUrl: input.sourceUrl,
+          detailUrl: input.detailUrl,
+          listingKey: input.listingKey
         }
       }
       set({ nodes: [...get().nodes, node] })
@@ -444,6 +451,34 @@ export const useStudio = create<StudioStore>((set, get) => {
         }
       } finally {
         unsubscribe()
+      }
+    },
+
+    async pullChatRealtyPhotos(query) {
+      const result = await bridge.chatRealty.pull(query)
+      if (!result || !result.ok) {
+        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      const cols = 3
+      const gap = 128
+      const originX = 60
+      const originY = 70
+      result.images.forEach((img, i) => {
+        get().addNode({
+          label: img.label,
+          mediaType: 'image',
+          source: 'generate',
+          src: img.src,
+          detailUrl: img.detailUrl ?? undefined,
+          listingKey: img.listingKey,
+          position: { x: originX + (i % cols) * gap, y: originY + Math.floor(i / cols) * gap },
+          startRendering: false
+        })
+      })
+      return {
+        ok: true,
+        count: result.images.length,
+        error: result.images.length === 0 ? (result.error ?? 'No photos found.') : undefined
       }
     },
 

@@ -1,7 +1,11 @@
 import { join } from 'node:path'
 import { BrowserWindow, app, shell } from 'electron'
+import { registerAssetProtocol, registerAssetSchemePrivileges } from './asset-store'
 import { registerIpc } from './ipc'
 import { runSelfTest } from './selftest'
+
+// Must run before app is ready — privileged custom schemes register at this point.
+registerAssetSchemePrivileges()
 
 /**
  * Lyme Hype's own documents (studio + secure modal) are the only navigation
@@ -65,6 +69,7 @@ function createMainWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   hardenNavigation()
+  registerAssetProtocol()
 
   const mainWindow = createMainWindow()
   registerIpc(mainWindow)

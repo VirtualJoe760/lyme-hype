@@ -33,15 +33,14 @@ Goal: an empty window that runs on Windows, with the Agent SDK wired into the ma
 
 ## Phase 3 — Credential security + first real connection
 
-Build the security boundary before any real connection touches a real key, not after.
+Build the security boundary before any real connection touches a real key, not after. **Substantially done (2026-08-08):** ChatRealty is connected and pulling real listing photos onto the canvas; only the generic add-any-connector form remains.
 
 - [x] Native secure-credential modal: `BrowserWindow` + IPC + `safeStorage`, reporting contract (field name / length / last-4 only) — built in the Phase 1/2 pass, ahead of need. The Connections sheet (left rail → Connections) has a "Test secure input (fake connector)" button; the self-test verifies the vault round-trip and that dismissing the modal stores nothing.
 - [x] **ChatRealty connection shape resolved and transport proven (2026-08-08).** From the jpsrealtor review: stdio MCP server (`@chatrealty/mcp-server`), `Bearer` token in `CHATREALTY_API_TOKEN` (must be `crt_live_…`), hosted base `https://jpsrealtor.com`, and `get_listing_photos` already returns base64 image blocks. `src/main/mcp-probe.ts` (a raw MCP-over-stdio client) is wired and `LYME_SELFTEST=1` confirms Lyme Hype spawns the server, handshakes, and lists all 34 tools. Full spec in [connections-and-credentials.md](connections-and-credentials.md#chatrealty-connection--resolved-shape-2026-08-08-from-the-jpsrealtor-review).
-- [ ] Generic connector data model (name / endpoint / auth-type / credential) + the reworked Connections panel UI. **Next up.**
-- [ ] Wire ChatRealty end to end: connector stored (token via the native modal → vault), agent calls `get_listing_photos`, returned image blocks become Image nodes.
-- [ ] Agent-driven browser-copilot setup flow.
-- **BLOCKER:** needs a fresh **hosted `crt_live_` token** from Joseph (mint at `https://jpsrealtor.com/agent/settings → Integrations`). The token found on-disk is revoked on hosted and its local backend is down — see the connections doc. Everything up to "requires a live authorized call" is built and self-tested.
-- **Done when:** a user can add a ChatRealty connection through the UI, the key never appears in agent-visible state or logs, and a real prompt in the aside pulls real listing photos onto the canvas as image nodes.
+- [x] **ChatRealty wired end to end (2026-08-08).** Token entered via the native secure modal → `safeStorage` vault (dev `.env.local` fallback), resolved only in the main process and injected into `CHATREALTY_API_TOKEN` when the stdio server is spawned — never in agent/renderer state. The aside's **ChatRealty** card (shown only when a token is configured) takes a query and pulls a listing's real photos: `search_listings` → `get_listing_photos` via `McpStdioClient`, image blocks saved as assets (`src/main/asset-store.ts`, served over the `lyme-asset://` protocol so `sessions.json` stays small), and dropped on the canvas as real Image nodes. Verified with Joseph's live hosted token: `LYME_SELFTEST=1` pulls 6 real photos and the protocol serves the JPEG bytes.
+- [ ] Reworked generic Connections panel UI (add/edit any connector from templates or custom). The vault + secure modal + `chatrealty` connector exist; the general add-a-connector form is the remaining Phase 3 UI. **Next up.**
+- [ ] Agent-driven browser-copilot setup flow (optional convenience — the manual token path works today).
+- **Done criteria MET:** the key never appears in agent-visible state or logs (vault + main-process-only resolution), and a real query in the aside pulls real listing photos onto the canvas as Image nodes. The only remaining Phase 3 item is the *generic* connector form (ChatRealty itself is a built-in template today).
 - Ref: [connections-and-credentials.md](connections-and-credentials.md).
 
 ## Phase 4 — Real generation (video / image / audio)

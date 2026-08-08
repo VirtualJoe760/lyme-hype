@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc-channels'
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyPullResult,
   PersistedState,
   SecretReport,
   SecretRequest
@@ -34,6 +35,11 @@ const api = {
   media: {
     pickFile: (kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null> =>
       ipcRenderer.invoke(IPC.mediaPickFile, kind)
+  },
+  chatRealty: {
+    status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),
+    pull: (query: string): Promise<ChatRealtyPullResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyPull, query)
   },
   secrets: {
     request: (request: SecretRequest): Promise<SecretReport | null> =>

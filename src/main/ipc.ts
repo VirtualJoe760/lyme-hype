@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type { PersistedState, SecretRequest } from '@shared/types'
 import { runAgentPrompt } from './agent'
+import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteSecret, listSecretReports } from './credential-vault'
 import { registerSecureCredentialIpc, requestSecret } from './secure-credential'
 import { loadState, saveState } from './sessions-store'
@@ -75,6 +76,12 @@ export function registerIpc(window: BrowserWindow): void {
     const filePath = result.filePaths[0]
     const name = filePath.split(/[\\/]/).pop() ?? filePath
     return { name, path: filePath }
+  })
+
+  ipcMain.handle(IPC.chatRealtyStatus, (e) => (isMainSender(e) ? { connected: hasChatRealtyToken() } : null))
+  ipcMain.handle(IPC.chatRealtyPull, (e, query: string) => {
+    if (!isMainSender(e)) return null
+    return pullListingPhotos(typeof query === 'string' ? query : '')
   })
 
   ipcMain.handle(IPC.secretRequest, (e, request: SecretRequest) => {
