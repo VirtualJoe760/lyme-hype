@@ -3,37 +3,38 @@
 Paste this as the first message in a fresh session, opened in this repo
 (`F:\web-clients\joseph-sardella\lyme-hype\`). `AGENTS.md` loads automatically via
 `CLAUDE.md` — the prompt below assumes that context is already present and doesn't
-repeat it.
+repeat it. Written for maximum autonomy — no plan-first checkpoint, no pausing between
+phases. Go as far as the actual work allows in one run.
 
 ---
 
-This is Lyme Hype, currently 100% planning — nothing is built yet. You should already
-have AGENTS.md loaded; read `docs/README.md` next, then `docs/build-plan.md` to see
-exactly where we are and what's already decided vs. still open.
+This is Lyme Hype — read `docs/README.md` and `docs/build-plan.md` for full context.
+Nothing is built yet.
 
-Your task is **Phase 1**: scaffold the actual Electron + TypeScript app.
+Build it. Work through `build-plan.md`'s phases in order, autonomously — **Phase 1**
+(Electron + TypeScript scaffold, Claude Agent SDK wired into the main process) straight
+into **Phase 2** (Sessions rail, canvas core, stub Image/Video/Audio nodes, combine
+interaction, collapsible panels), without stopping to check in between them. Don't ask
+for a plan first and don't pause for permission on implementation choices the docs
+already cover — the docs are the spec; follow them and go. Use the "Lime Cut" direction
+in `docs/concepts/studio-concept-directions.html` as your visual reference for the shell
+chrome.
 
-- electron-vite or Electron Forge, your call — both are fine per `docs/platform-decisions.md`.
-- Wire the Claude Agent SDK into the main process, confirm it can complete a basic call.
-- Basic `BrowserWindow` chrome — use the "Lime Cut" direction in
-  `docs/concepts/studio-concept-directions.html` as a rough visual reference for the
-  shell (titlebar + toolbar). Doesn't need to be pixel-perfect, just recognizably headed
-  that direction.
-- Windows is the dev target — see `docs/platform-decisions.md` for why, and for the Mac
-  timing.
+**Natural stopping point:** Phase 3 needs a real ChatRealty API key from Joseph to test
+against — that's genuinely where a human has to get involved. Push right up to that
+boundary (Phase 1 + Phase 2 both fully done, per their done-criteria in `build-plan.md`),
+then report what's built, what's next, and exactly what you need from him to keep going
+into Phase 3.
 
-**Done when:** `npm run dev` opens a real window and the agent responds to a hardcoded
-prompt.
+Update the relevant doc in the same change any time you make a decision the docs don't
+already cover — don't silently deviate from spec (AGENTS.md rule #3).
 
-Before you generate files: give me a quick plan first — folder structure, which
-scaffolding tool, key dependencies. This is a brand-new codebase and I'd rather catch a
-wrong turn now than after 40 files exist.
+Constraints that don't bend, already in AGENTS.md, restated because they matter even in
+full-autonomy mode: credentials never pass through you directly — build the native
+secure-credential modal (`BrowserWindow` + IPC + `safeStorage`) before Phase 3 needs it,
+never a plain input field. ffmpeg (whenever you get to it) must be an LGPL-only build.
+Absolute Windows paths for every file operation.
 
-Two things to keep in mind, not to act on yet:
+Don't touch `docs/reference-notes-*.md` — historical observations, not specs.
 
-- `docs/connections-and-credentials.md` has a section on publishing to Instagram/YouTube
-  by porting jpsrealtor's existing account-linking flow (a sibling project). That's
-  Phase 7 work, not now — just don't be surprised when you see the reference.
-- `docs/reference-notes-*.md` are historical observations, not specs — don't edit them.
-  Everything else: if you make a decision the docs don't already cover, update the
-  relevant doc in the same change, per AGENTS.md rule #3.
+Go.
