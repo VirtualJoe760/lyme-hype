@@ -1,6 +1,9 @@
-/** Vault id for the user's own Anthropic API key (BYO Claude). Shared so main
- *  and renderer reference the same key. */
-export const CLAUDE_CREDENTIAL_ID = 'anthropic-claude'
+export type ClaudeAuthOverrideKind = 'none' | 'apiKey' | 'oauthToken'
+
+export interface ClaudeAuthStatus {
+  /** 'none' = using this machine's own Claude Code login (the normal case). */
+  override: ClaudeAuthOverrideKind
+}
 
 export type MediaType = 'image' | 'video' | 'audio'
 export type SourceMethod = 'generate' | 'upload' | 'link'

@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import type { AgentPingResult, AgentStreamEvent } from '@shared/types'
-import { resolveClaudeApiKey } from './claude-auth'
+import { resolveClaudeAuthOverride } from './claude-auth'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
 
@@ -26,10 +26,17 @@ export async function runAgentPrompt(
     const { query } = await loadSdk()
     onEvent({ kind: 'status', text: 'Contacting agent…' })
 
-    // BYO Anthropic API key: when the user has stored one, force API-key auth by
-    // passing it in the SDK env. When absent (dev), the SDK falls back to this
-    // machine's Claude Code login. Packaged builds require a stored key.
-    const apiKey = resolveClaudeApiKey()
+    // Default: no env override, so the SDK authenticates with this machine's own
+    // Claude Code login (the same subscription-backed credential `claude
+    // setup-token` mints) — that's the normal path for a personal tool. An
+    // explicit override (a different API key or OAuth token) is opt-in.
+    const override = resolveClaudeAuthOverride()
+    const authEnv =
+      override?.kind === 'oauthToken'
+        ? { CLAUDE_CODE_OAUTH_TOKEN: override.value }
+        : override?.kind === 'apiKey'
+          ? { ANTHROPIC_API_KEY: override.value }
+          : null
 
     const stream = query({
       prompt,
@@ -40,7 +47,7 @@ export async function runAgentPrompt(
         // The studio agent must not inherit this machine's Claude Code settings
         // or any repo CLAUDE.md — Lyme Hype defines its own context.
         settingSources: [],
-        ...(apiKey ? { env: { ...process.env, ANTHROPIC_API_KEY: apiKey } } : {}),
+        ...(authEnv ? { env: { ...process.env, ...authEnv } } : {}),
         systemPrompt:
           'You are the Lyme Hype studio agent, embedded in a desktop content-creation app. Answer briefly.',
         cwd: app.getPath('userData')

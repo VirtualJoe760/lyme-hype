@@ -2,6 +2,7 @@ import type {
   AgentPingResult,
   AgentStreamEvent,
   ChatRealtyPullResult,
+  ClaudeAuthStatus,
   ConnectorDef,
   ConnectorTestResult,
   ConnectorView,
@@ -21,7 +22,7 @@ export interface Bridge {
   agent: {
     ping(prompt: string): Promise<AgentPingResult | null>
     onStream(callback: (event: AgentStreamEvent) => void): () => void
-    claudeStatus(): Promise<{ hasKey: boolean } | null>
+    claudeStatus(): Promise<ClaudeAuthStatus | null>
   }
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
@@ -78,7 +79,7 @@ function createBrowserMock(): Bridge {
         error: 'Agent runs in the Electron main process — unavailable in browser preview.'
       }),
       onStream: () => () => {},
-      claudeStatus: async () => ({ hasKey: false })
+      claudeStatus: async () => ({ override: 'none' })
     },
     media: {
       pickFile: async () => null

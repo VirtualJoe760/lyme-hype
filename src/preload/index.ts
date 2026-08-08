@@ -4,6 +4,7 @@ import type {
   AgentPingResult,
   AgentStreamEvent,
   ChatRealtyPullResult,
+  ClaudeAuthStatus,
   ConnectorDef,
   ConnectorTestResult,
   ConnectorView,
@@ -34,7 +35,7 @@ const api = {
       ipcRenderer.on(IPC.agentStream, listener)
       return () => ipcRenderer.removeListener(IPC.agentStream, listener)
     },
-    claudeStatus: (): Promise<{ hasKey: boolean } | null> => ipcRenderer.invoke(IPC.claudeStatus)
+    claudeStatus: (): Promise<ClaudeAuthStatus | null> => ipcRenderer.invoke(IPC.claudeStatus)
   },
   media: {
     pickFile: (kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null> =>

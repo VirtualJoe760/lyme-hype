@@ -1,27 +1,37 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CLAUDE_CREDENTIAL_ID } from '@shared/types'
+import type { ClaudeAuthOverrideKind } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
+
+const API_KEY_CREDENTIAL_ID = 'anthropic-claude-api-key'
+const OAUTH_TOKEN_CREDENTIAL_ID = 'anthropic-claude-oauth-token'
+
+const OVERRIDE_LABEL: Record<ClaudeAuthOverrideKind, string> = {
+  none: 'using this machine’s Claude Code login',
+  apiKey: 'API key override set',
+  oauthToken: 'setup-token override set'
+}
 
 export function AgentCard(): React.JSX.Element {
   const agent = useStudio((s) => s.agent)
   const pingAgent = useStudio((s) => s.pingAgent)
-  const [claudeKey, setClaudeKey] = useState<boolean | null>(null)
+  const [override, setOverride] = useState<ClaudeAuthOverrideKind | null>(null)
 
   const refreshClaude = useCallback(async () => {
     const status = await bridge.agent.claudeStatus()
-    setClaudeKey(status?.hasKey ?? false)
+    setOverride(status?.override ?? 'none')
   }, [])
 
   useEffect(() => {
     void refreshClaude()
   }, [refreshClaude])
 
-  async function setClaudeApiKey(): Promise<void> {
+  async function setOverrideKey(kind: 'apiKey' | 'oauthToken'): Promise<void> {
     const report = await bridge.secrets.request({
-      connectorId: CLAUDE_CREDENTIAL_ID,
+      connectorId: kind === 'apiKey' ? API_KEY_CREDENTIAL_ID : OAUTH_TOKEN_CREDENTIAL_ID,
       connectorName: 'Claude (Anthropic)',
-      fieldLabel: 'Anthropic API key (sk-ant-…)'
+      fieldLabel:
+        kind === 'apiKey' ? 'Anthropic API key (sk-ant-…)' : 'Setup-token (from `claude setup-token`)'
     })
     if (report) await refreshClaude()
   }
@@ -50,12 +60,15 @@ export function AgentCard(): React.JSX.Element {
       </button>
       {bridge.isElectron && (
         <div className="claude-key-row">
-          <span className="meta">
-            Claude: {claudeKey === null ? '…' : claudeKey ? 'your API key set' : 'using dev login'}
-          </span>
-          <button className="conn-mini" onClick={() => void setClaudeApiKey()}>
-            {claudeKey ? 'Replace key' : 'Set Claude API key'}
-          </button>
+          <span className="meta">Claude: {override === null ? '…' : OVERRIDE_LABEL[override]}</span>
+          <div className="conn-actions">
+            <button className="conn-mini" onClick={() => void setOverrideKey('oauthToken')}>
+              Use setup-token
+            </button>
+            <button className="conn-mini" onClick={() => void setOverrideKey('apiKey')}>
+              Use API key
+            </button>
+          </div>
         </div>
       )}
     </div>

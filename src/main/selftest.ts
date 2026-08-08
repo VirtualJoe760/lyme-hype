@@ -2,7 +2,11 @@ import { existsSync } from 'node:fs'
 import { BrowserWindow, app, net } from 'electron'
 import { runAgentPrompt } from './agent'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
-import { CLAUDE_CREDENTIAL_ID, hasClaudeApiKey } from './claude-auth'
+import {
+  CLAUDE_API_KEY_CREDENTIAL_ID,
+  CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID,
+  claudeAuthOverrideKind
+} from './claude-auth'
 import { deleteConnector, listConnectors, saveConnector } from './connectors-store'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
@@ -214,21 +218,27 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     fail(`connectors: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  // 8. BYO Claude key resolution — storing a key makes hasClaudeApiKey true;
-  //    removing it falls back to the machine login (what the agent test above
-  //    used). Doesn't call Anthropic — just verifies the resolve plumbing.
+  // 8. Claude auth override resolution — default is 'none' (this machine's own
+  //    Claude Code login, what the agent test above actually used). Storing an
+  //    override flips the kind; removing it restores the default. Oauth-token
+  //    takes priority over api-key when both are set. Doesn't call Anthropic —
+  //    just verifies the resolve plumbing.
   try {
-    const before = hasClaudeApiKey()
-    storeSecret(CLAUDE_CREDENTIAL_ID, 'Anthropic API key', 'sk-ant-selftest-dummy')
-    const withKey = hasClaudeApiKey()
-    deleteSecret(CLAUDE_CREDENTIAL_ID)
-    if (withKey && hasClaudeApiKey() === before) {
-      log(`claude byo-key: PASS (resolve toggles with the vault; dev fallback=${!before})`)
+    const before = claudeAuthOverrideKind()
+    storeSecret(CLAUDE_API_KEY_CREDENTIAL_ID, 'Anthropic API key', 'sk-ant-selftest-dummy')
+    const withApiKey = claudeAuthOverrideKind()
+    storeSecret(CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID, 'Setup-token', 'selftest-oauth-token-dummy')
+    const withBoth = claudeAuthOverrideKind()
+    deleteSecret(CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID)
+    deleteSecret(CLAUDE_API_KEY_CREDENTIAL_ID)
+    const after = claudeAuthOverrideKind()
+    if (before === 'none' && withApiKey === 'apiKey' && withBoth === 'oauthToken' && after === 'none') {
+      log('claude auth: PASS (default = local Claude Code login; override toggles correctly; oauth-token takes priority)')
     } else {
-      fail(`claude byo-key: withKey=${withKey} restored=${hasClaudeApiKey()} before=${before}`)
+      fail(`claude auth: before=${before} withApiKey=${withApiKey} withBoth=${withBoth} after=${after}`)
     }
   } catch (error) {
-    fail(`claude byo-key: ${error instanceof Error ? error.message : String(error)}`)
+    fail(`claude auth: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

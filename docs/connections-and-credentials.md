@@ -57,6 +57,8 @@ Researched the generation tools Joseph named (Krea, Seedance, Dreamina, muapi, E
 
 **Recommendation:** **muapi** as the primary generation connector (one key = image+video+audio, already funded) + **ElevenLabs** for premium voice + **Gemini** (Joseph already has billing-enabled keys). Krea adds 3D; fal is redundant with muapi; Yapper is nice but OAuth-gated.
 
+**Principle: prefer direct-to-source over aggregators when the friction is comparable.** muapi/Krea/fal/Yapper are resellers layered on top of the actual model providers — even when an aggregator markets itself as cheaper (muapi claims ~30% under calling providers directly), it's still a middleman with its own margin and its own uptime/pricing risk sitting between the app and the model. Go direct whenever a source provider ships a reasonable API of its own: ElevenLabs and Gemini already are direct. Reach for an aggregator only when there's no practical direct path — Midjourney has none at all; Seedance's only broadly-accessible direct path (BytePlus ModelArk) has meaningfully higher signup friction than muapi, so muapi is the pragmatic choice there specifically, not a default preference for aggregators in general.
+
 **Three transport gaps this surfaced — the Phase 4 connector work:**
 1. **http-MCP client** — the connector model + `McpStdioClient` only do stdio today; Krea and fal are remote http MCP servers. Needs an http/SSE MCP client path (the Agent SDK supports http `mcpServers`; the app's own probe/pull path is stdio-only).
 2. **MCP OAuth** — Yapper (and Krea's no-key option) authenticate the MCP connection via OAuth, not a stored API key. This is closer to the publishing-account OAuth mechanism than the stdio+env-key path.
