@@ -29,6 +29,10 @@ export interface Bridge {
   }
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
+    import(
+      kind: 'image' | 'video' | 'audio'
+    ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null>
+    importUrl(url: string): Promise<{ name: string; src: string | null; error: string | null } | null>
   }
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>
@@ -94,7 +98,13 @@ function createBrowserMock(): Bridge {
       claudeStatus: async () => ({ override: 'none' })
     },
     media: {
-      pickFile: async () => null
+      pickFile: async () => null,
+      import: async () => null,
+      importUrl: async () => ({
+        name: '',
+        src: null,
+        error: 'Media import runs in the Electron main process — unavailable in browser preview.'
+      })
     },
     chatRealty: {
       status: async () => ({ connected: false }),

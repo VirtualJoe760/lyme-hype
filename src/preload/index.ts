@@ -42,7 +42,15 @@ const api = {
   },
   media: {
     pickFile: (kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null> =>
-      ipcRenderer.invoke(IPC.mediaPickFile, kind)
+      ipcRenderer.invoke(IPC.mediaPickFile, kind),
+    import: (
+      kind: 'image' | 'video' | 'audio'
+    ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null> =>
+      ipcRenderer.invoke(IPC.mediaImport, kind),
+    importUrl: (
+      url: string
+    ): Promise<{ name: string; src: string | null; error: string | null } | null> =>
+      ipcRenderer.invoke(IPC.mediaImportUrl, url)
   },
   chatRealty: {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),

@@ -62,6 +62,9 @@ interface StudioStore {
   settingsOpen: boolean
   settingsTab: SettingsTab
   theme: ThemeId
+  /** Play view: the node under review (full-takeover) and where to return to. */
+  playNodeId: string | null
+  playFrom: StudioView
   combine: CombineTarget | null
   agent: AgentUiState
 
@@ -93,6 +96,13 @@ interface StudioStore {
   openCombine(sourceId: string, targetId: string): void
   closeCombine(): void
   confirmCombine(): void
+
+  openPlay(nodeId: string): void
+  closePlay(): void
+  setTrim(nodeId: string, trimIn: number, trimOut: number): void
+  splitAtPlayhead(nodeId: string, at: number): void
+  detachAudio(nodeId: string): void
+  deleteAudio(nodeId: string): void
 
   toggleRail(): void
   toggleAside(): void
@@ -193,6 +203,8 @@ export const useStudio = create<StudioStore>((set, get) => {
     settingsOpen: false,
     settingsTab: 'connectors',
     theme: 'lime-cut',
+    playNodeId: null,
+    playFrom: 'canvas',
     combine: null,
     agent: {
       status: 'idle',
@@ -413,6 +425,63 @@ export const useStudio = create<StudioStore>((set, get) => {
         position: midpoint,
         startRendering: true
       })
+    },
+
+    openPlay(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node || node.data.mediaType === 'image') return
+      const session = activeSession()
+      set({ playNodeId: nodeId, playFrom: session?.view ?? 'canvas' })
+    },
+
+    closePlay() {
+      set({ playNodeId: null })
+    },
+
+    setTrim(nodeId, trimIn, trimOut) {
+      patchNodeData(nodeId, { trimIn, trimOut })
+    },
+
+    splitAtPlayhead(nodeId, at) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node) return
+      const inPt = node.data.trimIn ?? 0
+      const outPt = node.data.trimOut
+      if (at <= inPt || (outPt !== undefined && at >= outPt)) return
+      // Left half stays on the source node; right half spawns beside it. Both are
+      // non-destructive views of the same file (in/out points only).
+      patchNodeData(nodeId, { trimOut: at })
+      get().addNode({
+        label: `${node.data.label}_b`,
+        mediaType: node.data.mediaType,
+        source: node.data.source,
+        src: node.data.src,
+        position: { x: node.position.x + 130, y: node.position.y + 24 },
+        startRendering: false
+      })
+      // Carry the right-half range onto the freshly added node (last in the list).
+      const added = get().nodes[get().nodes.length - 1]
+      if (added) patchNodeData(added.id, { trimIn: at, trimOut: outPt })
+    },
+
+    detachAudio(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node || node.data.mediaType !== 'video' || !node.data.src) return
+      // Detach spawns an independent audio node referencing the same file. Real
+      // track extraction happens at export via ffmpeg (Phase 7); this is the
+      // non-destructive canvas representation.
+      get().addNode({
+        label: `${node.data.label}_audio`,
+        mediaType: 'audio',
+        source: node.data.source,
+        src: node.data.src,
+        position: { x: node.position.x + 24, y: node.position.y + 150 },
+        startRendering: false
+      })
+    },
+
+    deleteAudio(nodeId) {
+      patchNodeData(nodeId, { audioMuted: true })
     },
 
     toggleRail() {

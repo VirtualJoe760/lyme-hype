@@ -30,9 +30,11 @@ const SOURCE_BADGE: Record<string, string> = {
 export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): React.JSX.Element {
   const sendToTimeline = useStudio((s) => s.sendToTimeline)
   const removeNode = useStudio((s) => s.removeNode)
+  const openPlay = useStudio((s) => s.openPlay)
 
   const rendering = data.status === 'rendering'
   const timelineEligible = data.mediaType !== 'image' && !rendering
+  const playable = timelineEligible
 
   const capPrefix =
     data.mediaType === 'video' ? '▶ ' : data.mediaType === 'audio' ? '♪ ' : ''
@@ -49,11 +51,25 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
       >
         {rendering ? (
           'Rendering…'
-        ) : data.src ? (
+        ) : data.src && data.mediaType === 'video' ? (
+          <video src={data.src} muted preload="metadata" className="thumb-img" />
+        ) : data.src && data.mediaType === 'image' ? (
           <img src={data.src} alt={data.label} className="thumb-img" draggable={false} />
         ) : data.mediaType === 'audio' ? (
           <Waveform />
         ) : null}
+        {playable && (
+          <button
+            className="play-open-btn"
+            title="Open in Play view"
+            onClick={(e) => {
+              e.stopPropagation()
+              openPlay(id)
+            }}
+          >
+            ▶
+          </button>
+        )}
       </div>
       <span className="cap" title={data.label}>
         {capPrefix}

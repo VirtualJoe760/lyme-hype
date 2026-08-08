@@ -3,6 +3,7 @@ import { AsidePanel } from './components/AsidePanel'
 import { CanvasArea } from './components/CanvasArea'
 import { CombineDialog } from './components/CombineDialog'
 import { CutRoom } from './components/CutRoom'
+import { PlayView } from './components/PlayView'
 import { Settings } from './components/settings/Settings'
 import { SessionsRail } from './components/SessionsRail'
 import { TitleBar } from './components/TitleBar'
@@ -14,6 +15,7 @@ export default function App(): React.JSX.Element {
   const init = useStudio((s) => s.init)
   const combine = useStudio((s) => s.combine)
   const settingsOpen = useStudio((s) => s.settingsOpen)
+  const playNodeId = useStudio((s) => s.playNodeId)
 
   useEffect(() => {
     void init()
@@ -26,12 +28,16 @@ export default function App(): React.JSX.Element {
       <div className="body">
         {loaded && (
           <>
-            <SessionsRail />
+            {!playNodeId && <SessionsRail />}
             <div className="main">
-              <div className="row">
-                <CanvasArea />
-                <AsidePanel />
-              </div>
+              {playNodeId ? (
+                <PlayView />
+              ) : (
+                <div className="row">
+                  <CanvasArea />
+                  <AsidePanel />
+                </div>
+              )}
               <CutRoom />
             </div>
           </>

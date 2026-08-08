@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type { ConnectorDef, ModelProviderDef, PersistedState, SecretRequest } from '@shared/types'
+import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { runAgentPrompt } from './agent'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
@@ -87,6 +88,30 @@ export function registerIpc(window: BrowserWindow): void {
     const filePath = result.filePaths[0]
     const name = filePath.split(/[\\/]/).pop() ?? filePath
     return { name, path: filePath }
+  })
+
+  ipcMain.handle(IPC.mediaImport, async (e, kind: string) => {
+    if (!isMainSender(e) || !mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: FILE_FILTERS[kind] ?? []
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    const filePath = result.filePaths[0]
+    const name = filePath.split(/[\\/]/).pop() ?? filePath
+    const saved = importFileAsset(filePath)
+    return { name, src: saved.url, mediaType: mediaTypeForPath(filePath) ?? kind }
+  })
+
+  ipcMain.handle(IPC.mediaImportUrl, async (e, url: string) => {
+    if (!isMainSender(e)) return null
+    try {
+      const saved = await importUrlAsset(url)
+      const tail = new URL(url).pathname.split('/').filter(Boolean).pop()
+      return { name: tail || new URL(url).hostname, src: saved.url, error: null }
+    } catch (err) {
+      return { name: '', src: null, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   ipcMain.handle(IPC.chatRealtyStatus, (e) => (isMainSender(e) ? { connected: hasChatRealtyToken() } : null))

@@ -12,6 +12,8 @@ export const IPC = {
   claudeStatus: 'claude:status',
 
   mediaPickFile: 'media:pick-file',
+  mediaImport: 'media:import',
+  mediaImportUrl: 'media:import-url',
 
   chatRealtyStatus: 'chatrealty:status',
   chatRealtyPull: 'chatrealty:pull',

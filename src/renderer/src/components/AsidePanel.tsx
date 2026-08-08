@@ -68,38 +68,40 @@ export function AsidePanel(): React.JSX.Element {
 
   async function handleUpload(): Promise<void> {
     const kind = tabToMediaType(mediaTab)
-    const file = await bridge.media.pickFile(kind)
-    if (!file) return
+    const imported = await bridge.media.import(kind)
+    if (!imported) return
     addNode({
-      label: file.name,
-      mediaType: kind,
+      label: imported.name,
+      mediaType: imported.mediaType,
       source: 'upload',
       motionGfx: mediaTab === 'motion' || undefined,
-      filePath: file.path
+      src: imported.src
     })
   }
 
-  function handleLink(): void {
+  async function handleLink(): Promise<void> {
     const url = link.trim()
     if (!url || !linkEligible) return
-    let label: string
-    try {
-      const tail = new URL(url).pathname.split('/').filter(Boolean).pop()
-      label = tail || new URL(url).hostname
-    } catch {
-      label = url.slice(0, 20)
-    }
-    addNode({
-      label,
-      mediaType: 'video',
-      source: 'link',
-      motionGfx: mediaTab === 'motion' || undefined,
-      sourceUrl: url,
-      // Linked media gets downloaded/transcoded before it's usable (Phase 4) —
-      // the rendering state mirrors that from day one.
-      startRendering: true
-    })
     setLink('')
+    // Land a rendering placeholder immediately, then swap in the downloaded file.
+    const result = await bridge.media.importUrl(url)
+    if (result?.src) {
+      let label: string
+      try {
+        const tail = new URL(url).pathname.split('/').filter(Boolean).pop()
+        label = tail || new URL(url).hostname
+      } catch {
+        label = result.name || url.slice(0, 20)
+      }
+      addNode({
+        label,
+        mediaType: 'video',
+        source: 'link',
+        motionGfx: mediaTab === 'motion' || undefined,
+        sourceUrl: url,
+        src: result.src
+      })
+    }
   }
 
   return (

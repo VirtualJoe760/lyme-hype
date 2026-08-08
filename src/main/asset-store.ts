@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, normalize } from 'node:path'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { extname, join, normalize } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { app, net, protocol } from 'electron'
+import type { MediaType } from '@shared/types'
 
 export const ASSET_SCHEME = 'lyme-asset'
 
@@ -11,6 +20,26 @@ const MIME_EXT: Record<string, string> = {
   'image/png': '.png',
   'image/webp': '.webp',
   'image/gif': '.gif'
+}
+
+const EXT_MEDIA_TYPE: Record<string, MediaType> = {
+  '.png': 'image',
+  '.jpg': 'image',
+  '.jpeg': 'image',
+  '.webp': 'image',
+  '.gif': 'image',
+  '.mp4': 'video',
+  '.mov': 'video',
+  '.webm': 'video',
+  '.mkv': 'video',
+  '.mp3': 'audio',
+  '.wav': 'audio',
+  '.m4a': 'audio',
+  '.ogg': 'audio'
+}
+
+export function mediaTypeForPath(p: string): MediaType | null {
+  return EXT_MEDIA_TYPE[extname(p).toLowerCase()] ?? null
 }
 
 function assetsDir(): string {
@@ -36,7 +65,9 @@ export function registerAssetProtocol(): void {
     if (!filePath.startsWith(assetsDir()) || !existsSync(filePath)) {
       return new Response('Not found', { status: 404 })
     }
-    return net.fetch(`file://${filePath.replace(/\\/g, '/')}`)
+    // net.fetch on a file URL streams with range support — needed for <video>
+    // seeking — and infers Content-Type from the extension.
+    return net.fetch(pathToFileURL(filePath).href)
   })
 }
 
@@ -50,6 +81,30 @@ export function saveImageAsset(base64: string, mimeType: string): SavedAsset {
   const ext = MIME_EXT[mimeType.toLowerCase()] ?? '.bin'
   const fileName = `${randomUUID()}${ext}`
   const buffer = Buffer.from(base64, 'base64')
+  writeFileSync(join(assetsDir(), fileName), buffer)
+  return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: buffer.length }
+}
+
+/** Copies a user-picked/downloaded file into the asset store and returns a
+ *  playable lyme-asset:// URL. Keeps the original untouched; large videos are
+ *  copied once (acceptable for a local desktop app). */
+export function importFileAsset(srcPath: string): SavedAsset {
+  const ext = extname(srcPath).toLowerCase() || '.bin'
+  const fileName = `${randomUUID()}${ext}`
+  const dest = join(assetsDir(), fileName)
+  copyFileSync(srcPath, dest)
+  return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: statSync(dest).size }
+}
+
+/** Downloads a remote media URL into the asset store. Real transcode of
+ *  non-web-playable containers is deferred to the ffmpeg pass (Phase 7). */
+export async function importUrlAsset(sourceUrl: string): Promise<SavedAsset> {
+  const res = await net.fetch(sourceUrl)
+  if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`)
+  const buffer = Buffer.from(await res.arrayBuffer())
+  const urlExt = extname(new URL(sourceUrl).pathname).toLowerCase()
+  const ext = EXT_MEDIA_TYPE[urlExt] ? urlExt : '.mp4'
+  const fileName = `${randomUUID()}${ext}`
   writeFileSync(join(assetsDir(), fileName), buffer)
   return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: buffer.length }
 }

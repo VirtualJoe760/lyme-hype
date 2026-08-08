@@ -54,22 +54,24 @@ Connector landscape researched 2026-08-08 — see [connections-and-credentials.m
 - [ ] **MCP OAuth** — Yapper (and Krea's no-key option) auth the MCP connection via OAuth, not a stored key. Closer to the publishing-account OAuth mechanism.
 - [ ] **Gemini stdio wrapper** — Google ships no trustworthy first-party media MCP; bundle a thin `@google/genai` stdio server rather than depend on a community package.
 - Wire Generate mode to actually call a connector's tools: agent (or a direct tool call, like the ChatRealty pull) produces an actual clip/image/audio node, the "Rendering…" state reflecting a real async job instead of the stub timer.
-- Upload and Link source methods for video/audio — local file picker; pasting a link triggers the download/transcode step before the node is usable.
-- **Done when:** all three source methods (generate / upload / link) produce a real node for at least one video connection and one audio connection.
+- [x] **Upload and Link source methods for video/audio.** Upload uses a native file picker (`media:import` IPC → `importFileAsset`, copies into `userData/assets`); Link downloads the URL (`media:importUrl` → `importUrlAsset` via `net.fetch`) into the same asset store. Both return a `lyme-asset://` `src` that `MediaNode` renders as a real `<video>`/`<img>`/waveform and that Play view plays. Media-type inferred from extension (`EXT_MEDIA_TYPE`). CSP widened to `media-src 'self' blob: lyme-asset:`. Transcode-on-import is still deferred — a linked `.mov`/`.webm` is stored as-is and relies on Chromium's codec support until the Phase 7 ffmpeg path lands.
+- **Done when:** all three source methods (generate / upload / link) produce a real node for at least one video connection and one audio connection. *(Upload + Link done; Generate still stubbed — the remaining blocker for closing this phase.)*
 - Ref: [canvas-node-model.md](canvas-node-model.md), [connections-and-credentials.md](connections-and-credentials.md).
 
-## Phase 5 — Play view
+## Phase 5 — Play view — BUILT (ffmpeg-backed cutting deferred to Phase 7)
 
-- A full-takeover view, not a third canvas toggle — Sessions and the aside hide while Play is open; Cut Room stays visible below it.
-- Playback and non-destructive cutting both run on the bundled ffmpeg (same engine as Cut Room, per Phase 0) — not a separate media library.
-- Toolbar breadcrumb swaps for a back arrow ("← Back to Canvas" / "← Back to Storyboard") while in Play — needs a small nav-stack, not just "last view," since Play should be reachable (and return correctly) from either Canvas or Storyboard.
-- Video frame with a minimal overlaid control bar (play/pause, time, trim track) — not a separate transport row. Audio nodes render a bigger waveform in the same overlay pattern.
-- A compact, separate audio strip below the video stage for the clip's own audio track — own trim handles, own **Detach** (→ independent node on Canvas) and **delete** (destructive, needs a confirm step) actions, scoped to audio only.
-- Non-destructive in/out points stored on the node itself, not separate editor state — confirm this before building, per the open question in canvas-node-model.md.
-- Split at playhead → produces two nodes back on Canvas.
-- Send to timeline action, reusing the same node → Cut Room path as Phase 7.
-- Double-click a video/audio node on Canvas or Storyboard as the entry point, or an explicit "Open in Play" action.
-- **Done when:** a real generated clip from Phase 4 can be opened in Play, trimmed, split, have its audio detached or deleted, sent to Cut Room, and the back arrow returns you to wherever you actually came from.
+Implemented in `src/renderer/src/components/PlayView.tsx`, wired into `App.tsx` as a full takeover, store actions in `store.ts` (`openPlay`/`closePlay`/`setTrim`/`splitAtPlayhead`/`detachAudio`/`deleteAudio`).
+
+- [x] A full-takeover view, not a third canvas toggle — Sessions rail and the aside hide while Play is open (`App.tsx` gates them on `playNodeId`); Cut Room stays visible below it.
+- [~] **Playback runs on HTML5 media, not ffmpeg.** Decision: `<video>`/`<audio>` play the `lyme-asset://` source directly, and cuts are stored as non-destructive in/out points on the node — no frames are rewritten in Play. ffmpeg only enters at **export** (Phase 7), where the stored trim/split/mute get baked into the output file. This keeps Play instant and avoids an ffmpeg round-trip per scrub; the Phase 0 "same engine as Cut Room" note referred to *export*, which still holds.
+- [x] Back arrow ("← Back to Canvas" / "← Back to Storyboard") driven by `playFrom`, captured from the session's `view` at `openPlay` time so Play returns to wherever it was opened from.
+- [x] Video frame with a minimal overlaid control bar (play/pause, time, trim track with draggable in/out handles) — not a separate transport row. Audio nodes render a glyph + hidden `<audio>` in the same overlay pattern.
+- [x] Clip audio actions below the stage (video only): **Detach** (→ independent audio node on Canvas referencing the same file) and **Delete** (mutes the track via `audioMuted`, behind a `confirm`). Real track extraction happens at export (ffmpeg, Phase 7) — Play stores intent.
+- [x] Non-destructive in/out points stored on the node itself (`MediaNodeData.trimIn`/`trimOut`), not separate editor state — matches the resolved question in canvas-node-model.md.
+- [x] Split at playhead → patches the source node's `trimOut` and spawns a right-half node (`trimIn = playhead`) back on Canvas; both are in/out views of the same file.
+- [x] Send to timeline action, reusing the same node → Cut Room path (shared with Phase 7).
+- [x] Entry points: double-click a video/audio node (`onNodeDoubleClick` in `CanvasArea`) or the hover ▶ button on the node thumb (`MediaNode`). `openPlay` guards against image nodes.
+- **Done when:** a clip can be opened in Play, trimmed, split, have its audio detached or deleted, sent to Cut Room, and the back arrow returns you to where you came from. *(Met today with uploaded/linked clips; "a real generated clip from Phase 4" awaits Generate wiring.)*
 - Ref: [canvas-node-model.md](canvas-node-model.md).
 
 ## Phase 6 — Storyboard view

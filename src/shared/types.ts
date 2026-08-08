@@ -58,6 +58,12 @@ export interface MediaNodeData {
   /** Provenance for connection-sourced nodes (e.g. ChatRealty listing). */
   detailUrl?: string
   listingKey?: string
+  /** Non-destructive in/out points (seconds) set in Play view; playback and
+   *  export clamp to these without altering the underlying file. */
+  trimIn?: number
+  trimOut?: number
+  /** Video's own audio track muted (set via Play view's audio delete). */
+  audioMuted?: boolean
   [key: string]: unknown
 }
 

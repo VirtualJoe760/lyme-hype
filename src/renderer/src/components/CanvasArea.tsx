@@ -21,6 +21,7 @@ function CanvasInner(): React.JSX.Element {
   const nodes = useStudio((s) => s.nodes)
   const onNodesChange = useStudio((s) => s.onNodesChange)
   const openCombine = useStudio((s) => s.openCombine)
+  const openPlay = useStudio((s) => s.openPlay)
   const [tool, setTool] = useState<Tool>('select')
   const { getIntersectingNodes } = useReactFlow()
 
@@ -34,6 +35,14 @@ function CanvasInner(): React.JSX.Element {
       }
     },
     [getIntersectingNodes, openCombine]
+  )
+
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: MediaFlowNode) => {
+      // Video/audio → Play view; images aren't Play-eligible (openPlay guards it).
+      openPlay(node.id)
+    },
+    [openPlay]
   )
 
   return (
@@ -79,6 +88,7 @@ function CanvasInner(): React.JSX.Element {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onNodeDragStop={handleDragStop}
+        onNodeDoubleClick={handleNodeDoubleClick}
         panOnDrag={tool === 'select'}
         selectionOnDrag={tool === 'box'}
         selectionMode={SelectionMode.Partial}
