@@ -9,6 +9,16 @@
 - **The app is an MCP client.** The Claude Agent SDK running in the main process is natively an MCP client — same model as Claude Desktop and Claude Code. Generation tools (Seedance, ElevenLabs-style audio, image-gen) and data tools (ChatRealty) all attach the same way, as user-added connections, not bespoke per-provider integrations we build and maintain. See [canvas-node-model.md](canvas-node-model.md#connections-mcp--this-changes-generate) for what this means for the canvas.
 - **Credentials never pass through the agent.** Connector setup can use the agent to drive a real browser (Electron already is Chromium — no dependency on Anthropic's "Claude in Chrome" extension) to help a user reach a signup page or API-keys screen, but the actual secret is always typed into a native modal `BrowserWindow` that reports only field name/length/last-4 back to the agent, and stores the real value via Electron's `safeStorage` (OS keychain/DPAPI) — never a plaintext file, never agent-observable state. Full reasoning and open questions in [connections-and-credentials.md](connections-and-credentials.md).
 
+## Implementation notes (Phase 1)
+
+Written down when the scaffold was actually built (2026-08-08), because each of these was a real decision:
+
+- **Stack: electron-vite 2.3 / Vite 5 / React 18 / Electron 38 / TypeScript strict.** The dev machine's nvm has Node 21.6.2 (and 18), and Vite 6/7 refuse Node 21 — so electron-vite 2.x + Vite 5 is the newest combination that runs here. Electron itself bundles its own Node 22, so the host Node only runs the build tooling. Upgrading the Vite line is a when-Node-gets-upgraded chore, not urgent.
+- **Agent SDK auth rides the machine's Claude Code login.** `@anthropic-ai/claude-agent-sdk` spawns its bundled CLI, which uses the same stored OAuth credentials Claude Code uses — no `ANTHROPIC_API_KEY` anywhere. Verified working. Two consequences: (a) dev requires a machine where Claude Code is signed in; (b) distributing to users who don't run Claude Code needs its own auth story — parked as an open question below.
+- **The SDK spawns `node` from PATH.** Fine in dev; packaging (Phase 9) must either bundle a Node runtime or use `ELECTRON_RUN_AS_NODE` so the spawned CLI has something to run on.
+- **The SDK is ESM-only; the Electron main bundle is CJS.** Loaded via dynamic `import()` (rollup preserves it) — don't convert to a static import without switching the whole main process to ESM.
+- **Self-test mode:** `LYME_SELFTEST=1 npm run dev` boots the app, checks vault encrypt/decrypt (real DPAPI), sessions persistence, secure-modal boot/dismiss, and a live agent call, then exits — the headless check for everything a browser preview can't reach.
+
 ## Premiere Pro integration: UXP, not CEP
 
 Adobe is mid-migration away from CEP (the old Node+Chromium plugin platform) to UXP (Unified Extensibility Platform):
@@ -37,6 +47,7 @@ A UXP plugin runs inside Premiere Pro's own process — it is **not** part of ou
 ## Open questions
 
 - ~~Do we need the Premiere plugin for v1?~~ Decided: yes, it's a confirmed goal — likely built as a second phase after the core studio app, since it's a genuinely separate codebase either way.
+- Agent auth for distribution: dev rides the machine's Claude Code login (see implementation notes). If Lyme Hype ever ships to someone without Claude Code, it needs its own key management or OAuth flow — not a Phase 1–7 problem, but real before any packaging that leaves this desk.
 - What's actually still missing from UXP's "approaching 1:1 parity" list right now — worth checking `developer.adobe.com/premiere-pro/uxp/changelog` before we commit to anything the API can't do yet.
 - Motion graphics generation is now in scope alongside video — worth figuring out whether Seedance covers that well on its own, or whether we need a second specialized tool/API for it.
 

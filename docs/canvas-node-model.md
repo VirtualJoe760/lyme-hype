@@ -59,9 +59,9 @@ Not a third canvas toggle — Canvas and Storyboard stay a 2-way toggle. Play is
 
 ## Open questions
 
-- Does audio need link-import too (a shared Dropbox/SoundCloud link, say), or is upload + generate enough for v1? Not explicitly requested — flagging as a natural extension, not a decision.
+- Does audio need link-import too (a shared Dropbox/SoundCloud link, say), or is upload + generate enough for v1? Not explicitly requested — flagging as a natural extension, not a decision. (The Phase 2 UI reflects the current answer: the link input only activates on the Video/Motion tabs.)
 - Play's non-destructive model implies in/out points (and split history) persist per node — worth confirming that's stored alongside the node itself rather than as separate editor state that could drift out of sync.
 - Back-navigation needs to track more than "last view" if Play can be opened from either Canvas or Storyboard — probably a small nav stack rather than a single remembered state, in case Play is ever opened from Play (e.g. via a related-clip link) two levels deep.
 - Delete-audio needs a confirm step somewhere (even a lightweight one) since it's destructive to the clip's current audio track — unlike trimming, which is explicitly non-destructive. Detach doesn't need one; nothing is lost, it just becomes two nodes.
-- For video links: confirm the download-and-transcode step happens automatically on paste, not as a separate manual step — otherwise a linked video looks canvas-ready but isn't actually timeline-eligible yet.
+- ~~For video links: confirm the download-and-transcode step happens automatically on paste, not as a separate manual step.~~ Confirmed in the Phase 2 build: pasting a link immediately puts the node into the "Rendering…" state — the same state real download/transcode will occupy in Phase 4 — so a linked node never looks ready before it is.
 - Connection auth and setup mechanics — how a connector actually gets added, how credentials are collected without the agent ever seeing them — now live in [connections-and-credentials.md](connections-and-credentials.md) rather than here.

@@ -1,0 +1,94 @@
+/* Lime Cut — Concept B from docs/concepts/studio-concept-directions.html.
+   Lime is rationed: brand mark, Generate, active tab, live dot. Everything else
+   stays neutral charcoal so the accent still means something when it appears. */
+
+@font-face {
+  font-family: 'Bitcount Prop Single';
+  src: url('../assets/fonts/BitcountPropSingle-variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('../assets/fonts/PressStart2P-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --bg: #15171a;
+  --panel: #1d2023;
+  --panel-raised: #242830;
+  --border: #30343a;
+  --text: #edeff1;
+  --text-soft: #9aa0a8;
+  --accent: #c6f135;
+  --accent-dim: #7c9421;
+  --danger: #e2543a;
+  --ok: #4ade80;
+  --radius: 9px;
+  --sans:
+    'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace;
+  --brand-font: 'Bitcount Prop Single', var(--mono);
+  --arcade-font: 'Press Start 2P', var(--mono);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--accent-dim);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

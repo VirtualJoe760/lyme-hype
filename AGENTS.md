@@ -11,10 +11,12 @@ into `CLAUDE.md`.
 
 ## 0. Where this project actually is
 
-**Nothing is built yet.** `docs/` is a complete spec — read it before writing a line of code.
-There is no `src/`, no `package.json`, no app. Phase 1 of the build plan (Electron + TypeScript
-scaffold) is the first real code this repo will contain. Don't assume any file exists that isn't
-listed in §2.
+**Phases 1–2 are built and verified (2026-08-08); Phase 3 is next.** `docs/` is the spec — read
+it before touching code, and read [`docs/build-plan.md`](docs/build-plan.md) to see which phases
+are done. The Electron + TypeScript app runs (`npm run dev`), the Claude Agent SDK is live in the
+main process, and the secure-credential boundary exists and is self-tested
+(`LYME_SELFTEST=1 npm run dev`). Phase 3 proper (first real MCP connection: ChatRealty) is
+blocked on a real token from Joseph.
 
 Start here: [`docs/README.md`](docs/README.md). It links everything else and tracks what's
 decided vs. still open.
@@ -88,13 +90,24 @@ lyme-hype/
 │       ├── studio-concept-directions.html      Interactive mockup — three visual-identity
 │       │                                       directions, Storyboard, Play, Connections panel.
 │       └── fonts/                              Bitcount Prop Single + Press Start 2P, self-hosted.
-├── src/                  Not created yet — Phase 1 of build-plan.md.
-│   ├── main/             (planned) Electron main process: Claude Agent SDK, MCP client, ffmpeg
-│   │                     invocation, secure-credential IPC handlers.
-│   ├── preload/          (planned) Narrow IPC bridge exposed to the renderer — nothing else.
-│   └── renderer/         (planned) React UI: Sessions rail, Canvas/Storyboard toggle, Play view,
-│                         Add-to-canvas aside, Cut Room.
-└── package.json          Not created yet.
+├── src/
+│   ├── main/             Electron main process. index.ts (boot/window), ipc.ts (all handlers,
+│   │                     sender-validated), agent.ts (Claude Agent SDK, dynamic import — ESM-only
+│   │                     dep in a CJS bundle), sessions-store.ts (JSON in userData),
+│   │                     credential-vault.ts (safeStorage/DPAPI), secure-credential.ts (the
+│   │                     native secret modal), selftest.ts (LYME_SELFTEST=1 plumbing check).
+│   ├── preload/          index.ts (the narrow `window.lyme` bridge — the studio renderer's whole
+│   │                     world), secure.ts (the modal's even narrower bridge), index.d.ts.
+│   ├── shared/           types.ts + ipc-channels.ts, imported by both sides as @shared/*.
+│   └── renderer/         React UI (Lime Cut skin). index.html + secure.html entries;
+│                         src/store.ts (zustand), src/bridge.ts (real IPC or browser-preview
+│                         mock), src/components/* (TitleBar, Toolbar, SessionsRail, CanvasArea +
+│                         MediaNode, StoryboardView placeholder, AsidePanel + AgentCard, CutRoom,
+│                         CombineDialog, ConnectionsPanel), src/secure/* (modal page).
+├── electron.vite.config.ts   Main/preload/renderer builds; two renderer entries (studio + modal).
+├── tsconfig.json / .node.json / .web.json   Strict TS; `npm run typecheck` covers both sides.
+└── package.json          electron-vite 2 / Vite 5 / React 18 / Electron 38 — version rationale in
+                          docs/platform-decisions.md (Node 21 on the dev machine pins Vite).
 ```
 
 ## 3. Which doc covers what

@@ -10,31 +10,32 @@ Sequencing, not spec. What each phase covers is already written down in the othe
 - [x] Connections panel mockup reworked to match [connections-and-credentials.md](connections-and-credentials.md) — generic connector form, quick-start templates, and the secure-credential modal shown as its own piece.
 - [ ] jpsrealtor's Instagram/social account-linking flow — under review in a separate session against the real jpsrealtor project directory. Lyme Hype ports that flow rather than building its own; exact mechanics land in [connections-and-credentials.md](connections-and-credentials.md) once that review is done.
 
-## Phase 1 — Electron + TypeScript scaffold
+## Phase 1 — Electron + TypeScript scaffold ✅ (built 2026-08-08)
 
 Goal: an empty window that runs on Windows, with the Agent SDK wired into the main process.
 
-- electron-vite or Electron Forge starter, TypeScript configured.
-- Claude Agent SDK instantiated in the main process — confirm it can complete a basic call.
-- Basic `BrowserWindow` chrome (titlebar + toolbar shell — pick one concept skin to build toward first, doesn't need to be final).
-- **Done when:** `npm run dev` opens a window and the agent responds to a hardcoded prompt.
+- [x] electron-vite scaffold, TypeScript strict, hand-rolled (the create-tool is interactive). Stack pinned by the dev machine's Node 21 (nvm): electron-vite 2.3 / Vite 5 / React 18 / Electron 38 — see the implementation notes in [platform-decisions.md](platform-decisions.md#implementation-notes-phase-1).
+- [x] Claude Agent SDK (0.1.77) in the main process — authenticates via this machine's existing Claude Code login, no API key needed. Verified standalone and in-app ("LINK OK", ~$0.10/ping).
+- [x] `BrowserWindow` chrome in the **Lime Cut** skin (frameless window, custom titlebar/toolbar, per the kickoff prompt's pick).
+- **Done criteria met:** `npm run dev` opens the window; the "Agent link" card in the aside gets a real reply. `LYME_SELFTEST=1 npm run dev` runs the headless plumbing check (vault, sessions, secure modal, agent) and exits.
 - Ref: [platform-decisions.md](platform-decisions.md) (Electron decision, Windows-first build order).
 
-## Phase 2 — Sessions + canvas core
+## Phase 2 — Sessions + canvas core ✅ (built 2026-08-08)
 
-- Sessions rail: list, create, rename, select. Local state only — no MCP yet.
-- Canvas view (React Flow): dot-grid background, pan/zoom, empty.
-- Node types stubbed — Image/Video/Audio nodes render with placeholder thumbnails, no real generation wired yet.
-- Combine interaction: dragging one node onto another fires a placeholder dialog (real generation lands in Phase 4).
-- Collapsible left/right panels.
-- **Done when:** you can create a session, rename it, see an empty canvas, and drag a stub node onto another to see a combine dialog fire.
+- [x] Sessions rail: list, create, rename (double-click or ✎), select, delete (confirm step). Persisted as JSON in `userData` via the main process — no MCP yet.
+- [x] Canvas view (React Flow / `@xyflow/react` 12): dot-grid background, pan/zoom, select + box-select tools.
+- [x] Node types stubbed — Image/Video/Audio nodes with placeholder swatch thumbnails (audio gets a waveform), source badges (gen/file/link/gfx), "Rendering…" pulse that resolves after a stub delay.
+- [x] Combine interaction: drag one node onto another (or select two + toolbar Combine) fires the combine dialog with per-pair copy; confirming spawns a stub combined node. Real generation lands in Phase 4.
+- [x] Collapsible left/right panels; Cut Room strip with send-to-timeline from video/audio nodes; Canvas/Storyboard toggle (Storyboard itself is a Phase 6 placeholder).
+- **Done criteria met** — verified end to end (session create/rename/switch with scoped state, drag-onto-node combine dialog, stub lifecycle).
+- Note: the renderer also runs in a plain browser against the Vite dev server with an in-memory mock bridge ("browser preview" tag in the titlebar) — used for UI verification without driving the Electron window.
 - Ref: [canvas-node-model.md](canvas-node-model.md), [reference-notes-stephenlawyer-canvas.md](reference-notes-stephenlawyer-canvas.md).
 
 ## Phase 3 — Credential security + first real connection
 
 Build the security boundary before any real connection touches a real key, not after.
 
-- Native secure-credential modal: `BrowserWindow` + IPC + `safeStorage`, reporting contract (field name / length / last-4 only) working end to end — test it with a fake connector before a real one exists.
+- [x] Native secure-credential modal: `BrowserWindow` + IPC + `safeStorage`, reporting contract (field name / length / last-4 only) — built in the Phase 1/2 pass, ahead of need. The Connections sheet (left rail → Connections) has a "Test secure input (fake connector)" button; the self-test verifies the vault round-trip and that dismissing the modal stores nothing. Remaining below needs a real ChatRealty token.
 - Generic connector data model (name / endpoint / auth-type / credential) + the reworked Connections panel UI.
 - Wire **one** real connection end to end: **ChatRealty** — token-based auth is the simplest case, and it's the concrete example the whole connector model was designed around.
 - Agent-driven browser-copilot setup flow, first tested against ChatRealty's own signup/token page since that flow is already known.

@@ -1,0 +1,117 @@
+:root {
+  --bg: #1d2023;
+  --raised: #242830;
+  --border: #30343a;
+  --text: #edeff1;
+  --soft: #9aa0a8;
+  --accent: #c6f135;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body.secure-body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+.secure-frame {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100vh;
+  -webkit-app-region: drag;
+}
+
+.secure-frame input,
+.secure-frame button {
+  -webkit-app-region: no-drag;
+}
+
+.secure-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--soft);
+}
+
+.secure-lock {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.secure-copy {
+  color: var(--soft);
+  line-height: 1.6;
+  font-size: 12.5px;
+}
+
+.secure-copy strong {
+  color: var(--text);
+}
+
+#secret-input {
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  outline: none;
+}
+
+#secret-input:focus {
+  border-color: var(--accent);
+}
+
+.secure-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.secure-actions button {
+  padding: 9px 16px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--soft);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.secure-actions button:hover {
+  color: var(--text);
+}
+
+#save-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #16240a;
+  font-weight: 700;
+}
+
+#save-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.secure-error {
+  color: var(--soft);
+  padding: 20px;
+}

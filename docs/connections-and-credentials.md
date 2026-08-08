@@ -29,6 +29,14 @@ Concretely: the copilot flow can navigate, click, and explain right up to the po
 
 Joseph already uses `~/.claude/tools/secure-input.js` with Claude Code for exactly this — a one-shot local page that collects a secret and writes it straight to its destination, reporting back only field name, length, and last-4, never the value itself. Lyme Hype needs the same *contract*, but built natively rather than depending on that external script (which exists specifically because Claude Code's chat transcript can't render an inline form — Lyme Hype doesn't have that constraint; it's a full Electron app).
 
+**Status: built and self-tested (2026-08-08)** — `src/main/secure-credential.ts` +
+`src/main/credential-vault.ts` + the `secure.html` modal page. A "Test secure input (fake
+connector)" button lives in the Connections sheet; `LYME_SELFTEST=1 npm run dev` verifies the
+vault round-trip on real DPAPI and that dismissing the modal stores nothing. One implementation
+detail worth knowing: the modal window is identified by a per-request id passed via
+`webPreferences.additionalArguments`, and the submit handler only accepts the value from that
+specific window's webContents — a stray renderer can't impersonate the modal.
+
 The native version is simpler than the original, not just a port of it:
 
 - **A real modal `BrowserWindow`**, not a localhost HTTP server plus a system browser tab. No listening port, ever — the form lives inside Lyme Hype's own process, and the value returns to the main process over a narrowly-scoped IPC channel the preload script exposes, never over a network socket.

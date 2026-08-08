@@ -47,10 +47,10 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
 
 ## Status
 
-Planning → concept design, canvas-first. Nothing built yet — everything below is spec, not code.
+**Building.** Phases 1 and 2 are code, built and verified 2026-08-08: the Electron + TypeScript shell (Lime Cut skin) runs on Windows with the Claude Agent SDK live in the main process (authenticated via the machine's Claude Code login), Sessions rail, React Flow canvas with stub Image/Video/Audio nodes, drag-onto-node combine dialog, Cut Room strip, and collapsible panels. Phase 3's security boundary — the native secure-credential modal + `safeStorage` vault — is also built and self-tested ahead of need. `npm run dev` to run; `LYME_SELFTEST=1 npm run dev` for the headless plumbing check.
 
-**Resolved** (these were open questions in earlier drafts of this doc; no longer are): center panel is a canvas (React Flow, per the stephenlawyer.clothing precedent), not jboogx's chat thread. Left rail is Sessions (Claude Desktop's chat-list model), not a category sidebar. Premiere plugin confirmed in scope, as a phase-2 build. Electron + TypeScript, Windows-first, Mac build later on Joseph's MacBook.
+**Next: Phase 3 proper** — wiring ChatRealty as the first real MCP connection, which needs a real token from Joseph.
 
-Sketched in `concepts/studio-concept-directions.html`: three visual-identity directions (Night Terminal, Lime Cut, Zest), a Storyboard view, a Play view, and a Connections panel (custom-connector-first, with the secure-credential modal shown as its own piece) — all matching the specs in the other docs now, nothing known-stale.
+**Resolved** (these were open questions in earlier drafts of this doc; no longer are): center panel is a canvas (React Flow, per the stephenlawyer.clothing precedent), not jboogx's chat thread. Left rail is Sessions (Claude Desktop's chat-list model), not a category sidebar. Premiere plugin confirmed in scope, as a phase-2 build. Electron + TypeScript, Windows-first, Mac build later on Joseph's MacBook. Visual direction: **Lime Cut** (per the kickoff prompt), from the three directions sketched in `concepts/studio-concept-directions.html`.
 
-Actual build order — phases, dependencies, "done" criteria — lives in [build-plan.md](build-plan.md). Name is decided (Lyme Hype), ffmpeg bundling is decided (also powers Play view and subtitle burn-in), and Phase 0 is otherwise closed. Next real step is Phase 1 — the actual Electron scaffold; nothing below planning/mockup exists as code yet.
+Actual build order — phases, dependencies, "done" criteria, and which are now done — lives in [build-plan.md](build-plan.md). Stack specifics and the decisions made while scaffolding are in [platform-decisions.md](platform-decisions.md#implementation-notes-phase-1).
