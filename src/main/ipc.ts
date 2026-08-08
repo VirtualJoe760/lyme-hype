@@ -4,7 +4,8 @@ import type { ConnectorDef, ModelProviderDef, PersistedState, SecretRequest } fr
 import { runAgentPrompt } from './agent'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
-import { deleteConnector, listConnectors, saveConnector, testConnector } from './connectors-store'
+import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
+import { addSuggestion, listSuggestions, openSuggestionKeyPage } from './connector-suggestions'
 import { deleteSecret, listSecretReports } from './credential-vault'
 import {
   deleteModelProvider,
@@ -106,6 +107,17 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.connectorsTest, (e, id: string) => {
     if (!isMainSender(e)) return null
     return testConnector(id)
+  })
+  ipcMain.handle(IPC.connectorsSuggestions, (e) =>
+    isMainSender(e) ? listSuggestions(installedConnectorIds()) : []
+  )
+  ipcMain.handle(IPC.connectorsAddSuggestion, (e, id: string) => {
+    if (!isMainSender(e)) return null
+    return addSuggestion(id)
+  })
+  ipcMain.handle(IPC.connectorsOpenKeyPage, (e, id: string) => {
+    if (!isMainSender(e)) return
+    openSuggestionKeyPage(id)
   })
 
   ipcMain.handle(IPC.modelProvidersList, (e) => (isMainSender(e) ? listModelProviders() : []))

@@ -7,7 +7,8 @@ import {
   CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID,
   claudeAuthOverrideKind
 } from './claude-auth'
-import { deleteConnector, listConnectors, saveConnector } from './connectors-store'
+import { deleteConnector, installedConnectorIds, listConnectors, saveConnector } from './connectors-store'
+import { addSuggestion, listSuggestions } from './connector-suggestions'
 import {
   deleteModelProvider,
   listModelProviders,
@@ -196,11 +197,13 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   }
 
-  // 7. Generic connector store: ChatRealty is a built-in template, and a custom
-  //    connector round-trips through save/list/delete.
+  // 7. Connectors: installed list is user-only + all removable; the suggestions
+  //    catalog carries the known tools; add-from-suggestion installs one.
   try {
-    const withBuiltin = listConnectors()
-    const chatRealty = withBuiltin.find((c) => c.id === 'chatrealty')
+    const suggestions = listSuggestions(installedConnectorIds())
+    const hasMuapi = suggestions.some((s) => s.id === 'muapi' && s.available)
+    const hasKrea = suggestions.some((s) => s.id === 'krea' && !s.available)
+    // Custom connector round-trip (all removable now).
     saveConnector({
       id: 'selftest-conn',
       name: 'Self Test Connector',
@@ -211,15 +214,21 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
       secretKey: 'X_TOKEN',
       secretFieldLabel: 'API key'
     })
-    const added = listConnectors().some((c) => c.id === 'selftest-conn')
+    const added = listConnectors().some((c) => c.id === 'selftest-conn' && !c.builtin)
     deleteConnector('selftest-conn')
     const removed = !listConnectors().some((c) => c.id === 'selftest-conn')
-    if (chatRealty?.builtin && added && removed) {
+    // Add-from-suggestion installs muapi, then clean it up.
+    const installedDef = addSuggestion('muapi')
+    const muapiInstalled = listConnectors().some((c) => c.id === 'muapi')
+    deleteConnector('muapi')
+    if (hasMuapi && hasKrea && added && removed && installedDef?.id === 'muapi' && muapiInstalled) {
       log(
-        `connectors: PASS (ChatRealty built-in present [credential=${chatRealty.hasCredential}], custom save/delete round-trip)`
+        `connectors: PASS (${suggestions.length} suggestions; custom + add-from-suggestion round-trip; all removable)`
       )
     } else {
-      fail(`connectors: builtin=${!!chatRealty?.builtin} added=${added} removed=${removed}`)
+      fail(
+        `connectors: muapi=${hasMuapi} krea-pending=${hasKrea} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
+      )
     }
   } catch (error) {
     fail(`connectors: ${error instanceof Error ? error.message : String(error)}`)

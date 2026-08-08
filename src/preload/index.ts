@@ -6,6 +6,7 @@ import type {
   ChatRealtyPullResult,
   ClaudeAuthStatus,
   ConnectorDef,
+  ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
   ModelProviderDef,
@@ -53,7 +54,11 @@ const api = {
     save: (def: ConnectorDef): Promise<void> => ipcRenderer.invoke(IPC.connectorsSave, def),
     delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.connectorsDelete, id),
     test: (id: string): Promise<ConnectorTestResult | null> =>
-      ipcRenderer.invoke(IPC.connectorsTest, id)
+      ipcRenderer.invoke(IPC.connectorsTest, id),
+    suggestions: (): Promise<ConnectorSuggestion[]> => ipcRenderer.invoke(IPC.connectorsSuggestions),
+    addSuggestion: (id: string): Promise<ConnectorDef | null> =>
+      ipcRenderer.invoke(IPC.connectorsAddSuggestion, id),
+    openKeyPage: (id: string): Promise<void> => ipcRenderer.invoke(IPC.connectorsOpenKeyPage, id)
   },
   modelProviders: {
     list: (): Promise<ModelProviderView[]> => ipcRenderer.invoke(IPC.modelProvidersList),

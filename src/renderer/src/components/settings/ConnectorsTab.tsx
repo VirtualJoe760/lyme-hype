@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ConnectorAuthType, ConnectorKind, ConnectorView } from '@shared/types'
+import type {
+  ConnectorAuthType,
+  ConnectorKind,
+  ConnectorSuggestion,
+  ConnectorView
+} from '@shared/types'
 import { bridge } from '../../bridge'
 
 interface DraftConnector {
@@ -40,8 +45,24 @@ function parseEnv(text: string): Record<string, string> {
   return out
 }
 
+/** Brand-ish gradient per suggested tool for its tile thumbnail. */
+const TILE_GRADIENT: Record<string, string> = {
+  chatrealty: 'linear-gradient(135deg, #2b3a67, #5b8dd6)',
+  muapi: 'linear-gradient(135deg, #46237a, #a06cd5)',
+  elevenlabs: 'linear-gradient(135deg, #1a1a1a, #4a4a4a)',
+  krea: 'linear-gradient(135deg, #703c1f, #e2543a)',
+  fal: 'linear-gradient(135deg, #6b2d5c, #d05f8a)',
+  gemini: 'linear-gradient(135deg, #1f4d6b, #4a90d9)',
+  yapper: 'linear-gradient(135deg, #1f4d3d, #4aa87d)'
+}
+
+function tileMark(name: string): string {
+  return name.replace(/[^A-Za-z0-9 ]/g, '').trim().slice(0, 2).toUpperCase()
+}
+
 export function ConnectorsTab(): React.JSX.Element {
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
+  const [suggestions, setSuggestions] = useState<ConnectorSuggestion[]>([])
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState<DraftConnector>(EMPTY_DRAFT)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
@@ -49,11 +70,24 @@ export function ConnectorsTab(): React.JSX.Element {
 
   const refresh = useCallback(async () => {
     setConnectors(await bridge.connectors.list())
+    setSuggestions(await bridge.connectors.suggestions())
   }, [])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  async function addSuggestion(s: ConnectorSuggestion): Promise<void> {
+    const def = await bridge.connectors.addSuggestion(s.id)
+    if (def && def.authType !== 'none') {
+      await bridge.secrets.request({
+        connectorId: def.id,
+        connectorName: def.name,
+        fieldLabel: def.secretFieldLabel
+      })
+    }
+    await refresh()
+  }
 
   async function setCredential(view: ConnectorView): Promise<void> {
     const report = await bridge.secrets.request({
@@ -121,6 +155,12 @@ export function ConnectorsTab(): React.JSX.Element {
         </p>
       )}
 
+      <div className="sheet-section-label">Installed</div>
+      {connectors.length === 0 && (
+        <p className="settings-intro" style={{ marginTop: 0 }}>
+          Nothing added yet. Add one from Suggested below, or build a custom connector.
+        </p>
+      )}
       <div className="settings-grid">
         {connectors.map((c) => (
           <div key={c.id} className="settings-card">
@@ -165,9 +205,54 @@ export function ConnectorsTab(): React.JSX.Element {
         ))}
       </div>
 
+      <div className="sheet-section-label" style={{ marginTop: 20 }}>Suggested</div>
+      <p className="settings-intro" style={{ marginTop: 0 }}>
+        Tools we recommend. “Open setup page” takes you to each one’s login / API-keys page in your
+        browser; “Add” installs it and prompts for the key.
+      </p>
+      <div className="suggestion-tiles">
+        {suggestions.map((s) => (
+          <div key={s.id} className={`suggestion-tile${s.available ? '' : ' pending'}`}>
+            <div
+              className="tile-thumb"
+              style={{ background: TILE_GRADIENT[s.id] ?? 'linear-gradient(135deg, #3d4a1f, #97b73e)' }}
+            >
+              <span className="tile-mark">{tileMark(s.name)}</span>
+              {s.installed && <span className="tile-badge">✓ installed</span>}
+            </div>
+            <div className="tile-body">
+              <div className="tile-name">
+                {s.name}
+                <span className="conn-tag">{s.category}</span>
+              </div>
+              <div className="settings-blurb">{s.blurb}</div>
+            </div>
+            <div className="tile-actions">
+              <button
+                className="conn-mini"
+                title={`Open ${s.name}'s setup page`}
+                onClick={() => void bridge.connectors.openKeyPage(s.id)}
+              >
+                ↗ Setup page
+              </button>
+              {s.installed ? (
+                <span className="tile-status">added</span>
+              ) : s.available ? (
+                <button className="conn-mini primary-mini" onClick={() => void addSuggestion(s)}>
+                  + Add
+                </button>
+              ) : (
+                <span className="tile-status" title={s.note}>coming</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="sheet-section-label" style={{ marginTop: 20 }}>Custom</div>
       {!adding ? (
         <button className="action-btn settings-add" onClick={() => setAdding(true)}>
-          + Add connector
+          + Add custom connector
         </button>
       ) : (
         <div className="add-connector">

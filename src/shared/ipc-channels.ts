@@ -20,6 +20,9 @@ export const IPC = {
   connectorsSave: 'connectors:save',
   connectorsDelete: 'connectors:delete',
   connectorsTest: 'connectors:test',
+  connectorsSuggestions: 'connectors:suggestions',
+  connectorsAddSuggestion: 'connectors:add-suggestion',
+  connectorsOpenKeyPage: 'connectors:open-key-page',
 
   modelProvidersList: 'model-providers:list',
   modelProvidersSave: 'model-providers:save',

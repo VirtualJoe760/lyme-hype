@@ -145,6 +145,23 @@ export interface ConnectorTestResult {
   error?: string
 }
 
+/**
+ * A known tool in the suggested-connectors catalog. "Open setup page" drives the
+ * browser to keyPageUrl; "Add" installs `template` as an installed connector.
+ * `available: false` means it needs transport support not built yet (http MCP,
+ * OAuth, a Gemini wrapper) — still worth showing so the user can grab the key.
+ */
+export interface ConnectorSuggestion {
+  id: string
+  name: string
+  blurb: string
+  category: string
+  keyPageUrl: string
+  installed: boolean
+  available: boolean
+  note?: string
+}
+
 export interface ChatRealtyListing {
   listingKey: string
   address: string

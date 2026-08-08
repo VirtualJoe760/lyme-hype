@@ -2,8 +2,6 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { ConnectorDef, ConnectorTestResult, ConnectorView } from '@shared/types'
-import { CHATREALTY_CONNECTOR_ID, chatRealtyConnectorDef, hasChatRealtyToken } from './chatrealty'
-import { BUILTIN_CONNECTOR_TEMPLATES } from './connector-templates'
 import { readSecretValue } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
 
@@ -28,25 +26,23 @@ function writeUserConnectors(defs: ConnectorDef[]): void {
   renameSync(tmp, file)
 }
 
-/** Built-in templates (present by default) plus user-added connectors, each
- *  tagged with whether a credential is stored — never the value. */
+/** Installed connectors are exactly what the user added — from the suggested
+ *  catalog or custom. All removable; each tagged with whether a credential is
+ *  stored (never the value). Known tools live in the suggestions catalog, not
+ *  here, so nothing is a forced, undeletable placeholder. */
 export function listConnectors(): ConnectorView[] {
-  const builtins = [chatRealtyConnectorDef(), ...BUILTIN_CONNECTOR_TEMPLATES]
-  const builtinIds = new Set(builtins.map((d) => d.id))
-  const user = readUserConnectors().filter((d) => !builtinIds.has(d.id))
-  return [...builtins, ...user].map((def) => ({
+  return readUserConnectors().map((def) => ({
     ...def,
-    // ChatRealty also honors the dev .env.local token, so mirror the same
-    // resolution the pull uses instead of only checking the vault.
-    hasCredential:
-      def.id === CHATREALTY_CONNECTOR_ID
-        ? hasChatRealtyToken()
-        : readSecretValue(def.id) !== null
+    builtin: false,
+    hasCredential: readSecretValue(def.id) !== null
   }))
 }
 
+export function installedConnectorIds(): string[] {
+  return readUserConnectors().map((d) => d.id)
+}
+
 export function saveConnector(def: ConnectorDef): void {
-  if (def.id === CHATREALTY_CONNECTOR_ID) return // built-in template is not user-editable
   const cleaned: ConnectorDef = { ...def, builtin: false }
   const user = readUserConnectors().filter((d) => d.id !== def.id)
   user.push(cleaned)
@@ -54,7 +50,6 @@ export function saveConnector(def: ConnectorDef): void {
 }
 
 export function deleteConnector(id: string): void {
-  if (id === CHATREALTY_CONNECTOR_ID) return
   writeUserConnectors(readUserConnectors().filter((d) => d.id !== id))
 }
 

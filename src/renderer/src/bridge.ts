@@ -4,6 +4,7 @@ import type {
   ChatRealtyPullResult,
   ClaudeAuthStatus,
   ConnectorDef,
+  ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
   ModelProviderDef,
@@ -38,6 +39,9 @@ export interface Bridge {
     save(def: ConnectorDef): Promise<void>
     delete(id: string): Promise<void>
     test(id: string): Promise<ConnectorTestResult | null>
+    suggestions(): Promise<ConnectorSuggestion[]>
+    addSuggestion(id: string): Promise<ConnectorDef | null>
+    openKeyPage(id: string): Promise<void>
   }
   modelProviders: {
     list(): Promise<ModelProviderView[]>
@@ -108,7 +112,10 @@ function createBrowserMock(): Bridge {
       test: async () => ({
         ok: false,
         error: 'Connections run in the Electron main process — unavailable in browser preview.'
-      })
+      }),
+      suggestions: async () => [],
+      addSuggestion: async () => null,
+      openKeyPage: async () => {}
     },
     modelProviders: {
       list: async () => [],
