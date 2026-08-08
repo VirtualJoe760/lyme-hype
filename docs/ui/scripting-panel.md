@@ -16,6 +16,8 @@ Every agent call Lyme Hype has built so far is **single-turn**: `runAgentPrompt`
 
 **This needs new plumbing, not just a new component:** a `runScriptingTurn`-shaped function (or a persistent `query()` session kept alive in the main process per active session-tab) that maintains conversation history and streams replies the way `agent:stream` already does for the existing single-shot agent-link card, but across many turns instead of one. Budget this as real work, not a thin UI wrapper around what exists.
 
+Not the only place this plumbing is needed — the Create panel's Motion graphics tile (`create-panel.md`) has its own iterative prompt-refinement loop (abstract references → prompt variations → feedback → revise) that's the same conversational shape as this. Whichever gets built first should build the multi-turn plumbing generically enough for both, rather than solving it twice.
+
 ## The conversation
 
 Standard chat layout — message list + input box, not the aside's single-shot prompt form. The agent's job here is straightforwardly "help develop a script": brainstorm, draft, revise, answer "what if" questions about structure or pacing. No tool calls, no MCP connectors attached (this is pure conversation, not generation) — same `settingSources: []` isolation the rest of the app's agent calls already use, so it doesn't inherit anything from the machine's own Claude Code config.

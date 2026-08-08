@@ -97,7 +97,9 @@ lyme-hype/
 │   │   ├── play-view.md              Full-takeover single-clip review/trim/split.
 │   │   ├── timeline.md               Multitrack Cut Room rework — spec'd, not built.
 │   │   ├── scripting-panel.md        Third middle-panel chat view — spec'd, not built.
-│   │   └── layout-and-panels.md      Resizable/collapsible panels — spec'd, not built.
+│   │   ├── layout-and-panels.md      Resizable/collapsible panels — spec'd, not built.
+│   │   └── create-panel.md           Aside redesign (tile grid + Motion graphics) — spec'd,
+│   │                                 not built.
 │   └── concepts/
 │       ├── studio-concept-directions.html   Interactive mockup — three visual-identity
 │       │                                    directions, Storyboard, Play, Connections panel.
@@ -153,6 +155,7 @@ lyme-hype/
 | The Cut Room / multitrack timeline | [`docs/ui/timeline.md`](docs/ui/timeline.md) |
 | The Scripting (chat) panel | [`docs/ui/scripting-panel.md`](docs/ui/scripting-panel.md) |
 | Panel resize/collapse behavior | [`docs/ui/layout-and-panels.md`](docs/ui/layout-and-panels.md) |
+| The Create panel (aside redesign), Motion graphics workflow | [`docs/ui/create-panel.md`](docs/ui/create-panel.md) |
 | Connector setup mechanism, credential storage, the copilot browser flow | [`docs/connectors/model.md`](docs/connectors/model.md) |
 | Which generation tool to use for what, adding a new connector | [`docs/connectors/catalog.md`](docs/connectors/catalog.md) |
 | Publishing-account OAuth (Instagram/YouTube) | [`docs/connectors/publishing.md`](docs/connectors/publishing.md) |

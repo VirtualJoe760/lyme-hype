@@ -12,7 +12,7 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
 
 **Deferred to a joint session, not autonomous work** (see `build-plan.md` Phase 4/7 for detail): a live generation call against a real connector, bundling a verified-LGPL ffmpeg for eventual distribution, and porting jpsrealtor's Instagram publish flow.
 
-**Newly spec'd, not yet built** (2026-08-08 doc expansion): an OpenAI image connector (storyboard-tier, alongside Gemini), a third middle-panel **Scripting** view (chat interface for developing a script before any shot exists), a real **multitrack timeline** replacing the Cut Room's current sequential clip strip, and **resizable/collapsible panels** across the shell. See `build-plan.md` Phases 4/10/11/12 and the linked `ui/` docs.
+**Newly spec'd, not yet built** (2026-08-08 doc expansion): an OpenAI image connector (storyboard-tier, alongside Gemini), a third middle-panel **Scripting** view (chat interface for developing a script before any shot exists), a real **multitrack timeline** replacing the Cut Room's current sequential clip strip, **resizable/collapsible panels** across the shell, and a **Create panel** redesign (tile grid of tasks replacing the aside's current flat form, including a full Motion graphics workflow that surfaces real generation gaps — reference-image input, batch review, frame-conditioned video, alpha-channel export). See `build-plan.md` Phases 4/10–13 and the linked `ui/` docs.
 
 ## Where things live
 
@@ -30,6 +30,7 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
   - **[timeline.md](ui/timeline.md)** — the planned multitrack rework of the Cut Room. Not built yet.
   - **[scripting-panel.md](ui/scripting-panel.md)** — the planned third middle-panel chat view and its script → Storyboard handoff. Not built yet.
   - **[layout-and-panels.md](ui/layout-and-panels.md)** — the planned resizable/collapsible panel system. Not built yet.
+  - **[create-panel.md](ui/create-panel.md)** — the planned redesign of the aside ("Add to canvas" → "Create"): a tile grid of tasks instead of one flat form. Includes the Motion graphics workflow (references → agent-authored prompts → batch review → animate → local alpha-keying), which surfaces real generation-architecture gaps (reference-image input, batch review, frame-conditioned video, alpha export). Not built yet.
 - **concepts/** — `studio-concept-directions.html` (the three visual-identity mockups; Lime Cut, Night Terminal, and Zest are all built now) and the self-hosted concept fonts.
 
 ## Platform direction

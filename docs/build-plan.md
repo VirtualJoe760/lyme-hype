@@ -134,6 +134,14 @@ Not started. Full spec: [ui/layout-and-panels.md](ui/layout-and-panels.md). Drag
 
 - **Done when:** see [ui/layout-and-panels.md](ui/layout-and-panels.md)'s own done-criteria.
 
+## Phase 13 — Create panel (aside redesign)
+
+Not started. Full spec: [ui/create-panel.md](ui/create-panel.md). Replaces the aside's current flat kitchen-sink form ("Add to canvas") with a tile-grid-to-task-screen UI ("Create"): Generate video/audio/image, Isolate audio (local ffmpeg), Create a LoRA (Krea REST training), Generate a deepfake (Yapper), Upload, Link, and Motion graphics. This is also where the Phase 4 connector-tier routing gap (`connectorId` exists, no UI drives it) finally gets wired, via the Image generation tile's storyboard-vs-production choice.
+
+**Motion graphics is a phase of its own scope inside this phase** — a multi-stage wizard (references → agent-authored prompt variations → batch-generate grid review → iterate → reference-reinforced final image → start/end-frame animated video → optional looping variant with ffmpeg alpha-keying) confirmed against a real reference workflow (a JBook's Creative tutorial, reviewed 2026-08-08). It surfaces three real architecture gaps nothing else in this app needs: generation accepting reference images as input (not just text), a batch-generate-and-compare UI, and an alpha-capable export codec path. Consider sequencing Motion graphics after Phase 11 (Scripting panel) since they share the same multi-turn agent-conversation plumbing need — building it once for whichever lands first, not twice.
+
+- **Done when:** see [ui/create-panel.md](ui/create-panel.md)'s own done-criteria (the tile-grid redesign, and Motion graphics separately given its larger scope).
+
 ## Cross-cutting, ongoing
 
 Update the relevant spec doc in the same change that implements it. Decisions made mid-build belong back in the `architecture/`, `connectors/`, or `ui/` docs, not just in code — that's how this project's planning has worked so far, and drifting from it is exactly how README's Status section went stale once already.
