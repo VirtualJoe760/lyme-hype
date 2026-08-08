@@ -86,6 +86,8 @@ lyme-hype/
 │   ├── README.md                    Index. Start here.
 │   ├── history.md                    How the design got here — provenance, not a live spec.
 │   ├── build-plan.md                 The actual build order — read this to know what's next.
+│   ├── kickoff.md                    Paste-as-first-message prompt for the next autonomous
+│   │                                 build round. Overwritten each round, not accumulated.
 │   ├── architecture/
 │   │   └── platform-decisions.md    Electron, UXP vs CEP, MCP-client model, ffmpeg engine.
 │   ├── connectors/

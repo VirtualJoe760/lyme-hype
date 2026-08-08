@@ -118,7 +118,7 @@ Export pipeline in `src/main/ffmpeg.ts`; Cut Room UI reworked in `CutRoom.tsx`; 
 
 ## Phase 10 — Multitrack timeline (Cut Room rework)
 
-Not started. Full spec: [ui/timeline.md](ui/timeline.md). Replaces the current single-track sequential clip strip with a real time-based multitrack timeline (video + overlay tracks, voice + music tracks), including a real rewrite of the ffmpeg export filter graph (`overlay` + `amix`, not just `concat`). No dependency on Phase 8/9 — can be built any time after Phase 7's single-track pipeline, which it extends rather than throws away (trim/split semantics carry over from Play view).
+Not started. Full spec: [ui/timeline.md](ui/timeline.md). Replaces the current single-track sequential clip strip with a real time-based multitrack timeline: dynamic add-able video/audio tracks (default layout Video 1/2 + Audio 1/2), a razor tool plus split-at-playhead, snapping, per-track mute (real, affects export) and solo (preview-only, never export), and a real rewrite of the ffmpeg export filter graph (`overlay` composites video tracks in ascending order, `amix` blends audio, not just `concat`). No dependency on Phase 8/9 — can be built any time after Phase 7's single-track pipeline, which it extends rather than throws away (trim/split semantics carry over from Play view). Every open design question in the spec has a firm v1 default; nothing here should block an unattended build.
 
 - **Done when:** see [ui/timeline.md](ui/timeline.md)'s own done-criteria — a correctly-composited export with overlapping video/audio tracks, not just a longer sequential list.
 
@@ -135,6 +135,8 @@ Not started. Full spec: [ui/layout-and-panels.md](ui/layout-and-panels.md). Drag
 - **Done when:** see [ui/layout-and-panels.md](ui/layout-and-panels.md)'s own done-criteria.
 
 ## Phase 13 — Create panel (aside redesign)
+
+**Depends on Phase 11 (Scripting panel) — build 11 before 13.** Motion graphics' iterative stages call the same multi-turn agent-conversation plumbing Phase 11 builds; see `ui/create-panel.md`'s "Decisions" section for the fallback if this phase is ever started out of order. Every other tile in this phase has no such dependency and could technically go first, but keeping the phase intact and doing 11 → 13 in order is simpler than splitting Motion graphics out.
 
 Not started. Full spec: [ui/create-panel.md](ui/create-panel.md). Replaces the aside's current flat kitchen-sink form ("Add to canvas") with a tile-grid-to-task-screen UI ("Create"): Generate video/audio/image, Isolate audio (local ffmpeg), Create a LoRA (Krea REST training), Generate a deepfake (Yapper), Upload, Link, and Motion graphics. This is also where the Phase 4 connector-tier routing gap (`connectorId` exists, no UI drives it) finally gets wired, via the Image generation tile's storyboard-vs-production choice.
 

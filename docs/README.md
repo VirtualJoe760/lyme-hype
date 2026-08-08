@@ -18,6 +18,7 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
 
 - **[history.md](history.md)** — how the design got here: the two reference tools, resolved planning-phase decisions, the ffmpeg-licensing correction. Read this once, not repeatedly — it's provenance, not a live spec.
 - **[build-plan.md](build-plan.md)** — the actual build order: phases, what blocks what, what's done, what's next. The single "what do I build" doc.
+- **[kickoff.md](kickoff.md)** — the paste-as-first-message prompt for the next autonomous build round. Overwritten each round rather than accumulating one file per round; if you're starting a fresh session to build the next batch of phases, this is what to paste.
 - **architecture/**
   - **[platform-decisions.md](architecture/platform-decisions.md)** — Electron, UXP vs. CEP for the Premiere plugin, the MCP-client model, the ffmpeg engine decision.
 - **connectors/**

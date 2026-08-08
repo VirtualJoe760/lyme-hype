@@ -35,11 +35,15 @@ Once a script feels solid, an explicit action moves it into Storyboard — not a
 
 jboogx's Night Shift let the chat reference specific assets by an addressable token (`@image1`, `@video1`, `@audio1`) that a console UI resolved into real drop targets. An analogous idea here: letting the Scripting chat reference existing canvas nodes or storyboard panels by name, so the agent can propose "combine shot 3 with the establishing clip we already generated" concretely rather than abstractly. Interesting, not required for v1 — the script → storyboard handoff above doesn't depend on it.
 
+## Decisions (firm, for an unattended build)
+
+- **The conversation persists**, same mechanism as everything else — an array of messages on `Session` (alongside `nodes`/`cutRoom`), written through the existing debounced `persist()` path. No new persistence mechanism to design; it's plain JSON like the rest of session state. Size/pruning isn't a v1 concern — revisit only if it becomes one in practice.
+- **Cost visibility**: reuse the store's existing `agent` cost-tracking shape (`lastCostUsd`/`totalCostUsd`, already tracked per the single-shot agent-link card) — the Scripting panel's header shows a running per-session total, updated after each turn. No new tracking infrastructure, just a second place that reads the same numbers.
+- **"Break into shots" always creates fresh panels** — no matching against or updating existing panels from a prior draft. Simplest correct behavior for v1; the user deletes stale panels manually if iterating on an already-storyboarded script. Revisit only if that proves annoying in practice.
+
 ## Open questions
 
-- **Does the ongoing chat conversation persist across app restarts** the way sessions/canvas state already do, or is it ephemeral per app run? Leaning toward persisting it (consistent with "chat/agent history" already being part of a session's scoped state per the existing model), but the persistence mechanism (where it's stored, how large it can grow) isn't designed yet.
-- **Cost visibility** — the existing single-shot agent-link card shows cost per ping; an open-ended chat needs a running-cost readout the user can actually watch, more like jboogx's `SESSION $` / `WEEK $` readouts than a single number.
-- **Does "break into shots" always create new panels, or can it also match against and update existing ones** if the user is iterating on a script after already storyboarding a draft of it? Not designed — first pass should probably just always create fresh panels and let the user delete stale ones.
+None left that would block an unattended build — the three above were the only ones and are now decided.
 
 ## Done when
 

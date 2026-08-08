@@ -25,10 +25,10 @@ Reuse the drag pattern already proven in this codebase rather than reaching for 
 
 Panel sizes are a workspace preference, not session content — global, like `theme` already is in `PersistedState`, not scoped per-session. Add `railWidth?`, `asideWidth?`, `timelineHeight?` alongside `theme` in `PersistedState`, written through the same debounced `persist()` path everything else already uses.
 
-## Open questions
+## Non-blocking open questions
 
-- **Track height inside the timeline itself** (once [timeline.md](timeline.md) is built) is a related but separate resize surface — worth spec'ing there if it turns out four fixed-height tracks feel cramped, not assumed here.
-- **Does the middle panel (Canvas/Storyboard/Scripting) ever need its own resize handle**, e.g. if the timeline and the middle panel should trade space independently rather than the timeline just eating from the bottom of whatever's left — leaning toward "no, the timeline resize handle is sufficient" since rail/aside/timeline are the only panels with a genuine reason to compete for space, but revisit if the Scripting panel's chat ends up wanting more width than Canvas typically needs.
+- **Track height inside the timeline itself**, now that [timeline.md](timeline.md) supports adding tracks freely rather than a fixed four: **decided** — tracks scroll vertically within the timeline panel once they exceed its available height (standard NLE behavior, e.g. Premiere), rather than shrinking track height to fit an unbounded number of tracks. This resize doc's `timelineHeight` (how tall the whole timeline panel is) and the timeline's own internal vertical scrolling (how many tracks are visible at once within that height) are two independent things — this doc only owns the former.
+- **Does the middle panel (Canvas/Storyboard/Scripting) ever need its own resize handle** rather than the timeline handle being the only one that trades space with it — leaning "no" (rail/aside/timeline are the only panels with a genuine reason to compete for space), not required for v1, revisit only if the Scripting panel's chat ends up wanting more width than Canvas typically needs.
 
 ## Done when
 

@@ -83,15 +83,18 @@ Most tiles (Generate video/audio/image, Deepfake) funnel into the existing `gene
 - **Generate audio's voice browser** — a new direct-tool-call path against the ElevenLabs connector (list/search/preview voices) that doesn't go through a full agent turn, same shape as `ChatRealtyPull`.
 - **Motion graphics** is the largest of these by far — it's the one tile whose stages don't fit the existing single-prompt-in, single-node-out shape at all. Four separate extensions, each real and each confirmed against a working reference workflow, not hypothetical: reference-image-conditioned generation (`GenerationParams` needs an image-input field; no connector wrapper accepts one today), a batch-generate-plus-grid-review UI (nothing like it exists), start/end-frame video conditioning (at least for the Gemini/Veo wrapper, since Veo supports it natively and `gemini-mcp.cjs` doesn't expose it), and an alpha-capable export codec path alongside the existing opaque-reels `libx264` path. None of these are needed by any other tile in this doc — they're specific to Motion graphics, and probably the right scope for a dedicated implementation pass rather than folded into a general Create-panel build.
 
+## Decisions (firm, for an unattended build)
+
+- **Where a trained LoRA lives:** a new **"Trained styles"** list in Settings (its own section, alongside Connectors/Models/Appearance) — `{ id, name, connectorId: 'krea', trainedAt, referenceImageCount }`. The Image generation tile's screen gets an additional picker (only shown when at least one trained style exists) to select one as an input alongside the tier choice. Simple, buildable, not forced into the `MediaNodeData` node model it genuinely doesn't fit.
+- **Internet-audio-ripping resolver:** **v1 supports direct-file URLs only** (already proven to work with ffmpeg alone, no extra dependency). Hosting-site URLs (YouTube and similar) are explicitly **out of scope for v1** — the Isolate Audio tile's URL field can simply error clearly ("this site isn't a direct media link") rather than the build stalling on a resolver dependency nobody has handed over yet. Revisit if/when existing tooling gets shared or a resolver becomes a real priority.
+- **Motion graphics batch size:** **2 prompt variations × 2 images each = 4 total** for v1, not the tutorial's 4×4=16 — real generation cost, and configurable later once actual usage shows the right number.
+- **Motion graphics' agent-conversation plumbing is a hard dependency on Phase 11 (Scripting panel), not a parallel option.** Build Phase 11 first; Phase 13's Motion graphics stages 2 and 4 (abstraction, iterate) call the same multi-turn plumbing rather than building a second copy. If Phase 13 is ever started before Phase 11 for some reason, build the multi-turn plumbing generically at that point (main-process persistent `query()` session + streaming) so Phase 11 can then adopt it rather than the reverse.
+- **The batch-results grid (stage 3) is a general, reusable component from the start**, not Motion-graphics-specific — `BatchResultsGrid` (or similar), taking N candidate results and returning the user's pick(s). Not meaningfully more work to build generally than bespoke, and other tiles (Generate image producing several options instead of one) are an obvious future consumer.
+- Exact tile icon/thumbnail treatment — visual detail, not designed here; reuses the suggestion-tile CSS pattern as a starting point. Genuinely cosmetic, doesn't block logic.
+
 ## Open questions
 
-- Where a trained LoRA lives in the data model (see "Create a LoRA" above) — unresolved.
-- The internet-audio-ripping resolver dependency (yt-dlp or similar, or reuse existing tooling the user may already have) — unresolved, not blocking the rest of this doc.
-- Exact tile icon/thumbnail treatment — visual detail, not designed here; reuses the suggestion-tile CSS pattern as a starting point.
-- **Motion graphics specifically:**
-  - Default batch size per prompt variation (the tutorial used 4×4=16; worth starting smaller given real generation cost, but not specified here).
-  - Whether stage 2/4's agent-conversation plumbing gets built as part of Motion graphics or waits for the Scripting panel (Phase 11) to land first and this tile reuses it — sequencing question, not a design question; either order works, building Scripting first avoids building the multi-turn plumbing twice.
-  - Whether the grid-review UI (stage 3) is specific to this tile or becomes a general "batch results" pattern other tiles could reuse later (e.g. Generate image producing 4 options instead of 1) — leaning toward building it generally from the start since the underlying need (compare N outputs, pick one) isn't Motion-graphics-specific, but not committing to that scope here.
+None left that would block an unattended build.
 
 ## Done when
 
