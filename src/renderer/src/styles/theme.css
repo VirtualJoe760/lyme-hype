@@ -17,6 +17,22 @@
 }
 
 :root {
+  /* Theme-independent: fonts. Colors/radius live in the per-theme blocks below.
+     Font roles: dot-matrix brand font for titles + headings, Jost for body and
+     small text. Press Start 2P (--arcade-font) is reserved for specific
+     decorative spots only — apply it deliberately via the .arcade utility. */
+  --sans:
+    'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace;
+  --brand-font: 'Bitcount Prop Single', var(--mono);
+  --arcade-font: 'Press Start 2P', var(--mono);
+  --heading-font: var(--brand-font);
+  --body-font: 'Jost Variable', var(--sans);
+}
+
+/* ---- Theme: Lime Cut (default) — charcoal + rationed lime ---- */
+:root,
+:root[data-theme='lime-cut'] {
   --bg: #15171a;
   --panel: #1d2023;
   --panel-raised: #242830;
@@ -25,20 +41,42 @@
   --text-soft: #9aa0a8;
   --accent: #c6f135;
   --accent-dim: #7c9421;
+  --accent-ink: #16240a;
   --danger: #e2543a;
   --ok: #4ade80;
   --radius: 9px;
-  --sans:
-    'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
-  --mono: 'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace;
-  --brand-font: 'Bitcount Prop Single', var(--mono);
-  --arcade-font: 'Press Start 2P', var(--mono);
-  /* Font roles: dot-matrix brand font for titles + headings, Jost for body and
-     small text. Press Start 2P (--arcade-font) is reserved for specific
-     decorative spots only — apply it deliberately via the .arcade utility, never
-     globally (it's too illegible as body text). */
-  --heading-font: var(--brand-font);
-  --body-font: 'Jost Variable', var(--sans);
+}
+
+/* ---- Theme: Night Terminal — amber phosphor on near-black ---- */
+:root[data-theme='night-terminal'] {
+  --bg: #0b0a08;
+  --panel: #14120d;
+  --panel-raised: #1b1810;
+  --border: #2a2317;
+  --text: #f5d9a6;
+  --text-soft: #8c7a55;
+  --accent: #ffb000;
+  --accent-dim: #b37a00;
+  --accent-ink: #1a1200;
+  --danger: #e2543a;
+  --ok: #4ade80;
+  --radius: 2px;
+}
+
+/* ---- Theme: Zest — retro, light ---- */
+:root[data-theme='zest'] {
+  --bg: #f1fae3;
+  --panel: #ffffff;
+  --panel-raised: #fbfff3;
+  --border: #d3e8b8;
+  --text: #1e2b12;
+  --text-soft: #6c7a54;
+  --accent: #7bc311;
+  --accent-dim: #5c9a0b;
+  --accent-ink: #16240a;
+  --danger: #d3552e;
+  --ok: #3fae5a;
+  --radius: 12px;
 }
 
 * {

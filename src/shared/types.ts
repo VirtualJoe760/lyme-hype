@@ -32,6 +32,8 @@ export interface ClaudeAuthStatus {
   override: ClaudeAuthOverrideKind
 }
 
+export type ThemeId = 'lime-cut' | 'night-terminal' | 'zest'
+
 export type MediaType = 'image' | 'video' | 'audio'
 export type SourceMethod = 'generate' | 'upload' | 'link'
 export type NodeStatus = 'rendering' | 'ready'
@@ -85,6 +87,7 @@ export interface Session {
 export interface PersistedState {
   sessions: Session[]
   activeSessionId: string | null
+  theme?: ThemeId
 }
 
 export interface AgentStreamEvent {

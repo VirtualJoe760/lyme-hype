@@ -8,11 +8,12 @@ import type {
   PersistedState,
   Session,
   SourceMethod,
-  StudioView
+  StudioView,
+  ThemeId
 } from '@shared/types'
 import { bridge } from './bridge'
 
-export type SettingsTab = 'connectors' | 'models'
+export type SettingsTab = 'connectors' | 'models' | 'appearance'
 
 export type MediaFlowNode = Node<MediaNodeData, 'media'>
 
@@ -60,6 +61,7 @@ interface StudioStore {
   asideCollapsed: boolean
   settingsOpen: boolean
   settingsTab: SettingsTab
+  theme: ThemeId
   combine: CombineTarget | null
   agent: AgentUiState
 
@@ -97,6 +99,7 @@ interface StudioStore {
   openSettings(tab?: SettingsTab): void
   closeSettings(): void
   setSettingsTab(tab: SettingsTab): void
+  setTheme(theme: ThemeId): void
 
   pingAgent(): Promise<void>
   pullChatRealtyPhotos(query: string): Promise<{ ok: boolean; count: number; error?: string }>
@@ -135,8 +138,8 @@ export const useStudio = create<StudioStore>((set, get) => {
   function persist(): void {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(() => {
-      const { activeSessionId } = get()
-      const state: PersistedState = { sessions: syncedSessions(), activeSessionId }
+      const { activeSessionId, theme } = get()
+      const state: PersistedState = { sessions: syncedSessions(), activeSessionId, theme }
       void bridge.sessions.save(state)
     }, 500)
   }
@@ -189,6 +192,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     asideCollapsed: false,
     settingsOpen: false,
     settingsTab: 'connectors',
+    theme: 'lime-cut',
     combine: null,
     agent: {
       status: 'idle',
@@ -217,11 +221,14 @@ export const useStudio = create<StudioStore>((set, get) => {
           ? persisted.activeSessionId
           : sessions[0].id
       const active = sessions.find((s) => s.id === activeSessionId)!
+      const theme: ThemeId = persisted?.theme ?? 'lime-cut'
+      document.documentElement.dataset.theme = theme
       set({
         loaded: true,
         sessions,
         activeSessionId,
-        nodes: active.nodes.map(toFlowNode)
+        nodes: active.nodes.map(toFlowNode),
+        theme
       })
     },
 
@@ -428,6 +435,12 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({ settingsTab: tab })
     },
 
+    setTheme(theme) {
+      document.documentElement.dataset.theme = theme
+      set({ theme })
+      persist()
+    },
+
     async pingAgent() {
       if (get().agent.status === 'running') return
       set({
@@ -504,7 +517,8 @@ export const useStudio = create<StudioStore>((set, get) => {
       }
       const state: PersistedState = {
         sessions: syncedSessions(),
-        activeSessionId: get().activeSessionId
+        activeSessionId: get().activeSessionId,
+        theme: get().theme
       }
       // Synchronous — this runs during beforeunload, when there's no time to
       // await. Falls back to async save under the browser-preview mock.

@@ -11,6 +11,7 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
 ## Branding
 
 - **Name: Lyme Hype.** Decided — this is the product name, not just a logo treatment. Anything still saying "Limehype" (mockup included) is stale; see the build plan.
+- **Themes: all three concept directions are implemented and user-selectable** (Settings › Appearance): **Lime Cut** (default, charcoal + lime), **Night Terminal** (amber phosphor), **Zest** (light citrus). They're CSS-variable token sets keyed on `<html data-theme>`; the choice persists. (Zest, being light, may want minor light-mode polish on a few decorative surfaces.)
 - **Wordmark + headings**: Bitcount Prop Single (a dot-matrix variable font), colored lime — the brand/heading font. **Body + UI text**: Jost (a geometric sans, self-hosted via `@fontsource-variable/jost`) — the secondary/body font. Press Start 2P (8-bit arcade) stays reserved for specific decorative accents only, applied deliberately via the `.arcade` utility class — confirmed too illegible for body text (briefly tried as the global body font 2026-08-08 and reverted). Concept font files live in `concepts/fonts/`; the app's fonts are in `src/renderer/src/assets/fonts/` (Bitcount, Press Start 2P) plus the Jost package.
 - **LimeWire proximity: not a concern.** Raised and dismissed — the citrus motif is aesthetic inspiration for the "Zest" direction, not a naming collision. Closed.
 

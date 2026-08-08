@@ -112,7 +112,9 @@ lyme-hype/
 │                         mock), src/components/* (TitleBar, Toolbar, SessionsRail, CanvasArea +
 │                         MediaNode, StoryboardView placeholder, AsidePanel + AgentCard +
 │                         ChatRealtyPull, CutRoom, CombineDialog, settings/* (full-screen
-│                         Settings shell + Connectors/Models tabs)), src/secure/* (modal page).
+│                         Settings shell + Connectors/Models/Appearance tabs)),
+│                         src/secure/* (modal page). Themes are CSS-var token sets
+│                         keyed on <html data-theme>; the choice persists in PersistedState.
 ├── electron.vite.config.ts   Main/preload/renderer builds; two renderer entries (studio + modal).
 ├── tsconfig.json / .node.json / .web.json   Strict TS; `npm run typecheck` covers both sides.
 └── package.json          electron-vite 2 / Vite 5 / React 18 / Electron 38 — version rationale in

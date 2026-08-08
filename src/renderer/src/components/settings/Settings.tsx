@@ -1,11 +1,13 @@
 import type { SettingsTab } from '../../store'
 import { useStudio } from '../../store'
+import { AppearanceTab } from './AppearanceTab'
 import { ConnectorsTab } from './ConnectorsTab'
 import { ModelsTab } from './ModelsTab'
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: 'connectors', label: 'Connectors' },
-  { key: 'models', label: 'Models' }
+  { key: 'models', label: 'Models' },
+  { key: 'appearance', label: 'Appearance' }
 ]
 
 export function Settings(): React.JSX.Element {
@@ -35,7 +37,9 @@ export function Settings(): React.JSX.Element {
           ))}
         </nav>
         <div className="settings-content">
-          {tab === 'connectors' ? <ConnectorsTab /> : <ModelsTab />}
+          {tab === 'connectors' && <ConnectorsTab />}
+          {tab === 'models' && <ModelsTab />}
+          {tab === 'appearance' && <AppearanceTab />}
         </div>
       </div>
     </div>
