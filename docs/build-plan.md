@@ -74,12 +74,16 @@ Implemented in `src/renderer/src/components/PlayView.tsx`, wired into `App.tsx` 
 - **Done when:** a clip can be opened in Play, trimmed, split, have its audio detached or deleted, sent to Cut Room, and the back arrow returns you to where you came from. *(Met today with uploaded/linked clips; "a real generated clip from Phase 4" awaits Generate wiring.)*
 - Ref: [canvas-node-model.md](canvas-node-model.md).
 
-## Phase 6 — Storyboard view
+## Phase 6 — Storyboard view — BUILT
 
-- Canvas-corner toggle, sequential panel grid.
-- "Add panel" (cheap, no generation call) vs. "Generate" (the Phase 4 path) — same aside, different button depending on mode.
-- Promote action: a panel becomes a real node on the Canvas view — same underlying state, not a copy.
-- **Done when:** you can block out five panels, promote one, and watch it become a real generating node.
+Implemented in `src/renderer/src/components/StoryboardView.tsx`; store actions in `store.ts` (`addPanel`/`updatePanel`/`movePanel`/`promotePanel`).
+
+- [x] Canvas-corner toggle (already existed), sequential panel grid.
+- [x] **A panel is a node, not a separate collection.** Panels are `MediaNodeData` with `panel: true` + `panelOrder`, so they persist with the session and share every node facility. The Canvas filters them out (`CanvasArea` shows `!panel || promoted`); the Storyboard shows `panel === true` ordered by `panelOrder`. This is what makes promote "same underlying state, not a copy" literal — promotion flips `promoted`/`status` on the *same* object and gives it a canvas position.
+- [x] Each panel card: media-type toggle (video/image/audio), editable shot label, a note textarea (the future generation prompt), reorder ◀ ▶, delete, and Promote.
+- [x] Promote → sets `promoted: true` + a canvas position, enters the "Rendering…" lifecycle (stub timer today, real generation when Phase 4's Generate wiring lands), and switches to Canvas so you watch it appear. A promoted panel stays in the Storyboard marked "On canvas →" and its type toggle locks.
+- [~] **"Add panel" lives in the Storyboard grid, not the aside.** The plan floated a mode-switched aside ("Add panel" vs "Generate" on the same button). Chose the simpler, self-contained affordance — a `+ Add panel` tile in the grid — so the aside keeps one job (add-to-canvas). Revisit if the aside's Generate flow and the Storyboard ever need to share prompt state.
+- **Done when:** block out five panels, promote one, watch it become a real generating node. *(Verified end-to-end in the browser mock: add → edit → reorder → promote → same node lands on Canvas as a "gen" node; the Storyboard entry flips to "On canvas →". No console errors.)*
 - Ref: [canvas-node-model.md](canvas-node-model.md).
 
 ## Phase 7 — Cut Room / ffmpeg timeline

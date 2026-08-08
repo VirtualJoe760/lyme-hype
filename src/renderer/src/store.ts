@@ -104,6 +104,11 @@ interface StudioStore {
   detachAudio(nodeId: string): void
   deleteAudio(nodeId: string): void
 
+  addPanel(input?: { mediaType?: MediaType; label?: string }): void
+  updatePanel(nodeId: string, patch: { label?: string; note?: string; mediaType?: MediaType }): void
+  movePanel(nodeId: string, dir: -1 | 1): void
+  promotePanel(nodeId: string): void
+
   toggleRail(): void
   toggleAside(): void
   openSettings(tab?: SettingsTab): void
@@ -482,6 +487,74 @@ export const useStudio = create<StudioStore>((set, get) => {
 
     deleteAudio(nodeId) {
       patchNodeData(nodeId, { audioMuted: true })
+    },
+
+    addPanel(input) {
+      const panels = get().nodes.filter((n) => n.data.panel)
+      const nextOrder = panels.reduce((max, n) => Math.max(max, n.data.panelOrder ?? 0), 0) + 1
+      const node: MediaFlowNode = {
+        id: nextId('panel'),
+        type: 'media',
+        // Off-canvas until promoted; promotePanel assigns the real position.
+        position: { x: 0, y: 0 },
+        data: {
+          label: input?.label ?? `panel ${String(nextOrder).padStart(2, '0')}`,
+          mediaType: input?.mediaType ?? 'video',
+          source: 'generate',
+          status: 'ready',
+          swatch: pickSwatch(),
+          panel: true,
+          panelOrder: nextOrder,
+          promoted: false
+        }
+      }
+      set({ nodes: [...get().nodes, node] })
+      persist()
+    },
+
+    updatePanel(nodeId, patch) {
+      patchNodeData(nodeId, patch)
+    },
+
+    movePanel(nodeId, dir) {
+      const ordered = get()
+        .nodes.filter((n) => n.data.panel)
+        .sort((a, b) => (a.data.panelOrder ?? 0) - (b.data.panelOrder ?? 0))
+      const idx = ordered.findIndex((n) => n.id === nodeId)
+      const swapWith = idx + dir
+      if (idx < 0 || swapWith < 0 || swapWith >= ordered.length) return
+      const a = ordered[idx]
+      const b = ordered[swapWith]
+      const aOrder = a.data.panelOrder ?? 0
+      const bOrder = b.data.panelOrder ?? 0
+      set({
+        nodes: get().nodes.map((n) => {
+          if (n.id === a.id) return { ...n, data: { ...n.data, panelOrder: bOrder } }
+          if (n.id === b.id) return { ...n, data: { ...n.data, panelOrder: aOrder } }
+          return n
+        })
+      })
+      persist()
+    },
+
+    promotePanel(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node || !node.data.panel || node.data.promoted) return
+      // Same node object graduates onto the Canvas — not a copy. It enters the
+      // "Rendering…" lifecycle a real generation will occupy (stub timer today).
+      set({
+        nodes: get().nodes.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                position: { x: 80 + Math.random() * 300, y: 80 + Math.random() * 220 },
+                data: { ...n.data, promoted: true, status: 'rendering' }
+              }
+            : n
+        )
+      })
+      persist()
+      scheduleStubReady(nodeId)
     },
 
     toggleRail() {

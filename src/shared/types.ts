@@ -64,6 +64,15 @@ export interface MediaNodeData {
   trimOut?: number
   /** Video's own audio track muted (set via Play view's audio delete). */
   audioMuted?: boolean
+  /** Storyboard panel: a cheap planning sketch that lives only in the Storyboard
+   *  sequence until promoted. `panel` and `promoted` are the same node object —
+   *  promotion flips the flag and gives it a canvas position, never a copy. */
+  panel?: boolean
+  panelOrder?: number
+  promoted?: boolean
+  /** Shot/prompt note authored on a Storyboard panel; carried onto the node when
+   *  promoted so the generation call (Phase 4) has the intent. */
+  note?: string
   [key: string]: unknown
 }
 

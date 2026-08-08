@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -25,7 +25,11 @@ function CanvasInner(): React.JSX.Element {
   const [tool, setTool] = useState<Tool>('select')
   const { getIntersectingNodes } = useReactFlow()
 
-  const selectedIds = nodes.filter((n) => n.selected).map((n) => n.id)
+  // Un-promoted Storyboard panels are node objects too, but they only belong to
+  // the Storyboard sequence — the Canvas shows real nodes and promoted panels.
+  const canvasNodes = useMemo(() => nodes.filter((n) => !n.data.panel || n.data.promoted), [nodes])
+
+  const selectedIds = canvasNodes.filter((n) => n.selected).map((n) => n.id)
 
   const handleDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: MediaFlowNode) => {
@@ -83,7 +87,7 @@ function CanvasInner(): React.JSX.Element {
         </button>
       </div>
       <ReactFlow
-        nodes={nodes}
+        nodes={canvasNodes}
         edges={[]}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
@@ -99,7 +103,7 @@ function CanvasInner(): React.JSX.Element {
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#2a2e34" />
       </ReactFlow>
-      {nodes.length === 0 && (
+      {canvasNodes.length === 0 && (
         <div className="canvas-empty">
           <div className="inner">
             <strong>Empty canvas.</strong>
