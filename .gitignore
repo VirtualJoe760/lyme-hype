@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+out/
+release/
+build/
+
+# Env files — never commit real credentials (see AGENTS.md §1.8)
+.env
+.env.*
+env.local
+env.*.local
+!.env.example
+!env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo

@@ -1,0 +1,1710 @@
+<style>
+  :root {
+    --paper: #ECEAE2;
+    --paper-raised: #F5F3EC;
+    --ink: #201F1A;
+    --ink-soft: #55523F;
+    --line: #D8D4C6;
+    --safelight: #B24A18;
+    --safelight-soft: #C97A4A;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", monospace;
+    --bitcount: "Bitcount Prop Single", var(--sans);
+    --pressstart: "Press Start 2P", var(--mono);
+    --lime-word: #4F7A12;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #17180F;
+      --paper-raised: #1E1F16;
+      --ink: #E9E5D6;
+      --ink-soft: #A6A08C;
+      --line: #34331F;
+      --safelight: #E0803F;
+      --safelight-soft: #8C4E28;
+      --lime-word: #C6EE5C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #17180F;
+    --paper-raised: #1E1F16;
+    --ink: #E9E5D6;
+    --ink-soft: #A6A08C;
+    --line: #34331F;
+    --safelight: #E0803F;
+    --safelight-soft: #8C4E28;
+    --lime-word: #C6EE5C;
+  }
+  :root[data-theme="light"] {
+    --paper: #ECEAE2;
+    --paper-raised: #F5F3EC;
+    --ink: #201F1A;
+    --ink-soft: #55523F;
+    --line: #D8D4C6;
+    --safelight: #B24A18;
+    --safelight-soft: #C97A4A;
+    --lime-word: #4F7A12;
+  }
+
+  @font-face {
+    font-family: "Bitcount Prop Single";
+    font-weight: 100 900;
+    font-display: swap;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+  @font-face {
+    font-family: "Press Start 2P";
+    font-weight: 400;
+    font-display: swap;
+    src: url(data:font/woff2;base64,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) format("woff2");
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .page {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    padding: 4rem 1.5rem 6rem;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  /* ---- header ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--safelight);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--safelight);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--safelight) 25%, transparent);
+    flex: none;
+  }
+  h1.deck-title {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2.1rem, 4vw, 3rem);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 0.9rem 0 0.9rem;
+    text-wrap: balance;
+    max-width: 30ch;
+  }
+  .deck-sub {
+    font-size: 1.05rem;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 2.6rem;
+  }
+
+  .brief {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-bottom: 3.2rem;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+  }
+  .brandmark {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 2.4rem;
+  }
+  .brandmark .word {
+    font-family: var(--bitcount);
+    font-weight: 480;
+    font-size: clamp(2.4rem, 6.4vw, 4.2rem);
+    color: var(--lime-word);
+    letter-spacing: 0.01em;
+  }
+  .brandmark .badge {
+    font-family: var(--pressstart);
+    font-size: 0.6rem;
+    line-height: 1;
+    color: var(--paper);
+    background: var(--safelight);
+    padding: 0.55rem 0.6rem;
+    border-radius: 2px;
+    white-space: nowrap;
+    transform: translateY(-0.35rem);
+  }
+  .brief div { background: var(--paper-raised); padding: 0.85rem 1rem; }
+  .brief dt {
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.68rem;
+    margin: 0 0 0.3rem;
+  }
+  .brief dd { margin: 0; color: var(--ink); }
+
+  /* ---- contact-sheet sections ---- */
+  .sheet { margin-bottom: 3.6rem; }
+  .sheet-label {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background-image: radial-gradient(circle, var(--line) 1.4px, transparent 1.6px);
+    background-size: 13px 100%;
+    background-position: left center;
+    background-repeat: repeat-x;
+  }
+  .sheet-label span.tag {
+    background: var(--paper-raised);
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--ink);
+  }
+  .sheet-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 1.1rem 0 1.3rem;
+  }
+  h2.sheet-title {
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    margin: 0;
+    font-weight: 400;
+  }
+  .sheet-mood {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--ink-soft);
+    font-size: 1rem;
+  }
+
+  .mockup-scroll { overflow-x: auto; padding-bottom: 0.4rem; }
+  .mockup-window {
+    width: 820px;
+    min-width: 820px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px -20px rgba(0,0,0,0.45);
+    position: relative;
+    font-family: var(--mk-font);
+  }
+
+  /* ---- concept A tokens: Night Terminal ---- */
+  .concept-a {
+    --mk-bg: #0B0A08;
+    --mk-panel: #14120D;
+    --mk-panel-raised: #1B1810;
+    --mk-border: #2A2317;
+    --mk-text: #F5D9A6;
+    --mk-text-soft: #8C7A55;
+    --mk-accent: #FFB000;
+    --mk-accent-dim: #B37A00;
+    --mk-danger: #E2543A;
+    --mk-radius: 2px;
+    --mk-font: var(--mono);
+    --mk-tab-active-bg: color-mix(in srgb, var(--mk-accent) 16%, transparent);
+  }
+  .concept-a .mockup-window::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255,176,0,0.05) 0px,
+      rgba(255,176,0,0.05) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+  .concept-a .glow { text-shadow: 0 0 7px color-mix(in srgb, var(--mk-accent) 65%, transparent); }
+
+  /* ---- concept B tokens: Lime Cut ---- */
+  .concept-b {
+    --mk-bg: #15171A;
+    --mk-panel: #1D2023;
+    --mk-panel-raised: #242830;
+    --mk-border: #30343A;
+    --mk-text: #EDEFF1;
+    --mk-text-soft: #9AA0A8;
+    --mk-accent: #C6F135;
+    --mk-accent-dim: #7C9421;
+    --mk-danger: #E2543A;
+    --mk-ok: #4ADE80;
+    --mk-radius: 9px;
+    --mk-font: var(--sans);
+    --mk-data-font: var(--mono);
+    --mk-tab-active-bg: transparent;
+  }
+  .concept-b .mockup-window { box-shadow: 0 20px 44px -18px rgba(0,0,0,0.5); }
+
+  /* ---- concept C tokens: Zest (retro, light) ---- */
+  .concept-c {
+    --mk-bg: #F1FAE3;
+    --mk-panel: #FFFFFF;
+    --mk-panel-raised: #FBFFF3;
+    --mk-border: #D3E8B8;
+    --mk-text: #1E2B12;
+    --mk-text-soft: #6C7A54;
+    --mk-accent: #7BC311;
+    --mk-accent-dim: #5C9A0B;
+    --mk-yellow: #F6C445;
+    --mk-danger: #D3552E;
+    --mk-radius: 12px;
+    --mk-font: var(--sans);
+    --mk-head-font: "Trebuchet MS", "Segoe UI", var(--sans);
+    --mk-tab-active-bg: transparent;
+  }
+  .concept-c .mockup-window { box-shadow: 0 22px 46px -20px rgba(60,110,10,0.35); }
+  .concept-c .mk-brand, .concept-c .sheet-title, .concept-c .mk-generate, .concept-c .mk-pill.mode {
+    font-family: var(--mk-head-font);
+  }
+  .concept-c .mk-titlebar, .concept-c .mk-toolbar, .concept-c .mk-body { background: var(--mk-panel); }
+  .concept-c .mk-nav, .concept-c .mk-aside, .concept-c .mk-canvas, .concept-c .mk-cutroom { background: var(--mk-bg); }
+  .concept-c .mk-nav .item.active {
+    background: var(--mk-panel);
+    color: var(--mk-accent-dim);
+    border: 1px solid var(--mk-accent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+  .concept-c .mk-tool, .concept-c .mk-msg .bubble, .concept-c .mk-drop, .concept-c .mk-code, .concept-c .mk-input, .concept-c .mk-clip {
+    background: var(--mk-panel);
+  }
+  .concept-c .mk-code { color: var(--mk-accent-dim); border-color: var(--mk-border); }
+  .concept-c .mk-generate {
+    background: linear-gradient(180deg, #A3E635 0%, var(--mk-accent) 55%, var(--mk-accent-dim) 100%);
+    color: #16240A;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 6px 14px -4px rgba(91,154,11,0.55);
+    border-radius: 999px;
+  }
+  .concept-c .mk-input .send {
+    background: linear-gradient(180deg, #A3E635, var(--mk-accent-dim));
+    color: #16240A;
+    border-radius: 999px;
+  }
+  .concept-c .mk-tabs .t.active {
+    color: #16240A;
+    background: var(--mk-yellow);
+    border-color: var(--mk-yellow);
+    border-radius: 999px;
+  }
+  .concept-c .mk-pill.mode { background: var(--mk-yellow); color: #16240A; border-color: var(--mk-yellow); }
+  .concept-c .mk-thumb.active {
+    border-color: var(--mk-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mk-yellow) 45%, transparent);
+  }
+  .concept-c .mk-titlebar { position: relative; }
+  .concept-c .mk-titlebar::before {
+    content: "";
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    width: 36px; height: 36px;
+    background: radial-gradient(circle, color-mix(in srgb, var(--mk-yellow) 55%, transparent) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .concept-c .mk-brand { position: relative; z-index: 1; }
+  .concept-c .citrus-mark { display: block; width: 15px; height: 15px; flex: none; }
+
+  /* ---- shared mockup chrome ---- */
+  .mk-titlebar {
+    height: 34px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 10px 0 12px;
+    background: var(--mk-bg);
+    border-bottom: 1px solid var(--mk-border);
+    color: var(--mk-text-soft);
+    font-size: 0.72rem;
+  }
+  .mk-brand { display: flex; align-items: center; gap: 0.5rem; color: var(--mk-text); }
+  .mk-brand .dot {
+    width: 8px; height: 8px; border-radius: 2px;
+    background: var(--mk-accent);
+  }
+  .concept-b .mk-brand .dot { border-radius: 50%; }
+  .mk-winctl { display: flex; gap: 10px; letter-spacing: 0.05em; opacity: 0.7; }
+
+  .mk-toolbar {
+    height: 42px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px;
+    background: var(--mk-panel);
+    border-bottom: 1px solid var(--mk-border);
+    font-size: 0.74rem;
+    color: var(--mk-text);
+  }
+  .mk-breadcrumb { display: flex; align-items: center; gap: 0.5rem; }
+  .mk-breadcrumb .live {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--mk-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mk-accent) 25%, transparent);
+  }
+  .mk-stats { display: flex; gap: 0.6rem; align-items: center; }
+  .mk-pill {
+    border: 1px solid var(--mk-border);
+    background: var(--mk-panel-raised);
+    color: var(--mk-text-soft);
+    padding: 0.22rem 0.55rem;
+    border-radius: var(--mk-radius);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.7rem;
+  }
+  .mk-pill.mode {
+    color: var(--mk-bg);
+    background: var(--mk-accent);
+    border-color: var(--mk-accent);
+    font-weight: 600;
+  }
+
+  .mk-body { display: flex; background: var(--mk-panel); }
+  .mk-nav {
+    width: 168px;
+    flex: none;
+    border-right: 1px solid var(--mk-border);
+    font-size: 0.74rem;
+    overflow: hidden;
+    transition: width 0.18s ease;
+  }
+  .mk-aside { overflow: hidden; transition: width 0.18s ease; }
+  .mk-nav.collapsed, .mk-aside.collapsed { width: 34px !important; }
+  .mk-nav.collapsed .mk-panel-body, .mk-aside.collapsed .mk-panel-body { display: none; }
+  .mk-nav.collapsed .mk-panel-head span, .mk-aside.collapsed .mk-panel-head span { display: none; }
+  .mk-nav.collapsed .mk-panel-head, .mk-aside.collapsed .mk-panel-head { justify-content: center; border-bottom: none; }
+  .mk-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px;
+    font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--mk-text-soft);
+    border-bottom: 1px solid var(--mk-border);
+  }
+  .mk-panel-body { padding: 10px 8px; }
+  .mk-panel-head-btns { display: flex; gap: 4px; }
+  .mk-nav .item .rename-ic { margin-left: auto; opacity: 0.55; font-size: 0.62rem; }
+  .mk-view-toggle {
+    position: absolute; right: 8px; top: 8px; z-index: 5;
+    display: flex; gap: 2px; padding: 2px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--mk-panel) 82%, transparent);
+    border: 1px solid var(--mk-border);
+    font-size: 0.62rem;
+  }
+  .mk-view-toggle .v { padding: 0.2rem 0.5rem; border-radius: 3px; color: var(--mk-text-soft); }
+  .mk-view-toggle .v.active { background: var(--mk-accent); color: var(--mk-bg); }
+  .concept-c .mk-view-toggle .v.active { color: #16240A; }
+  .mk-storyboard {
+    position: absolute; inset: 0; overflow: auto;
+    padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px; align-content: start;
+  }
+  .sb-panel {
+    border: 1px solid var(--mk-border); border-radius: var(--mk-radius);
+    background: var(--mk-panel-raised); padding: 8px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .sb-num { font-size: 0.6rem; color: var(--mk-text-soft); font-family: var(--mk-data-font, var(--mk-font)); }
+  .sb-sketch {
+    height: 70px; border: 1px dashed var(--mk-border); border-radius: 4px;
+    background: var(--mk-bg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mk-text-soft); opacity: 0.55; font-size: 1.1rem;
+  }
+  .sb-panel.promoted .sb-sketch { border-style: solid; border-color: var(--mk-accent); }
+  .sb-prompt { margin: 0; font-size: 0.68rem; color: var(--mk-text); line-height: 1.35; }
+  .sb-meta { display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--mk-text-soft); }
+  .sb-status { text-transform: uppercase; letter-spacing: 0.04em; }
+  .sb-panel.promoted .sb-status { color: var(--mk-accent); }
+  .sb-add {
+    border: 1px dashed var(--mk-border); border-radius: var(--mk-radius);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--mk-text-soft); font-size: 0.7rem; min-height: 120px;
+  }
+
+  /* Play view — a full takeover of mk-row (nav + aside both step aside), not a canvas overlay */
+  .mk-play {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    padding: 18px 24px; gap: 10px;
+  }
+  .play-head {
+    font-size: 0.72rem; color: var(--mk-text-soft);
+    font-family: var(--mk-data-font, var(--mk-font));
+    display: flex; align-items: center; gap: 8px; flex: none;
+  }
+  .play-head .play-name { color: var(--mk-text); font-weight: 600; }
+  .play-head .srcbadge { position: static; }
+
+  /* The video/audio stage itself — controls live as a minimal overlay, not a separate row */
+  .play-stage {
+    flex: 1; min-height: 280px; border-radius: var(--mk-radius); border: 1px solid var(--mk-border);
+    background: linear-gradient(135deg,#1f3a4a,#2f6b7a);
+    position: relative; overflow: hidden;
+  }
+  .play-overlay {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: linear-gradient(to top, rgba(0,0,0,0.72), rgba(0,0,0,0));
+  }
+  .play-ov-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: none; flex: none;
+    background: rgba(255,255,255,0.18); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 0.7rem;
+  }
+  .play-ov-time {
+    flex: none; font-size: 0.6rem; color: #fff;
+    font-family: var(--mk-data-font, var(--mk-font));
+  }
+  .play-ov-track { flex: 1; position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.28); }
+  .play-ov-track .trim-range { background: var(--mk-accent); opacity: 0.85; }
+  .play-ov-track .trim-handle { top: -5px; bottom: -5px; width: 4px; }
+  .play-ov-track .trim-playhead { top: -5px; bottom: -5px; width: 2px; background: #fff; }
+
+  .trim-range { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: color-mix(in srgb, var(--mk-accent) 25%, transparent); }
+  .trim-handle { position: absolute; top: -2px; bottom: -2px; width: 6px; border-radius: 3px; background: var(--mk-accent); }
+  .trim-playhead { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--mk-text); }
+
+  /* Compact audio strip — one thin bar, not a second boxed component */
+  .play-audiobar {
+    flex: none; display: flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 8px; border-radius: var(--mk-radius);
+    background: var(--mk-panel-raised); border: 1px solid var(--mk-border);
+  }
+  .play-audio-wave { flex: 1; position: relative; height: 22px; }
+  .play-audio-wave svg { width: 100%; height: 100%; color: var(--mk-accent); display: block; }
+  .play-audio-wave .trim-handle { top: -4px; bottom: -4px; width: 4px; }
+  .play-audio-wave .trim-range { border-radius: 0; }
+  .play-audio-label {
+    flex: none; font-size: 0.6rem; color: var(--mk-text-soft);
+    font-family: var(--mk-data-font, var(--mk-font)); white-space: nowrap;
+  }
+  .play-audio-btn {
+    flex: none; height: 22px; padding: 0 0.5rem; border-radius: 4px;
+    border: 1px solid var(--mk-border); background: var(--mk-panel);
+    color: var(--mk-text-soft); font-size: 0.6rem;
+  }
+  .play-audio-btn.danger { color: var(--mk-danger); border-color: color-mix(in srgb, var(--mk-danger) 50%, var(--mk-border)); }
+
+  .play-actions { flex: none; display: flex; justify-content: flex-end; gap: 6px; }
+  .play-actions .mk-actionbtn, .play-actions .mk-generate { flex: none; padding: 0.32rem 0.7rem; margin-top: 0; }
+  .mk-toolbar .play-back { cursor: default; color: var(--mk-accent); }
+  .mk-toolbar .play-back .back-arrow { margin-right: 3px; }
+  .mk-collapse-btn {
+    width: 18px; height: 18px; flex: none;
+    border: 1px solid var(--mk-border);
+    background: var(--mk-panel-raised);
+    color: var(--mk-text-soft);
+    border-radius: 3px;
+    font-size: 0.6rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .mk-nav .item {
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--mk-radius);
+    color: var(--mk-text-soft);
+    display: flex; align-items: center; gap: 0.4rem;
+    margin-bottom: 2px;
+  }
+  .mk-nav .item.active {
+    background: var(--mk-tab-active-bg);
+    color: var(--mk-accent);
+    border: 1px solid color-mix(in srgb, var(--mk-accent) 40%, transparent);
+  }
+  .concept-b .mk-nav .item.active {
+    background: var(--mk-panel-raised);
+    color: var(--mk-text);
+    border-left: 2px solid var(--mk-accent);
+  }
+  .mk-nav .divider { height: 1px; background: var(--mk-border); margin: 8px 2px; }
+  .mk-nav .util { color: var(--mk-text-soft); opacity: 0.75; }
+
+  .mk-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .mk-row { flex: 1; display: flex; }
+
+  .mk-canvas {
+    flex: 1; min-width: 0; min-height: 340px;
+    position: relative; overflow: hidden;
+    background-image: radial-gradient(circle, var(--mk-border) 1px, transparent 1.6px);
+    background-size: 22px 22px;
+  }
+  .mk-canvas-toolbar {
+    position: absolute; left: 8px; top: 8px; z-index: 5;
+    display: flex; gap: 3px; padding: 3px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--mk-panel) 82%, transparent);
+    border: 1px solid var(--mk-border);
+  }
+  .mk-tool-btn {
+    width: 22px; height: 22px; border: none; background: transparent;
+    border-radius: 3px; color: var(--mk-text-soft);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mk-tool-btn svg { width: 13px; height: 13px; }
+  .mk-tool-btn.active { background: var(--mk-accent); color: var(--mk-bg); }
+  .concept-c .mk-tool-btn.active { color: #16240A; }
+
+  .mk-group {
+    position: absolute;
+    border: 1px dashed var(--mk-border);
+    border-radius: 8px;
+  }
+  .mk-group .glabel {
+    position: absolute; top: -9px; left: 10px;
+    font-size: 0.56rem; padding: 0 4px;
+    background: var(--mk-bg);
+    color: var(--mk-text-soft);
+  }
+  .mk-node {
+    position: absolute; width: 100px;
+    border: 1px solid var(--mk-border);
+    border-radius: var(--mk-radius);
+    background: var(--mk-panel-raised);
+    padding: 5px;
+    box-shadow: 0 6px 14px -8px rgba(0,0,0,0.5);
+  }
+  .mk-node.selected {
+    border-color: var(--mk-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mk-accent) 35%, transparent);
+  }
+  .mk-node .thumb { width: 100%; height: 62px; border-radius: 3px; margin-bottom: 4px; overflow: hidden; }
+  .mk-node .cap {
+    display: block; font-size: 0.56rem; color: var(--mk-text-soft);
+    font-family: var(--mk-data-font, var(--mk-font));
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mk-node.clip { width: 112px; }
+  .mk-node.clip .thumb {
+    background: var(--mk-bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.52rem; color: var(--mk-text-soft);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .mk-node.clip.rendering .thumb { animation: mkpulse 1.4s ease-in-out infinite; }
+  @keyframes mkpulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    .mk-node.clip.rendering .thumb { animation: none; }
+  }
+  .mk-node .srcbadge {
+    position: absolute; left: 3px; top: 3px; z-index: 2;
+    font-size: 0.46rem; padding: 1px 3px; border-radius: 2px;
+    background: color-mix(in srgb, var(--mk-bg) 65%, transparent);
+    color: var(--mk-text-soft);
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .mk-node .sendbtn {
+    position: absolute; right: 3px; bottom: 3px; z-index: 2;
+    width: 15px; height: 15px; border-radius: 3px;
+    background: var(--mk-accent); color: var(--mk-bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.5rem; line-height: 1;
+  }
+  .concept-c .mk-node .sendbtn { color: #16240A; }
+  .mk-node.audio .thumb {
+    background: var(--mk-bg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mk-node.audio .thumb svg { width: 82%; height: 60%; color: var(--mk-accent); }
+
+  .mk-importrow { display: flex; gap: 6px; }
+  .mk-linkinput {
+    border: 1px dashed var(--mk-border);
+    border-radius: var(--mk-radius);
+    padding: 0.4rem 0.5rem;
+    font-size: 0.66rem;
+    color: var(--mk-text-soft);
+  }
+  .mk-clip.sent { border-color: var(--mk-accent); }
+
+  .mk-connstrip { display: flex; gap: 4px; flex-wrap: wrap; }
+  .mk-connstrip .conn {
+    font-size: 0.58rem; padding: 0.15rem 0.4rem; border-radius: 999px;
+    border: 1px solid var(--mk-border); color: var(--mk-text-soft);
+    background: var(--mk-panel-raised);
+  }
+  .mk-connstrip .conn.add {
+    color: var(--mk-accent); border-color: var(--mk-accent); font-weight: 700;
+    padding: 0.15rem 0.5rem;
+  }
+  .concept-c .mk-connstrip .conn.add { color: var(--mk-accent-dim); }
+
+  .conn-modal {
+    width: 380px; border-radius: var(--mk-radius); overflow: hidden;
+    background: var(--mk-panel); border: 1px solid var(--mk-border);
+    box-shadow: 0 18px 40px -20px rgba(0,0,0,0.45);
+    font-family: var(--mk-font); color: var(--mk-text);
+  }
+  .conn-modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--mk-border);
+    font-size: 0.8rem; font-weight: 600;
+  }
+  .conn-close { color: var(--mk-text-soft); }
+  .conn-list { padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .conn-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--mk-radius); }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mk-accent); flex: none; }
+  .conn-info { flex: 1; min-width: 0; }
+  .conn-name { font-size: 0.8rem; }
+  .conn-desc { font-size: 0.68rem; color: var(--mk-text-soft); }
+  .conn-status {
+    font-size: 0.62rem; padding: 0.15rem 0.5rem; border-radius: 999px;
+    border: 1px solid var(--mk-border); color: var(--mk-text-soft); flex: none;
+  }
+  .conn-status.ok { color: var(--mk-accent); border-color: var(--mk-accent); }
+  .concept-c .conn-status.ok { color: var(--mk-accent-dim); }
+  .conn-row.add {
+    border: 1px dashed var(--mk-border); color: var(--mk-text-soft);
+    justify-content: center; font-size: 0.72rem;
+  }
+  .conn-divider { height: 1px; background: var(--mk-border); margin: 4px 14px; }
+  .conn-section-label {
+    padding: 10px 14px 4px; font-size: 0.62rem; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--mk-text-soft);
+  }
+  .conn-quickstart { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
+  .conn-chip {
+    font-size: 0.68rem; padding: 0.3rem 0.6rem; border-radius: 999px;
+    border: 1px solid var(--mk-border); color: var(--mk-text-soft); background: var(--mk-panel-raised);
+  }
+  .conn-chip.active { color: var(--mk-accent); border-color: var(--mk-accent); }
+  .concept-c .conn-chip.active { color: var(--mk-accent-dim); }
+  .conn-form { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .conn-field { display: flex; flex-direction: column; gap: 3px; }
+  .conn-field-label { font-size: 0.62rem; color: var(--mk-text-soft); text-transform: uppercase; letter-spacing: 0.05em; }
+  .conn-input {
+    border: 1px solid var(--mk-border); background: var(--mk-panel-raised);
+    border-radius: var(--mk-radius); padding: 0.4rem 0.6rem;
+    font-size: 0.74rem; color: var(--mk-text);
+    font-family: var(--mk-data-font, var(--mk-font));
+  }
+  .conn-authrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .conn-formactions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .conn-help-btn {
+    font-size: 0.7rem; padding: 0.4rem 0.7rem; border-radius: var(--mk-radius);
+    border: 1px solid var(--mk-accent); color: var(--mk-accent); background: transparent;
+  }
+  .concept-c .conn-help-btn { color: var(--mk-accent-dim); border-color: var(--mk-accent-dim); }
+  .conn-formactions .mk-generate { margin-top: 0; margin-left: auto; flex: none; padding: 0.4rem 0.9rem; }
+
+  .secure-modal {
+    width: 300px; border-radius: var(--mk-radius); overflow: hidden;
+    background: var(--mk-panel); border: 1px solid var(--mk-accent);
+    box-shadow: 0 18px 40px -20px rgba(0,0,0,0.45);
+    font-family: var(--mk-font); color: var(--mk-text);
+  }
+  .secure-modal-head {
+    padding: 10px 14px; border-bottom: 1px solid var(--mk-border);
+    font-size: 0.78rem; font-weight: 600;
+  }
+  .secure-modal-head span { display: block; font-size: 0.66rem; font-weight: 400; color: var(--mk-text-soft); margin-top: 2px; }
+  .secure-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .secure-field {
+    border: 1px solid var(--mk-border); background: var(--mk-panel-raised);
+    border-radius: var(--mk-radius); padding: 0.5rem 0.6rem;
+    font-size: 0.9rem; letter-spacing: 0.15em; color: var(--mk-text);
+  }
+  .secure-note { font-size: 0.66rem; line-height: 1.5; color: var(--mk-text-soft); }
+  .secure-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .secure-cancel { font-size: 0.7rem; padding: 0.4rem 0.7rem; color: var(--mk-text-soft); border: 1px solid var(--mk-border); border-radius: var(--mk-radius); background: transparent; }
+  .secure-actions .mk-generate { margin-top: 0; flex: none; padding: 0.4rem 0.9rem; }
+
+  .mk-promptform { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .mk-promptform p { margin: 0; font-size: 0.68rem; line-height: 1.5; color: var(--mk-text-soft); }
+  .mk-promptarea {
+    border: 1px solid var(--mk-border);
+    background: var(--mk-panel-raised);
+    border-radius: var(--mk-radius);
+    padding: 6px 8px;
+    font-size: 0.68rem; color: var(--mk-text-soft);
+    min-height: 46px;
+  }
+  .mk-actionsrow { display: flex; gap: 6px; }
+  .mk-actionbtn {
+    flex: 1; text-align: center;
+    border: 1px solid var(--mk-border);
+    border-radius: var(--mk-radius);
+    padding: 0.35rem;
+    font-size: 0.62rem; color: var(--mk-text-soft);
+  }
+  .mk-tool {
+    border: 1px solid var(--mk-border);
+    background: var(--mk-panel-raised);
+    color: var(--mk-text-soft);
+    border-radius: var(--mk-radius);
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.7rem;
+  }
+  .mk-msg { margin-bottom: 0.7rem; max-width: 88%; }
+  .mk-msg .who {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--mk-text-soft);
+    margin-bottom: 0.2rem;
+  }
+  .mk-msg .bubble {
+    background: var(--mk-panel-raised);
+    border: 1px solid var(--mk-border);
+    border-radius: var(--mk-radius);
+    padding: 0.55rem 0.7rem;
+  }
+  .mk-msg.user { margin-left: auto; }
+  .mk-code {
+    margin-top: 0.4rem;
+    background: var(--mk-bg);
+    border: 1px solid var(--mk-border);
+    border-radius: var(--mk-radius);
+    padding: 0.5rem 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--mk-accent);
+    white-space: pre-wrap;
+  }
+  .mk-input {
+    margin-top: auto;
+    display: flex; align-items: center; gap: 0.5rem;
+    border: 1px solid var(--mk-border);
+    background: var(--mk-panel-raised);
+    border-radius: var(--mk-radius);
+    padding: 0.5rem 0.6rem;
+    color: var(--mk-text-soft);
+    font-size: 0.72rem;
+  }
+  .mk-input .send {
+    margin-left: auto;
+    background: var(--mk-accent);
+    color: var(--mk-bg);
+    padding: 0.22rem 0.6rem;
+    border-radius: var(--mk-radius);
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+
+  .mk-aside { width: 258px; flex: none; border-left: 1px solid var(--mk-border); display: flex; flex-direction: column; }
+  .mk-aside-h {
+    font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--mk-text-soft); padding: 8px 12px; border-bottom: 1px solid var(--mk-border);
+    display: flex; justify-content: space-between;
+  }
+  .mk-refwall { padding: 10px 12px; border-bottom: 1px solid var(--mk-border); }
+  .mk-thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .mk-thumb { aspect-ratio: 1; border-radius: var(--mk-radius); border: 1px solid var(--mk-border); position: relative; }
+  .mk-thumb.active { border-color: var(--mk-accent); }
+  .mk-thumb .cap {
+    position: absolute; bottom: 2px; left: 3px; right: 3px;
+    font-size: 0.52rem; color: rgba(255,255,255,0.85);
+    font-family: var(--mono);
+    text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+  }
+  .mk-console { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .mk-tabs { display: flex; gap: 4px; font-size: 0.66rem; }
+  .mk-tabs .t {
+    padding: 0.25rem 0.5rem; border-radius: var(--mk-radius);
+    border: 1px solid var(--mk-border); color: var(--mk-text-soft);
+  }
+  .mk-tabs .t.active { color: var(--mk-accent); border-color: var(--mk-accent); }
+  .concept-b .mk-tabs .t.active { color: var(--mk-text); border-color: transparent; border-bottom: 2px solid var(--mk-accent); border-radius: 0; }
+  .mk-drop {
+    border: 1px dashed var(--mk-border);
+    border-radius: var(--mk-radius);
+    padding: 0.4rem 0.5rem;
+    font-size: 0.66rem;
+    color: var(--mk-text-soft);
+    font-family: var(--mk-data-font, var(--mk-font));
+  }
+  .mk-drop.bound { border-style: solid; color: var(--mk-text); }
+  .mk-chips { display: flex; gap: 4px; font-size: 0.64rem; }
+  .mk-chips .c { border: 1px solid var(--mk-border); border-radius: var(--mk-radius); padding: 0.15rem 0.4rem; color: var(--mk-text-soft); }
+  .mk-generate {
+    margin-top: auto;
+    background: var(--mk-accent);
+    color: var(--mk-bg);
+    text-align: center;
+    padding: 0.45rem;
+    border-radius: var(--mk-radius);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .concept-a .mk-generate { text-shadow: none; box-shadow: 0 0 14px color-mix(in srgb, var(--mk-accent) 55%, transparent); }
+
+  .mk-cutroom { border-top: 1px solid var(--mk-border); background: var(--mk-panel-raised); padding: 8px 12px; }
+  .mk-cutroom-h { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mk-text-soft); margin-bottom: 6px; }
+  .mk-clips { display: flex; gap: 6px; }
+  .mk-clip {
+    width: 92px; height: 52px; flex: none;
+    border: 1px solid var(--mk-border);
+    border-radius: var(--mk-radius);
+    background: var(--mk-panel);
+    font-size: 0.56rem; color: var(--mk-text-soft);
+    display: flex; align-items: flex-end; padding: 4px;
+  }
+  .mk-clip.drop { border-style: dashed; align-items: center; justify-content: center; }
+
+  /* gradient swatches standing in for real generated frames */
+  .sw1 { background: linear-gradient(135deg,#3a1f4a,#7a2f6b); }
+  .sw2 { background: linear-gradient(135deg,#1f3a4a,#2f6b7a); }
+  .sw3 { background: linear-gradient(135deg,#4a3a1f,#7a6b2f); }
+  .sw4 { background: linear-gradient(135deg,#1f4a2f,#2f7a4f); }
+  .sw5 { background: linear-gradient(135deg,#4a1f2f,#7a2f4f); }
+  .sw6 { background: linear-gradient(135deg,#2f2f4a,#5f5f7a); }
+
+  /* ---- margin notes ---- */
+  .notes { margin-top: 1.1rem; padding-left: 1.1rem; border-left: 2px solid var(--line); }
+  .notes li { margin-bottom: 0.5rem; color: var(--ink-soft); font-size: 0.92rem; }
+  .notes li::marker { color: var(--safelight); }
+
+  /* ---- comparison table ---- */
+  .compare-wrap { overflow-x: auto; margin-top: 3rem; }
+  table.compare { width: 100%; border-collapse: collapse; min-width: 560px; font-size: 0.92rem; }
+  table.compare caption {
+    text-align: left; font-family: var(--serif); font-size: 1.35rem; margin-bottom: 1rem; color: var(--ink);
+  }
+  table.compare th, table.compare td { padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  table.compare th { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+  table.compare td:first-child { color: var(--ink-soft); font-family: var(--mono); font-size: 0.78rem; white-space: nowrap; }
+
+  .closing { margin-top: 3rem; font-size: 0.98rem; color: var(--ink-soft); max-width: 62ch; }
+  .closing a { color: var(--safelight); }
+
+  .reveal { opacity: 0; transform: translateY(10px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+
+  a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--safelight); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <div class="wrap">
+
+    <p class="eyebrow">Lyme Hype Studio — internal review</p>
+    <h1 class="deck-title">Two ways into the room</h1>
+    <p class="deck-sub">Same app, same job — a canvas-driven studio for turning a track into keyframes, motion graphics, and Seedance video, then handing the cut to Premiere. Generated nodes live and combine right on the canvas (the stephenlawyer.clothing pattern) — every node can be generated, uploaded, or pulled in from a web link, and video/audio nodes send straight to the timeline. The left rail is now Sessions, nameable like Claude Desktop's chat list. Storyboard sits alongside the freeform canvas for blocking out prompts before spending a real generation, and Play is its own full-width destination — not another canvas toggle — for reviewing and cutting a single video or audio node, with a back arrow returning to whichever view sent you there. Generation tools and data tools like ChatRealty attach as MCP connections rather than hardcoded integrations — see the Connections panel below. Both side panels collapse out of the way, and what differs below is just the visual system wrapped around it.</p>
+
+    <div class="brandmark reveal">
+      <span class="word">Lyme Hype</span>
+      <span class="badge">▸ press start</span>
+    </div>
+
+    <dl class="brief">
+      <div><dt>Project</dt><dd>Lyme Hype Studio (desktop)</dd></div>
+      <div><dt>Shell</dt><dd>Electron + TypeScript</dd></div>
+      <div><dt>Stage</dt><dd>Concept — nothing built</dd></div>
+    </dl>
+
+    <section class="sheet reveal">
+      <div class="sheet-label"><span class="tag">Concept A</span> Night Terminal · amber phosphor</div>
+      <div class="sheet-head">
+        <h2 class="sheet-title">Night Terminal</h2>
+        <p class="sheet-mood">a terminal that never stopped being a terminal</p>
+      </div>
+
+      <div class="mockup-scroll">
+        <div class="mockup-window concept-a">
+          <div class="mk-titlebar">
+            <div class="mk-brand"><span class="dot"></span>lyme hype</div>
+            <div class="mk-winctl"><span>─</span><span>▢</span><span>✕</span></div>
+          </div>
+          <div class="mk-toolbar">
+            <div class="mk-breadcrumb"><span class="live"></span> r-042 · neon tide</div>
+            <div class="mk-stats">
+              <span class="mk-pill">ctx 38%</span>
+              <span class="mk-pill">$1.85</span>
+              <span class="mk-pill mode glow">studio mode</span>
+            </div>
+          </div>
+          <div class="mk-body">
+            <div class="mk-nav" id="nav-a">
+              <div class="mk-panel-head"><span>sessions</span><div class="mk-panel-head-btns"><button class="mk-collapse-btn" title="new session">+</button><button class="mk-collapse-btn" onclick="mkToggle('nav-a')">‹</button></div></div>
+              <div class="mk-panel-body">
+                <div class="item active">r-042 · neon tide<span class="rename-ic">✎</span></div>
+                <div class="item">r-041 · static bloom</div>
+                <div class="item">r-039 · afterglow</div>
+                <div class="divider"></div>
+                <div class="item util">assets</div>
+                <div class="item util">settings</div>
+              </div>
+            </div>
+            <div class="mk-main">
+              <div class="mk-row">
+                <div class="mk-canvas">
+                  <div class="mk-canvas-toolbar">
+                    <button class="mk-tool-btn active" title="select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6 18 2.5-7L21 11.5 5 3z"></path></svg></button>
+                    <button class="mk-tool-btn" title="box select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2" stroke-linecap="round"><rect x="4" y="5" width="16" height="14" rx="1"></rect></svg></button>
+                    <button class="mk-tool-btn" title="combine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="9" height="9" rx="1"></rect><rect x="12" y="11" width="9" height="9" rx="1"></rect></svg></button>
+                  </div>
+                  <div class="mk-view-toggle"><span class="v active">canvas</span><span class="v">storyboard</span></div>
+                  <div class="mk-group" style="left:8px;top:40px;width:358px;height:112px;"><span class="glabel">group 1</span></div>
+                  <div class="mk-node selected" style="left:16px;top:52px;">
+                    <div class="thumb sw2"></div>
+                    <span class="cap">keyframe_02</span>
+                  </div>
+                  <div class="mk-node" style="left:128px;top:52px;">
+                    <div class="thumb sw6"></div>
+                    <span class="cap">drip-title_v2</span>
+                  </div>
+                  <div class="mk-node clip rendering" style="left:240px;top:46px;">
+                    <span class="srcbadge">gen</span>
+                    <div class="thumb">rendering…</div>
+                    <span class="cap">clip_seedance</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                  <div class="mk-node" style="left:16px;top:184px;">
+                    <div class="thumb sw4"></div>
+                    <span class="cap">keyframe_04</span>
+                  </div>
+                  <div class="mk-node video" style="left:132px;top:184px;">
+                    <span class="srcbadge">link</span>
+                    <div class="thumb sw5"></div>
+                    <span class="cap">ref_zeedo.mp4</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                  <div class="mk-node audio" style="left:246px;top:184px;">
+                    <span class="srcbadge">gen</span>
+                    <div class="thumb">
+                      <svg viewBox="0 0 100 36" preserveAspectRatio="xMidYMid meet">
+                        <rect x="4" y="13" width="6" height="10" rx="1" fill="currentColor"></rect>
+                        <rect x="14" y="8" width="6" height="20" rx="1" fill="currentColor"></rect>
+                        <rect x="24" y="11" width="6" height="14" rx="1" fill="currentColor"></rect>
+                        <rect x="34" y="5" width="6" height="26" rx="1" fill="currentColor"></rect>
+                        <rect x="44" y="10" width="6" height="16" rx="1" fill="currentColor"></rect>
+                        <rect x="54" y="6" width="6" height="24" rx="1" fill="currentColor"></rect>
+                        <rect x="64" y="12" width="6" height="12" rx="1" fill="currentColor"></rect>
+                        <rect x="74" y="9" width="6" height="18" rx="1" fill="currentColor"></rect>
+                      </svg>
+                    </div>
+                    <span class="cap">vo_lantern.mp3</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                </div>
+                <div class="mk-aside" id="aside-a">
+                  <div class="mk-panel-head"><span>add to canvas</span><button class="mk-collapse-btn" onclick="mkToggle('aside-a')">›</button></div>
+                  <div class="mk-panel-body mk-promptform">
+                    <div class="mk-connstrip">
+                      <span class="conn">ChatRealty</span>
+                      <span class="conn">Seedance</span>
+                      <span class="conn">ElevenLabs</span>
+                      <span class="conn add">+</span>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">video</div>
+                      <div class="t active">motion gfx</div>
+                      <div class="t">image</div>
+                      <div class="t">audio</div>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">reference</div>
+                      <div class="t active">keyframe</div>
+                      <div class="t">text</div>
+                    </div>
+                    <p>describe a shot, upload a reference, or drop in audio. it lands on the canvas — drag it onto another node to combine.</p>
+                    <div class="mk-promptarea">lantern spirit rising from a river of flames, chorus swell, wide shot</div>
+                    <div class="mk-chips">
+                      <div class="c">1:1</div>
+                      <div class="c">12s</div>
+                      <div class="c">1080p</div>
+                    </div>
+                    <div class="mk-generate">generate</div>
+                    <div class="mk-importrow">
+                      <div class="mk-actionbtn">↑ upload file</div>
+                    </div>
+                    <div class="mk-linkinput">⛓ paste a video or audio link…</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mk-cutroom">
+                <div class="mk-cutroom-h">cut room — timeline</div>
+                <div class="mk-clips">
+                  <div class="mk-clip sw1">scene 1 · 6 takes</div>
+                  <div class="mk-clip sw4">title card · staged</div>
+                  <div class="mk-clip sw2">b-roll · staged</div>
+                  <div class="mk-clip sent">vo_lantern.mp3 · sent</div>
+                  <div class="mk-clip drop">+ drop clips</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>Monospace everywhere — including body copy — leans all the way into the terminal bit rather than terminal-flavored chrome over an ordinary UI.</li>
+        <li>Amber phosphor, not green: reads as its own thing rather than the generic "dark mode plus neon" look, and stays out of the way if we want lime kept for the logo/marketing only.</li>
+        <li>Nav trimmed to a flat project list — jboogx's ten-category sidebar (Tonight / Darkroom / War Room / …) works great on a stream, but is a lot of structure for two of us to keep fed.</li>
+        <li>Scanline and glow are real texture, not a filter over a screenshot — cheap to render, and easy to dial back if it gets tiring in daily use.</li>
+      </ul>
+    </section>
+
+    <section class="sheet reveal">
+      <div class="sheet-label"><span class="tag">Concept B</span> Lime Cut · production suite</div>
+      <div class="sheet-head">
+        <h2 class="sheet-title">Lime Cut</h2>
+        <p class="sheet-mood">sits next to Premiere, not next to a shell prompt</p>
+      </div>
+
+      <div class="mockup-scroll">
+        <div class="mockup-window concept-b">
+          <div class="mk-titlebar">
+            <div class="mk-brand"><span class="dot"></span>lyme hype</div>
+            <div class="mk-winctl"><span>─</span><span>▢</span><span>✕</span></div>
+          </div>
+          <div class="mk-toolbar">
+            <div class="mk-breadcrumb"><span class="live"></span> R-042 · Neon Tide</div>
+            <div class="mk-stats">
+              <span class="mk-pill">CTX 38%</span>
+              <span class="mk-pill">$1.85</span>
+              <span class="mk-pill mode">Studio Mode</span>
+            </div>
+          </div>
+          <div class="mk-body">
+            <div class="mk-nav" id="nav-b">
+              <div class="mk-panel-head"><span>Sessions</span><div class="mk-panel-head-btns"><button class="mk-collapse-btn" title="New session">+</button><button class="mk-collapse-btn" onclick="mkToggle('nav-b')">‹</button></div></div>
+              <div class="mk-panel-body">
+                <div class="item active">R-042 · Neon Tide<span class="rename-ic">✎</span></div>
+                <div class="item">R-041 · Static Bloom</div>
+                <div class="item">R-039 · Afterglow</div>
+                <div class="divider"></div>
+                <div class="item util">Assets</div>
+                <div class="item util">Settings</div>
+              </div>
+            </div>
+            <div class="mk-main">
+              <div class="mk-row">
+                <div class="mk-canvas">
+                  <div class="mk-canvas-toolbar">
+                    <button class="mk-tool-btn active" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6 18 2.5-7L21 11.5 5 3z"></path></svg></button>
+                    <button class="mk-tool-btn" title="Box select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2" stroke-linecap="round"><rect x="4" y="5" width="16" height="14" rx="1"></rect></svg></button>
+                    <button class="mk-tool-btn" title="Combine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="9" height="9" rx="1"></rect><rect x="12" y="11" width="9" height="9" rx="1"></rect></svg></button>
+                  </div>
+                  <div class="mk-view-toggle"><span class="v active">Canvas</span><span class="v">Storyboard</span></div>
+                  <div class="mk-group" style="left:8px;top:40px;width:358px;height:112px;"><span class="glabel">Group 1</span></div>
+                  <div class="mk-node selected" style="left:16px;top:52px;">
+                    <div class="thumb sw2"></div>
+                    <span class="cap">keyframe_02</span>
+                  </div>
+                  <div class="mk-node" style="left:128px;top:52px;">
+                    <div class="thumb sw6"></div>
+                    <span class="cap">drip-title_v2</span>
+                  </div>
+                  <div class="mk-node clip rendering" style="left:240px;top:46px;">
+                    <span class="srcbadge">gen</span>
+                    <div class="thumb">Rendering…</div>
+                    <span class="cap">clip_seedance</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                  <div class="mk-node" style="left:16px;top:184px;">
+                    <div class="thumb sw4"></div>
+                    <span class="cap">keyframe_04</span>
+                  </div>
+                  <div class="mk-node video" style="left:132px;top:184px;">
+                    <span class="srcbadge">link</span>
+                    <div class="thumb sw5"></div>
+                    <span class="cap">ref_zeedo.mp4</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                  <div class="mk-node audio" style="left:246px;top:184px;">
+                    <span class="srcbadge">gen</span>
+                    <div class="thumb">
+                      <svg viewBox="0 0 100 36" preserveAspectRatio="xMidYMid meet">
+                        <rect x="4" y="13" width="6" height="10" rx="1" fill="currentColor"></rect>
+                        <rect x="14" y="8" width="6" height="20" rx="1" fill="currentColor"></rect>
+                        <rect x="24" y="11" width="6" height="14" rx="1" fill="currentColor"></rect>
+                        <rect x="34" y="5" width="6" height="26" rx="1" fill="currentColor"></rect>
+                        <rect x="44" y="10" width="6" height="16" rx="1" fill="currentColor"></rect>
+                        <rect x="54" y="6" width="6" height="24" rx="1" fill="currentColor"></rect>
+                        <rect x="64" y="12" width="6" height="12" rx="1" fill="currentColor"></rect>
+                        <rect x="74" y="9" width="6" height="18" rx="1" fill="currentColor"></rect>
+                      </svg>
+                    </div>
+                    <span class="cap">vo_lantern.mp3</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                </div>
+                <div class="mk-aside" id="aside-b">
+                  <div class="mk-panel-head"><span>Add to canvas</span><button class="mk-collapse-btn" onclick="mkToggle('aside-b')">›</button></div>
+                  <div class="mk-panel-body mk-promptform">
+                    <div class="mk-connstrip">
+                      <span class="conn">ChatRealty</span>
+                      <span class="conn">Seedance</span>
+                      <span class="conn">ElevenLabs</span>
+                      <span class="conn add">+</span>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">Video</div>
+                      <div class="t active">Motion GFX</div>
+                      <div class="t">Image</div>
+                      <div class="t">Audio</div>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">Reference</div>
+                      <div class="t active">Keyframe</div>
+                      <div class="t">Text</div>
+                    </div>
+                    <p>Describe a shot, upload a reference, or drop in audio. It lands on the canvas — drag it onto another node to combine.</p>
+                    <div class="mk-promptarea">lantern spirit rising from a river of flames, chorus swell, wide shot</div>
+                    <div class="mk-chips">
+                      <div class="c">1:1</div>
+                      <div class="c">12s</div>
+                      <div class="c">1080p</div>
+                    </div>
+                    <div class="mk-generate">Generate</div>
+                    <div class="mk-importrow">
+                      <div class="mk-actionbtn">↑ Upload file</div>
+                    </div>
+                    <div class="mk-linkinput">⛓ Paste a video or audio link…</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mk-cutroom">
+                <div class="mk-cutroom-h">Cut room — timeline</div>
+                <div class="mk-clips">
+                  <div class="mk-clip sw1">Scene 1 · 6 takes</div>
+                  <div class="mk-clip sw4">Title card · staged</div>
+                  <div class="mk-clip sw2">B-roll · staged</div>
+                  <div class="mk-clip sent">vo_lantern.mp3 · Sent</div>
+                  <div class="mk-clip drop">+ Drop clips</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>Lime is rationed: it shows up on the Generate button, the active tab, and the brand mark — nowhere else. Everything around it stays neutral charcoal so the accent still means something when it appears.</li>
+        <li>UI chrome sits in a plain sans; monospace is kept for actual data — file paths, cost readouts, the upload map — the same split real grading tools draw between controls and telemetry.</li>
+        <li>Panels have real depth (raised surface, soft shadow) instead of flat terminal cards — closer to sitting next to Resolve or Premiere than a CLI window.</li>
+        <li>Same trimmed project list as Concept A — that call isn't really in question, only the skin around it is.</li>
+      </ul>
+    </section>
+
+    <section class="sheet reveal">
+      <div class="sheet-label"><span class="tag">Concept C</span> Zest · retro, light</div>
+      <div class="sheet-head">
+        <h2 class="sheet-title">Zest</h2>
+        <p class="sheet-mood">a lime you're looking straight down the middle of</p>
+      </div>
+
+      <div class="mockup-scroll">
+        <div class="mockup-window concept-c">
+          <div class="mk-titlebar">
+            <div class="mk-brand">
+              <svg class="citrus-mark" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="16" cy="16" r="14" fill="none" stroke="var(--mk-accent)" stroke-width="2"></circle>
+                <g stroke="var(--mk-accent)" stroke-width="1.3" opacity="0.85">
+                  <line x1="16" y1="16" x2="16" y2="3"></line>
+                  <line x1="16" y1="16" x2="25.3" y2="8.5"></line>
+                  <line x1="16" y1="16" x2="27.5" y2="18.8"></line>
+                  <line x1="16" y1="16" x2="21.5" y2="27.3"></line>
+                  <line x1="16" y1="16" x2="10.5" y2="27.3"></line>
+                  <line x1="16" y1="16" x2="4.5" y2="18.8"></line>
+                  <line x1="16" y1="16" x2="6.7" y2="8.5"></line>
+                </g>
+                <circle cx="16" cy="16" r="3" fill="var(--mk-yellow)"></circle>
+              </svg>
+              Lyme Hype
+            </div>
+            <div class="mk-winctl"><span>─</span><span>▢</span><span>✕</span></div>
+          </div>
+          <div class="mk-toolbar">
+            <div class="mk-breadcrumb"><span class="live"></span> R-042 · Neon Tide</div>
+            <div class="mk-stats">
+              <span class="mk-pill">CTX 38%</span>
+              <span class="mk-pill">$1.85</span>
+              <span class="mk-pill mode">Studio Mode</span>
+            </div>
+          </div>
+          <div class="mk-body">
+            <div class="mk-nav" id="nav-c">
+              <div class="mk-panel-head"><span>Sessions</span><div class="mk-panel-head-btns"><button class="mk-collapse-btn" title="New session">+</button><button class="mk-collapse-btn" onclick="mkToggle('nav-c')">‹</button></div></div>
+              <div class="mk-panel-body">
+                <div class="item active">R-042 · Neon Tide<span class="rename-ic">✎</span></div>
+                <div class="item">R-041 · Static Bloom</div>
+                <div class="item">R-039 · Afterglow</div>
+                <div class="divider"></div>
+                <div class="item util">Assets</div>
+                <div class="item util">Settings</div>
+              </div>
+            </div>
+            <div class="mk-main">
+              <div class="mk-row">
+                <div class="mk-canvas">
+                  <div class="mk-canvas-toolbar">
+                    <button class="mk-tool-btn active" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6 18 2.5-7L21 11.5 5 3z"></path></svg></button>
+                    <button class="mk-tool-btn" title="Box select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2" stroke-linecap="round"><rect x="4" y="5" width="16" height="14" rx="1"></rect></svg></button>
+                    <button class="mk-tool-btn" title="Combine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="9" height="9" rx="1"></rect><rect x="12" y="11" width="9" height="9" rx="1"></rect></svg></button>
+                  </div>
+                  <div class="mk-view-toggle"><span class="v active">Canvas</span><span class="v">Storyboard</span></div>
+                  <div class="mk-group" style="left:8px;top:40px;width:358px;height:112px;"><span class="glabel">Group 1</span></div>
+                  <div class="mk-node selected" style="left:16px;top:52px;">
+                    <div class="thumb sw2"></div>
+                    <span class="cap">keyframe_02</span>
+                  </div>
+                  <div class="mk-node" style="left:128px;top:52px;">
+                    <div class="thumb sw6"></div>
+                    <span class="cap">drip-title_v2</span>
+                  </div>
+                  <div class="mk-node clip rendering" style="left:240px;top:46px;">
+                    <span class="srcbadge">gen</span>
+                    <div class="thumb">Rendering…</div>
+                    <span class="cap">clip_seedance</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                  <div class="mk-node" style="left:16px;top:184px;">
+                    <div class="thumb sw4"></div>
+                    <span class="cap">keyframe_04</span>
+                  </div>
+                  <div class="mk-node video" style="left:132px;top:184px;">
+                    <span class="srcbadge">link</span>
+                    <div class="thumb sw5"></div>
+                    <span class="cap">ref_zeedo.mp4</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                  <div class="mk-node audio" style="left:246px;top:184px;">
+                    <span class="srcbadge">gen</span>
+                    <div class="thumb">
+                      <svg viewBox="0 0 100 36" preserveAspectRatio="xMidYMid meet">
+                        <rect x="4" y="13" width="6" height="10" rx="1" fill="currentColor"></rect>
+                        <rect x="14" y="8" width="6" height="20" rx="1" fill="currentColor"></rect>
+                        <rect x="24" y="11" width="6" height="14" rx="1" fill="currentColor"></rect>
+                        <rect x="34" y="5" width="6" height="26" rx="1" fill="currentColor"></rect>
+                        <rect x="44" y="10" width="6" height="16" rx="1" fill="currentColor"></rect>
+                        <rect x="54" y="6" width="6" height="24" rx="1" fill="currentColor"></rect>
+                        <rect x="64" y="12" width="6" height="12" rx="1" fill="currentColor"></rect>
+                        <rect x="74" y="9" width="6" height="18" rx="1" fill="currentColor"></rect>
+                      </svg>
+                    </div>
+                    <span class="cap">vo_lantern.mp3</span>
+                    <span class="sendbtn">→</span>
+                  </div>
+                </div>
+                <div class="mk-aside" id="aside-c">
+                  <div class="mk-panel-head"><span>Add to canvas</span><button class="mk-collapse-btn" onclick="mkToggle('aside-c')">›</button></div>
+                  <div class="mk-panel-body mk-promptform">
+                    <div class="mk-connstrip">
+                      <span class="conn">ChatRealty</span>
+                      <span class="conn">Seedance</span>
+                      <span class="conn">ElevenLabs</span>
+                      <span class="conn add">+</span>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">Video</div>
+                      <div class="t active">Motion GFX</div>
+                      <div class="t">Image</div>
+                      <div class="t">Audio</div>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">Reference</div>
+                      <div class="t active">Keyframe</div>
+                      <div class="t">Text</div>
+                    </div>
+                    <p>Describe a shot, upload a reference, or drop in audio. It lands on the canvas — drag it onto another node to combine.</p>
+                    <div class="mk-promptarea">lantern spirit rising from a river of flames, chorus swell, wide shot</div>
+                    <div class="mk-chips">
+                      <div class="c">1:1</div>
+                      <div class="c">12s</div>
+                      <div class="c">1080p</div>
+                    </div>
+                    <div class="mk-generate">Generate</div>
+                    <div class="mk-importrow">
+                      <div class="mk-actionbtn">↑ Upload file</div>
+                    </div>
+                    <div class="mk-linkinput">⛓ Paste a video or audio link…</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mk-cutroom">
+                <div class="mk-cutroom-h">Cut room — timeline</div>
+                <div class="mk-clips">
+                  <div class="mk-clip sw1">Scene 1 · 6 takes</div>
+                  <div class="mk-clip sw4">Title card · staged</div>
+                  <div class="mk-clip sw2">B-roll · staged</div>
+                  <div class="mk-clip sent">vo_lantern.mp3 · Sent</div>
+                  <div class="mk-clip drop">+ Drop clips</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>The citrus cross-section becomes the brand mark, redrawn as simple line art rather than the literal photo-real logo you sent over — same idea, looking straight down a lime, as our own drawing of it.</li>
+        <li>Trebuchet-style rounded headers and glossy, pill-shaped buttons are a genuine Y2K software reference, not a generic "rounded UI" — that beveled-candy-button look is basically extinct now, which is exactly what makes it read as retro instead of dated.</li>
+        <li>The glow is a soft yellow-green bloom behind the brand mark, not falling code — keeps the Matrix nod to a feeling of energy rather than the literal digital-rain trope.</li>
+        <li>Same nav, canvas, and cut room structure as A and B. Still comparing skins, not features.</li>
+      </ul>
+    </section>
+
+    <section class="sheet reveal">
+      <div class="sheet-label"><span class="tag">Feature</span> Storyboard view · pre-planning the shots</div>
+      <div class="sheet-head">
+        <h2 class="sheet-title">Storyboard view</h2>
+        <p class="sheet-mood">plan the shot list before spending a single real generation</p>
+      </div>
+
+      <div class="mockup-scroll">
+        <div class="mockup-window concept-b">
+          <div class="mk-titlebar">
+            <div class="mk-brand"><span class="dot"></span>lyme hype</div>
+            <div class="mk-winctl"><span>─</span><span>▢</span><span>✕</span></div>
+          </div>
+          <div class="mk-toolbar">
+            <div class="mk-breadcrumb"><span class="live"></span> R-042 · Neon Tide</div>
+            <div class="mk-stats">
+              <span class="mk-pill">CTX 38%</span>
+              <span class="mk-pill">$1.85</span>
+              <span class="mk-pill mode">Studio Mode</span>
+            </div>
+          </div>
+          <div class="mk-body">
+            <div class="mk-nav" id="nav-sb">
+              <div class="mk-panel-head"><span>Sessions</span><div class="mk-panel-head-btns"><button class="mk-collapse-btn" title="New session">+</button><button class="mk-collapse-btn" onclick="mkToggle('nav-sb')">‹</button></div></div>
+              <div class="mk-panel-body">
+                <div class="item active">R-042 · Neon Tide<span class="rename-ic">✎</span></div>
+                <div class="item">R-041 · Static Bloom</div>
+                <div class="item">R-039 · Afterglow</div>
+                <div class="divider"></div>
+                <div class="item util">Assets</div>
+                <div class="item util">Settings</div>
+              </div>
+            </div>
+            <div class="mk-main">
+              <div class="mk-row">
+                <div class="mk-canvas">
+                  <div class="mk-canvas-toolbar">
+                    <button class="mk-tool-btn active" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l6 18 2.5-7L21 11.5 5 3z"></path></svg></button>
+                    <button class="mk-tool-btn" title="Box select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2" stroke-linecap="round"><rect x="4" y="5" width="16" height="14" rx="1"></rect></svg></button>
+                    <button class="mk-tool-btn" title="Combine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="9" height="9" rx="1"></rect><rect x="12" y="11" width="9" height="9" rx="1"></rect></svg></button>
+                  </div>
+                  <div class="mk-view-toggle"><span class="v">Canvas</span><span class="v active">Storyboard</span></div>
+                  <div class="mk-storyboard">
+                    <div class="sb-panel">
+                      <div class="sb-num">01</div>
+                      <div class="sb-sketch">✎</div>
+                      <p class="sb-prompt">Lantern spirit rises from the river, wide shot</p>
+                      <div class="sb-meta"><span>12s</span><span class="sb-status">Planned</span></div>
+                    </div>
+                    <div class="sb-panel">
+                      <div class="sb-num">02</div>
+                      <div class="sb-sketch">✎</div>
+                      <p class="sb-prompt">Close-up: chest-flame ignites</p>
+                      <div class="sb-meta"><span>4s</span><span class="sb-status">Planned</span></div>
+                    </div>
+                    <div class="sb-panel promoted">
+                      <div class="sb-num">03</div>
+                      <div class="sb-sketch">✎</div>
+                      <p class="sb-prompt">Title card, drip effect reveal</p>
+                      <div class="sb-meta"><span>3s</span><span class="sb-status">Generating</span></div>
+                    </div>
+                    <div class="sb-add">+ Add panel</div>
+                  </div>
+                </div>
+                <div class="mk-aside" id="aside-sb">
+                  <div class="mk-panel-head"><span>Add to canvas</span><button class="mk-collapse-btn" onclick="mkToggle('aside-sb')">›</button></div>
+                  <div class="mk-panel-body mk-promptform">
+                    <div class="mk-connstrip">
+                      <span class="conn">ChatRealty</span>
+                      <span class="conn">Seedance</span>
+                      <span class="conn">ElevenLabs</span>
+                      <span class="conn add">+</span>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">Video</div>
+                      <div class="t active">Motion GFX</div>
+                      <div class="t">Image</div>
+                      <div class="t">Audio</div>
+                    </div>
+                    <div class="mk-tabs">
+                      <div class="t">Reference</div>
+                      <div class="t active">Keyframe</div>
+                      <div class="t">Text</div>
+                    </div>
+                    <p>Sketch out a shot — a prompt and rough notes, no real generation spent yet. Promote it later to turn it into a real node.</p>
+                    <div class="mk-promptarea">wide shot, lantern spirit steps out of the water</div>
+                    <div class="mk-chips">
+                      <div class="c">1:1</div>
+                      <div class="c">8s</div>
+                      <div class="c">1080p</div>
+                    </div>
+                    <div class="mk-generate">Add panel</div>
+                    <div class="mk-importrow">
+                      <div class="mk-actionbtn">↑ Upload file</div>
+                    </div>
+                    <div class="mk-linkinput">⛓ Paste a video or audio link…</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mk-cutroom">
+                <div class="mk-cutroom-h">Cut room — timeline</div>
+                <div class="mk-clips">
+                  <div class="mk-clip sw1">Scene 1 · 6 takes</div>
+                  <div class="mk-clip sw4">Title card · staged</div>
+                  <div class="mk-clip sw2">B-roll · staged</div>
+                  <div class="mk-clip sent">vo_lantern.mp3 · Sent</div>
+                  <div class="mk-clip drop">+ Drop clips</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>Panels are cheap on purpose — a prompt and a rough sketch, no real generation call, so you can block out ten shots and only pay for the three that survive.</li>
+        <li>Promoting a panel (the solid-bordered one, panel 03) is what actually spawns a real node back on the Canvas view — this is the same <code>clip_seedance</code> node rendering in the other screenshots.</li>
+        <li>The aside's button swaps from Generate to Add panel in this mode — same form, cheaper action, so it's obvious you haven't spent a real generation yet.</li>
+        <li>Lives inside the same window as the Canvas view — Storyboard is a toggle in the corner, not a separate screen to navigate to.</li>
+      </ul>
+    </section>
+
+    <section class="sheet reveal">
+      <div class="sheet-label"><span class="tag">Feature</span> Play view · a full player, not a squeezed panel</div>
+      <div class="sheet-head">
+        <h2 class="sheet-title">Play view</h2>
+        <p class="sheet-mood">a real player takes the whole room — Canvas and Storyboard step aside</p>
+      </div>
+
+      <div class="mockup-scroll">
+        <div class="mockup-window concept-b">
+          <div class="mk-titlebar">
+            <div class="mk-brand"><span class="dot"></span>lyme hype</div>
+            <div class="mk-winctl"><span>─</span><span>▢</span><span>✕</span></div>
+          </div>
+          <div class="mk-toolbar">
+            <div class="mk-breadcrumb play-back"><span class="back-arrow">←</span> Back to Canvas</div>
+            <div class="mk-stats">
+              <span class="mk-pill">CTX 38%</span>
+              <span class="mk-pill">$1.85</span>
+              <span class="mk-pill mode">Studio Mode</span>
+            </div>
+          </div>
+          <div class="mk-body">
+            <div class="mk-main">
+              <div class="mk-row">
+                <div class="mk-play">
+                  <div class="play-head">
+                    <span class="srcbadge">gen</span>
+                    <span class="play-name">clip_seedance.mp4</span>
+                    <span>0:12</span>
+                  </div>
+                  <div class="play-stage">
+                    <div class="play-overlay">
+                      <button class="play-ov-btn">▶</button>
+                      <span class="play-ov-time">0:03</span>
+                      <div class="play-ov-track">
+                        <div class="trim-range" style="left:8%;right:15%;"></div>
+                        <div class="trim-handle" style="left:8%;"></div>
+                        <div class="trim-handle" style="left:85%;"></div>
+                        <div class="trim-playhead" style="left:25%;"></div>
+                      </div>
+                      <span class="play-ov-time">0:12</span>
+                    </div>
+                  </div>
+                  <div class="play-audiobar">
+                    <div class="play-audio-wave">
+                      <svg viewBox="0 0 100 36" preserveAspectRatio="none">
+                        <rect x="4" y="13" width="6" height="10" rx="1" fill="currentColor"></rect>
+                        <rect x="14" y="8" width="6" height="20" rx="1" fill="currentColor"></rect>
+                        <rect x="24" y="11" width="6" height="14" rx="1" fill="currentColor"></rect>
+                        <rect x="34" y="5" width="6" height="26" rx="1" fill="currentColor"></rect>
+                        <rect x="44" y="10" width="6" height="16" rx="1" fill="currentColor"></rect>
+                        <rect x="54" y="6" width="6" height="24" rx="1" fill="currentColor"></rect>
+                        <rect x="64" y="12" width="6" height="12" rx="1" fill="currentColor"></rect>
+                        <rect x="74" y="9" width="6" height="18" rx="1" fill="currentColor"></rect>
+                      </svg>
+                      <div class="trim-range" style="left:4%;right:20%;"></div>
+                      <div class="trim-handle" style="left:4%;"></div>
+                      <div class="trim-handle" style="left:80%;"></div>
+                    </div>
+                    <span class="play-audio-label">vo_lantern.mp3 · 0:06</span>
+                    <button class="play-audio-btn" title="Detach audio as its own node">Detach</button>
+                    <button class="play-audio-btn danger" title="Delete audio">✕</button>
+                  </div>
+                  <div class="play-actions">
+                    <span class="mk-actionbtn">Split at playhead</span>
+                    <span class="mk-generate">Send to timeline</span>
+                  </div>
+                </div>
+              </div>
+              <div class="mk-cutroom">
+                <div class="mk-cutroom-h">Cut room — timeline</div>
+                <div class="mk-clips">
+                  <div class="mk-clip sw1">Scene 1 · 6 takes</div>
+                  <div class="mk-clip sw4">Title card · staged</div>
+                  <div class="mk-clip sw2">B-roll · staged</div>
+                  <div class="mk-clip sent">vo_lantern.mp3 · Sent</div>
+                  <div class="mk-clip drop">+ Drop clips</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>Not a canvas overlay anymore — Play takes the whole body. Sessions and the Add-to-canvas rail step aside rather than sharing the room, so the video itself gets real size instead of fighting for space.</li>
+        <li>Controls are overlaid on the video, not a separate row underneath it — play/pause, the time readouts, and the trim handles all live in one slim bar at the bottom edge of the frame, the same place a normal video player puts them.</li>
+        <li>The audio strip is one thin bar, not a second boxed component that mirrors the video — a compact waveform with its own trim handles, sized to be easy to grab, not to look important.</li>
+        <li><strong>Detach</strong> pulls the audio out as its own independent node on Canvas; <strong>✕</strong> deletes it from the clip outright. Both act on the audio track specifically — they don't touch the video.</li>
+        <li>The back arrow replaces the breadcrumb while in Play and returns to whichever view sent you here — Canvas or Storyboard — not always Canvas by default.</li>
+        <li>Trimming is still non-destructive — in/out points live on the node's own data, not a cut of the underlying generated file. Reopening Play later shows the full original with the last trim remembered.</li>
+        <li>Split at playhead turns one clip into two nodes back on Canvas — the way to pull three good seconds out of a longer generation without regenerating it.</li>
+      </ul>
+    </section>
+
+    <section class="sheet reveal">
+      <div class="sheet-label"><span class="tag">Feature</span> Connections · MCP</div>
+      <div class="sheet-head">
+        <h2 class="sheet-title">Connections</h2>
+        <p class="sheet-mood">every generation tool is a connection, not a hardcoded integration</p>
+      </div>
+
+      <div class="mockup-scroll">
+        <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+          <div class="conn-modal concept-b">
+            <div class="conn-modal-head">Connections <span class="conn-close">✕</span></div>
+            <div class="conn-list">
+              <div class="conn-row">
+                <span class="conn-dot"></span>
+                <div class="conn-info">
+                  <div class="conn-name">ChatRealty</div>
+                  <div class="conn-desc">Listings, photos, market data</div>
+                </div>
+                <span class="conn-status ok">Connected</span>
+              </div>
+              <div class="conn-row">
+                <span class="conn-dot"></span>
+                <div class="conn-info">
+                  <div class="conn-name">Seedance</div>
+                  <div class="conn-desc">Video generation</div>
+                </div>
+                <span class="conn-status ok">Connected</span>
+              </div>
+              <div class="conn-row">
+                <span class="conn-dot"></span>
+                <div class="conn-info">
+                  <div class="conn-name">ElevenLabs</div>
+                  <div class="conn-desc">Voice &amp; music generation</div>
+                </div>
+                <span class="conn-status ok">Connected</span>
+              </div>
+            </div>
+            <div class="conn-divider"></div>
+            <div class="conn-section-label">Add a connection</div>
+            <div class="conn-quickstart">
+              <span class="conn-chip">ChatRealty</span>
+              <span class="conn-chip">Seedance</span>
+              <span class="conn-chip">ElevenLabs</span>
+              <span class="conn-chip active">Custom</span>
+            </div>
+            <div class="conn-form">
+              <div class="conn-field">
+                <span class="conn-field-label">Name</span>
+                <div class="conn-input">Runway</div>
+              </div>
+              <div class="conn-field">
+                <span class="conn-field-label">Endpoint</span>
+                <div class="conn-input">https://api.runwayml.com/mcp</div>
+              </div>
+              <div class="conn-field">
+                <span class="conn-field-label">Auth type</span>
+                <div class="conn-authrow">
+                  <span class="conn-chip">None</span>
+                  <span class="conn-chip active">API key</span>
+                  <span class="conn-chip">Bearer</span>
+                  <span class="conn-chip">OAuth</span>
+                </div>
+              </div>
+              <div class="conn-formactions">
+                <button class="conn-help-btn">Help me set this up</button>
+                <span class="mk-generate">Connect</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="secure-modal concept-b">
+            <div class="secure-modal-head">Enter API key<span>for Runway — opens when Connect needs a credential</span></div>
+            <div class="secure-body">
+              <div class="secure-field">••••••••••••••••••</div>
+              <p class="secure-note">Stored in your OS keychain. The agent only ever sees the field name, length, and last 4 characters — never this value.</p>
+              <div class="secure-actions">
+                <button class="secure-cancel">Cancel</button>
+                <span class="mk-generate">Save</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ul class="notes">
+        <li>"Custom" is the default tab, not a fallback after three pre-built rows — the form is the same whether you pick a quick-start template or type in something we've never heard of. Templates just pre-fill it.</li>
+        <li>"Help me set this up" is the agent-copilot entry point — it drives a real browser to the service's signup or API-keys page and narrates, but never types into the credential field itself.</li>
+        <li>The secure entry modal is a separate, isolated piece — not a field inside the connection form. That's the boundary: the agent can get the user to this screen, but everything typed here goes straight to OS-native storage, reported back only as field name, length, and last 4 characters.</li>
+        <li>Same MCP client model Claude Desktop and Claude Code already use — the agent gets a tool's capabilities the moment it's connected, no per-provider plumbing on our end.</li>
+        <li>ChatRealty specifically is what makes "listing video" a real feature: search a listing, pull its real photos, and hand them straight to the canvas as image nodes — no manual download-and-drag.</li>
+      </ul>
+    </section>
+
+    <div class="compare-wrap reveal">
+      <table class="compare">
+        <caption>Side by side</caption>
+        <thead>
+          <tr><th>Concept A</th><th>Night Terminal</th><th>Lime Cut</th><th>Zest</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Mood</td><td>Hacker night-shift, raw</td><td>Pro suite, controlled</td><td>Y2K software nostalgia, glossy</td></tr>
+          <tr><td>Typography</td><td>Monospace, all of it</td><td>Sans UI, mono for data only</td><td>Trebuchet-style rounded headers, sans body</td></tr>
+          <tr><td>Accent discipline</td><td>Amber lives everywhere accents can</td><td>Lime rationed to three spots</td><td>Lime as the ground itself, yellow for glow</td></tr>
+          <tr><td>Best fit if…</td><td>you want it to feel like a tool, and to look proud of that on stream</td><td>you want it sitting naturally next to Premiere without reading as a terminal</td><td>you want the retro LimeWire wink, in a light workspace for daytime</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="closing">Same content, same panel layout, same information in both — the only variable on purpose is the skin. Docs for the full reasoning live alongside this in <a href="#">platform-decisions.md</a> and the jboogx reference notes.</p>
+  </div>
+</div>
+
+<script>
+  function mkToggle(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('collapsed');
+  }
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var els = document.querySelectorAll('.reveal');
+    if (reduce || !('IntersectionObserver' in window)) {
+      els.forEach(function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+</script>
