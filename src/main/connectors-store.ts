@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { ConnectorDef, ConnectorTestResult, ConnectorView } from '@shared/types'
 import { CHATREALTY_CONNECTOR_ID, chatRealtyConnectorDef, hasChatRealtyToken } from './chatrealty'
+import { BUILTIN_CONNECTOR_TEMPLATES } from './connector-templates'
 import { readSecretValue } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
 
@@ -30,7 +31,7 @@ function writeUserConnectors(defs: ConnectorDef[]): void {
 /** Built-in templates (present by default) plus user-added connectors, each
  *  tagged with whether a credential is stored — never the value. */
 export function listConnectors(): ConnectorView[] {
-  const builtins = [chatRealtyConnectorDef()]
+  const builtins = [chatRealtyConnectorDef(), ...BUILTIN_CONNECTOR_TEMPLATES]
   const builtinIds = new Set(builtins.map((d) => d.id))
   const user = readUserConnectors().filter((d) => !builtinIds.has(d.id))
   return [...builtins, ...user].map((def) => ({

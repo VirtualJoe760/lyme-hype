@@ -45,11 +45,16 @@ Build the security boundary before any real connection touches a real key, not a
 
 ## Phase 4 — Real generation (video / image / audio)
 
-- Wire a real video-gen connection (Seedance) — Generate mode produces an actual clip node, with the "Rendering…" pulsing state reflecting a real async job instead of a mock.
-- Wire a real audio-gen connection (ElevenLabs-style).
+Connector landscape researched 2026-08-08 — see [connections-and-credentials.md](connections-and-credentials.md#generation-connectors--researched-landscape-2026-08-08) for the full table and per-tool key pages. **muapi** (one key = image+video+audio incl. Seedance/Midjourney/Kling/Veo/Flux/Suno) is the recommended primary; **ElevenLabs** for voice; **Gemini** for Nano Banana image + Veo video. Midjourney/Seedance/Dreamina are models inside aggregators, not separate keys.
+
+- [x] Built-in connector templates seeded for the stdio + API-key tools that work with today's model: **muapi** and **ElevenLabs** (`src/main/connector-templates.ts`). They appear in the Connections panel; credential via the native secure modal → vault.
+- [ ] **http-MCP client** — Krea (`api.krea.ai/mcp`) and fal (`mcp.fal.ai/mcp`) are remote http MCP servers; the connector model + `McpStdioClient` are stdio-only today. Add an http/SSE MCP path.
+- [ ] **MCP OAuth** — Yapper (and Krea's no-key option) auth the MCP connection via OAuth, not a stored key. Closer to the publishing-account OAuth mechanism.
+- [ ] **Gemini stdio wrapper** — Google ships no trustworthy first-party media MCP; bundle a thin `@google/genai` stdio server rather than depend on a community package.
+- Wire Generate mode to actually call a connector's tools: agent (or a direct tool call, like the ChatRealty pull) produces an actual clip/image/audio node, the "Rendering…" state reflecting a real async job instead of the stub timer.
 - Upload and Link source methods for video/audio — local file picker; pasting a link triggers the download/transcode step before the node is usable.
 - **Done when:** all three source methods (generate / upload / link) produce a real node for at least one video connection and one audio connection.
-- Ref: [canvas-node-model.md](canvas-node-model.md).
+- Ref: [canvas-node-model.md](canvas-node-model.md), [connections-and-credentials.md](connections-and-credentials.md).
 
 ## Phase 5 — Play view
 

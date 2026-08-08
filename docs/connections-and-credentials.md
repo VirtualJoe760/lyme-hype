@@ -40,6 +40,30 @@ it is **proven** — the app spawns the server, completes the MCP handshake, and
   isn't running. The working credential is the claude.ai connector's, which is stored server-side
   and not extractable. Phase 3's live step needs a **fresh hosted `crt_live_` token** from Joseph.
 
+## Generation connectors — researched landscape (2026-08-08)
+
+Researched the generation tools Joseph named (Krea, Seedance, Dreamina, muapi, ElevenLabs, Yapper, Midjourney, Gemini) and drove his logged-in Chrome to each real API-keys page. The big realization: **most of these overlap.** Krea, fal, muapi, and Yapper are all *aggregators* reselling the same underlying models, and **Seedance, Dreamina, and Midjourney are models, not keys** — you reach them through an aggregator, not a dedicated connection.
+
+| Tool | Key page | Connect shape | Covers | Status in Lyme Hype |
+|---|---|---|---|---|
+| **muapi** | `muapi.ai/access-keys` | stdio `npx -y muapi-cli mcp serve`, `MUAPI_API_KEY` | image+video+audio (Seedance, Kling, Veo, Flux, **Midjourney V7**, Suno) | **built-in template, works today** |
+| **ElevenLabs** | `elevenlabs.io/app/settings/api-keys` | stdio `uvx elevenlabs-mcp`, `ELEVENLABS_API_KEY` | voice, music, SFX | **built-in template, works today** (needs `uv` runtime) |
+| **Gemini** | `aistudio.google.com/apikey` | stdio wrapper over `@google/genai`, `GEMINI_API_KEY` | image (Nano Banana), video (Veo 3.1) | needs a small in-house stdio wrapper (no first-party media MCP). Image/video are **paid-only** (free tier is text). |
+| **Krea** | `krea.ai/settings/api-tokens` | **http** MCP `api.krea.ai/mcp` (bearer or OAuth) | image+video+3D | needs http-MCP support |
+| **fal (Seedance)** | `fal.ai/dashboard/keys` | **http** MCP `mcp.fal.ai/mcp`, `FAL_KEY` | Seedance + 1000 models | needs http-MCP support; redundant with muapi |
+| **Yapper** | `yapper.so/account/developer` | http MCP `yapper.so/mcp/connector`, **OAuth** | video/image | needs MCP-OAuth support |
+| Midjourney | — (no accessible official API in 2026) | via aggregator only | stylized image | use via muapi (V7/V8/Niji) |
+| Seedance / Dreamina | — (models, not products) | via aggregator | video / image | use via muapi or fal |
+
+**Recommendation:** **muapi** as the primary generation connector (one key = image+video+audio, already funded) + **ElevenLabs** for premium voice + **Gemini** (Joseph already has billing-enabled keys). Krea adds 3D; fal is redundant with muapi; Yapper is nice but OAuth-gated.
+
+**Three transport gaps this surfaced — the Phase 4 connector work:**
+1. **http-MCP client** — the connector model + `McpStdioClient` only do stdio today; Krea and fal are remote http MCP servers. Needs an http/SSE MCP client path (the Agent SDK supports http `mcpServers`; the app's own probe/pull path is stdio-only).
+2. **MCP OAuth** — Yapper (and Krea's no-key option) authenticate the MCP connection via OAuth, not a stored API key. This is closer to the publishing-account OAuth mechanism than the stdio+env-key path.
+3. **Gemini stdio wrapper** — Google ships no trustworthy first-party media-generation MCP; the clean path is a thin bundled `@google/genai` stdio server rather than depending on an unvetted community package.
+
+Until those land, `muapi` and `ElevenLabs` (both stdio + API key) are seeded as built-in templates in the Connections panel (`src/main/connector-templates.ts`); a credential is entered through the native secure modal and stored in `safeStorage`, exactly like ChatRealty.
+
 ## The agent as setup copilot — not an OAuth bypass
 
 First framing, and why it's wrong: having the agent autonomously click through a provider's OAuth consent screen on the user's behalf. Rejected — a consent screen exists specifically so a *human* approves "this app gets access to that data." An agent doing that instead likely violates the provider's ToS and defeats the one moment in the flow that's supposed to require a person.
