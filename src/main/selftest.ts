@@ -1,6 +1,8 @@
+import { existsSync } from 'node:fs'
 import { BrowserWindow, app } from 'electron'
 import { runAgentPrompt } from './agent'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
+import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
 import { loadState, saveState } from './sessions-store'
 
@@ -114,6 +116,42 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`agent: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 5. ChatRealty MCP transport (dev-machine probe). Proves Lyme Hype can spawn
+  //    and speak MCP to the ChatRealty stdio server; auth needs a real hosted
+  //    crt_live_ token (entered via the vault), so whoami is expected to error
+  //    here — the pass condition is the handshake + tool discovery.
+  const chatRealtyServer =
+    'F:\\web-clients\\joseph-sardella\\jpsrealtor\\packages\\mcp-server\\dist\\index.js'
+  if (!existsSync(chatRealtyServer)) {
+    log('chatrealty transport: SKIP (jpsrealtor mcp-server dist not present)')
+  } else {
+    try {
+      const probe = await probeStdioMcp(
+        {
+          command: 'node',
+          args: [chatRealtyServer],
+          env: {
+            CHATREALTY_API_TOKEN: 'crt_live_selftest_dummy_token_shape_only',
+            CHATREALTY_API_BASE: 'https://jpsrealtor.com'
+          }
+        },
+        { name: 'whoami' }
+      )
+      const hasPhotos = probe.tools.some((t) => t.name === 'get_listing_photos')
+      if (probe.ok && hasPhotos) {
+        log(
+          `chatrealty transport: PASS (${probe.serverInfo?.name}@${probe.serverInfo?.version}, ${probe.tools.length} tools, get_listing_photos present; auth=${
+            probe.verify?.isError ? 'needs real token' : 'ok'
+          })`
+        )
+      } else {
+        fail(`chatrealty transport: ${probe.error ?? 'handshake ok but get_listing_photos missing'}`)
+      }
+    } catch (error) {
+      fail(`chatrealty transport: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)
