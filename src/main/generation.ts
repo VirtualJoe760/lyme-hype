@@ -4,6 +4,7 @@ import { importUrlAsset } from './asset-store'
 import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors } from './connectors-store'
 import { readSecretValue } from './credential-vault'
+import { httpAuthHeaders } from './mcp-http'
 import { resolveActiveProvider } from './model-providers'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
@@ -36,10 +37,10 @@ function mcpName(connectorId: string): string {
 
 /**
  * Builds the SDK mcpServers map from installed connectors, injecting each stored
- * credential the same way a real call would (env var for stdio, header for http).
- * Only stdio is attached in this cut — http/SSE transport for the agent path
- * rides in with the dedicated http-MCP work. A connector that needs a key but
- * has none is skipped rather than spawned to fail.
+ * credential the same way a real call would — env var for stdio, header for
+ * http. The SDK carries the actual transport (stdio spawn / Streamable-HTTP).
+ * A connector that needs a key but has none is skipped rather than attached to
+ * fail.
  */
 function buildMcpServers(restrictId?: string): {
   servers: Record<string, McpServerConfig>
@@ -54,22 +55,25 @@ function buildMcpServers(restrictId?: string): {
 
   for (const def of listConnectors()) {
     if (restrictId && def.id !== restrictId) continue
-    if (def.kind !== 'stdio' || !def.command) {
-      skipped.push(def.id)
-      continue
-    }
     const needsKey = def.authType !== 'none'
     const token = needsKey ? readSecretValue(def.id) : null
     if (needsKey && !token) {
       skipped.push(def.id)
       continue
     }
-    const env: Record<string, string> = { ...(def.env ?? {}) }
-    if (def.secretKey && token) env[def.secretKey] = token
     const name = mcpName(def.id)
-    servers[name] = { command: def.command, args: def.args ?? [], env }
-    // `mcp__<server>` allows every tool from that server and nothing else —
-    // built-in Bash/Write/etc. stay disabled even under bypassPermissions.
+    if (def.kind === 'stdio' && def.command) {
+      const env: Record<string, string> = { ...(def.env ?? {}) }
+      if (def.secretKey && token) env[def.secretKey] = token
+      servers[name] = { command: def.command, args: def.args ?? [], env }
+    } else if (def.kind === 'http' && def.url) {
+      servers[name] = { type: 'http', url: def.url, headers: httpAuthHeaders(def.authType, def.secretKey, token) }
+    } else {
+      skipped.push(def.id)
+      continue
+    }
+    // `mcp__<server>` allows every tool from that server and nothing else — the
+    // canUseTool backstop still hard-denies any non-MCP tool.
     allowedTools.push(`mcp__${name}`)
     attached.push(def.id)
   }

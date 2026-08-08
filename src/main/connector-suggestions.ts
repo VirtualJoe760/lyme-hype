@@ -77,22 +77,40 @@ const CATALOG: CatalogEntry[] = [
   {
     id: 'krea',
     name: 'Krea',
-    blurb: 'Image + video + 3D across many models. Remote MCP — needs http transport (coming).',
+    blurb: 'Image + video + 3D across many models, over remote http MCP.',
     category: 'multi',
     keyPageUrl: 'https://www.krea.ai/settings/api-tokens',
-    available: false,
-    note: 'http MCP support is a Phase 4 item.',
-    template: () => null
+    available: true,
+    note: 'Remote http MCP. Add, set your token, then Test to confirm the endpoint/auth.',
+    template: () => ({
+      id: 'krea',
+      name: 'Krea',
+      kind: 'http',
+      url: 'https://api.krea.ai/mcp',
+      authType: 'bearer',
+      secretKey: 'Authorization',
+      secretFieldLabel: 'Krea API token',
+      docUrl: 'https://www.krea.ai/settings/api-tokens'
+    })
   },
   {
     id: 'fal',
     name: 'fal (Seedance +1000 models)',
-    blurb: 'Direct Seedance and a huge model catalog. Remote MCP — needs http transport (coming). Redundant with muapi.',
+    blurb: 'Direct Seedance and a huge model catalog, over remote http MCP. Redundant with muapi.',
     category: 'video',
     keyPageUrl: 'https://fal.ai/dashboard/keys',
-    available: false,
-    note: 'http MCP support is a Phase 4 item.',
-    template: () => null
+    available: true,
+    note: 'Remote http MCP. Add, set your key, then Test — fal may expect an "Authorization: Key <k>" header; adjust if Test 401s.',
+    template: () => ({
+      id: 'fal',
+      name: 'fal',
+      kind: 'http',
+      url: 'https://mcp.fal.ai/mcp',
+      authType: 'bearer',
+      secretKey: 'Authorization',
+      secretFieldLabel: 'fal API key',
+      docUrl: 'https://fal.ai/dashboard/keys'
+    })
   },
   {
     id: 'gemini',

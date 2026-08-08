@@ -3,7 +3,8 @@ import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { ConnectorDef, ConnectorTestResult, ConnectorView } from '@shared/types'
 import { readSecretValue } from './credential-vault'
-import { probeStdioMcp } from './mcp-probe'
+import { httpAuthHeaders, probeHttpMcp } from './mcp-http'
+import { probeStdioMcp, type McpProbeResult } from './mcp-probe'
 
 function storeFile(): string {
   return join(app.getPath('userData'), 'connectors.json')
@@ -53,20 +54,26 @@ export function deleteConnector(id: string): void {
   writeUserConnectors(readUserConnectors().filter((d) => d.id !== id))
 }
 
-/** Live reachability check for a stdio connector: spawn it, handshake, count
- *  tools. The stored credential (if any) is injected exactly as it would be at
- *  real use, but never returned. */
+/** Live reachability check for a connector: handshake and count tools. Works
+ *  for stdio (spawn) and Streamable-HTTP (POST) transports. The stored
+ *  credential (if any) is injected exactly as it would be at real use — env var
+ *  for stdio, header for http — but never returned. */
 export async function testConnector(id: string): Promise<ConnectorTestResult> {
   const def = listConnectors().find((d) => d.id === id)
   if (!def) return { ok: false, error: 'Connector not found.' }
-  if (def.kind !== 'stdio' || !def.command) {
-    return { ok: false, error: 'Live test currently supports stdio connectors only.' }
-  }
   const token = readSecretValue(id)
-  const env = { ...(def.env ?? {}) }
-  if (def.authType !== 'none' && def.secretKey && token) env[def.secretKey] = token
 
-  const probe = await probeStdioMcp({ command: def.command, args: def.args ?? [], env })
+  let probe: McpProbeResult
+  if (def.kind === 'stdio' && def.command) {
+    const env = { ...(def.env ?? {}) }
+    if (def.authType !== 'none' && def.secretKey && token) env[def.secretKey] = token
+    probe = await probeStdioMcp({ command: def.command, args: def.args ?? [], env })
+  } else if (def.kind === 'http' && def.url) {
+    probe = await probeHttpMcp({ url: def.url, headers: httpAuthHeaders(def.authType, def.secretKey, token) })
+  } else {
+    return { ok: false, error: 'Connector is missing a command (stdio) or url (http).' }
+  }
+
   if (!probe.ok) return { ok: false, error: probe.error ?? 'Connection failed.' }
   return {
     ok: true,

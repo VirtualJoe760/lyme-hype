@@ -49,8 +49,8 @@ Researched the generation tools Joseph named (Krea, Seedance, Dreamina, muapi, E
 | **muapi** | `muapi.ai/access-keys` | stdio `npx -y muapi-cli mcp serve`, `MUAPI_API_KEY` | image+video+audio (Seedance, Kling, Veo, Flux, **Midjourney V7**, Suno) | **built-in template, works today** |
 | **ElevenLabs** | `elevenlabs.io/app/settings/api-keys` | stdio `uvx elevenlabs-mcp`, `ELEVENLABS_API_KEY` | voice, music, SFX | **built-in template, works today** (needs `uv` runtime) |
 | **Gemini** | `aistudio.google.com/apikey` | stdio wrapper over `@google/genai`, `GEMINI_API_KEY` | image (Nano Banana), video (Veo 3.1) | needs a small in-house stdio wrapper (no first-party media MCP). Image/video are **paid-only** (free tier is text). |
-| **Krea** | `krea.ai/settings/api-tokens` | **http** MCP `api.krea.ai/mcp` (bearer or OAuth) | image+video+3D | needs http-MCP support |
-| **fal (Seedance)** | `fal.ai/dashboard/keys` | **http** MCP `mcp.fal.ai/mcp`, `FAL_KEY` | Seedance + 1000 models | needs http-MCP support; redundant with muapi |
+| **Krea** | `krea.ai/settings/api-tokens` | **http** MCP `api.krea.ai/mcp` (bearer or OAuth) | image+video+3D | **available** (http transport landed) — bearer `Authorization` |
+| **fal (Seedance)** | `fal.ai/dashboard/keys` | **http** MCP `mcp.fal.ai/mcp`, `FAL_KEY` | Seedance + 1000 models | **available** (http transport landed); may want `Authorization: Key <k>`; redundant with muapi |
 | **Yapper** | `yapper.so/account/developer` | http MCP `yapper.so/mcp/connector`, **OAuth** | video/image | needs MCP-OAuth support |
 | Midjourney | — (no accessible official API in 2026) | via aggregator only | stylized image | use via muapi (V7/V8/Niji) |
 | Seedance / Dreamina | — (models, not products) | via aggregator | video / image | use via muapi or fal |
@@ -60,11 +60,11 @@ Researched the generation tools Joseph named (Krea, Seedance, Dreamina, muapi, E
 **Principle: prefer direct-to-source over aggregators when the friction is comparable.** muapi/Krea/fal/Yapper are resellers layered on top of the actual model providers — even when an aggregator markets itself as cheaper (muapi claims ~30% under calling providers directly), it's still a middleman with its own margin and its own uptime/pricing risk sitting between the app and the model. Go direct whenever a source provider ships a reasonable API of its own: ElevenLabs and Gemini already are direct. Reach for an aggregator only when there's no practical direct path — Midjourney has none at all; Seedance's only broadly-accessible direct path (BytePlus ModelArk) has meaningfully higher signup friction than muapi, so muapi is the pragmatic choice there specifically, not a default preference for aggregators in general.
 
 **Three transport gaps this surfaced — the Phase 4 connector work:**
-1. **http-MCP client** — the connector model + `McpStdioClient` only do stdio today; Krea and fal are remote http MCP servers. Needs an http/SSE MCP client path (the Agent SDK supports http `mcpServers`; the app's own probe/pull path is stdio-only).
-2. **MCP OAuth** — Yapper (and Krea's no-key option) authenticate the MCP connection via OAuth, not a stored API key. This is closer to the publishing-account OAuth mechanism than the stdio+env-key path.
-3. **Gemini stdio wrapper** — Google ships no trustworthy first-party media-generation MCP; the clean path is a thin bundled `@google/genai` stdio server rather than depending on an unvetted community package.
+1. ~~**http-MCP client**~~ **DONE.** `src/main/mcp-http.ts` speaks the Streamable-HTTP MCP transport (POST JSON-RPC, JSON *or* `text/event-stream` responses, `Mcp-Session-Id`). `testConnector` probes http as well as stdio, and generation attaches http connectors to the Agent SDK (`{type:'http',url,headers}`). Krea and fal are flipped to available with bearer-`Authorization` http templates; the credential injects as a header via `httpAuthHeaders`.
+2. **MCP OAuth** — Yapper (and Krea's no-key option) authenticate the MCP connection via OAuth, not a stored API key. This is closer to the publishing-account OAuth mechanism than the stdio+env-key path. Still open.
+3. **Gemini stdio wrapper** — Google ships no trustworthy first-party media-generation MCP; the clean path is a thin bundled `@google/genai` stdio server rather than depending on an unvetted community package. Still open.
 
-Until those land, `muapi` and `ElevenLabs` (both stdio + API key) are seeded as built-in templates in the Connections panel (`src/main/connector-templates.ts`); a credential is entered through the native secure modal and stored in `safeStorage`, exactly like ChatRealty.
+`muapi` + `ElevenLabs` (stdio) and now `Krea` + `fal` (http) are all installable from the suggestions catalog (`src/main/connector-suggestions.ts`); a credential is entered through the native secure modal and stored in `safeStorage`, exactly like ChatRealty.
 
 ## Settings (full-screen) — Connectors + Models
 

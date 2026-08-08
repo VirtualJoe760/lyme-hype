@@ -203,7 +203,8 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
   try {
     const suggestions = listSuggestions(installedConnectorIds())
     const hasMuapi = suggestions.some((s) => s.id === 'muapi' && s.available)
-    const hasKrea = suggestions.some((s) => s.id === 'krea' && !s.available)
+    // Krea is now an available http connector (http-MCP transport landed).
+    const hasKrea = suggestions.some((s) => s.id === 'krea' && s.available)
     // Custom connector round-trip (all removable now).
     saveConnector({
       id: 'selftest-conn',
@@ -218,17 +219,29 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     const added = listConnectors().some((c) => c.id === 'selftest-conn' && !c.builtin)
     deleteConnector('selftest-conn')
     const removed = !listConnectors().some((c) => c.id === 'selftest-conn')
-    // Add-from-suggestion installs muapi, then clean it up.
+    // Add-from-suggestion installs muapi (stdio), then clean it up.
     const installedDef = addSuggestion('muapi')
     const muapiInstalled = listConnectors().some((c) => c.id === 'muapi')
     deleteConnector('muapi')
-    if (hasMuapi && hasKrea && added && removed && installedDef?.id === 'muapi' && muapiInstalled) {
+    // Add-from-suggestion installs krea as an http connector, then clean it up.
+    const kreaDef = addSuggestion('krea')
+    const kreaHttp = kreaDef?.kind === 'http' && !!kreaDef.url
+    deleteConnector('krea')
+    if (
+      hasMuapi &&
+      hasKrea &&
+      kreaHttp &&
+      added &&
+      removed &&
+      installedDef?.id === 'muapi' &&
+      muapiInstalled
+    ) {
       log(
-        `connectors: PASS (${suggestions.length} suggestions; custom + add-from-suggestion round-trip; all removable)`
+        `connectors: PASS (${suggestions.length} suggestions; stdio + http add-from-suggestion round-trip; all removable)`
       )
     } else {
       fail(
-        `connectors: muapi=${hasMuapi} krea-pending=${hasKrea} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
+        `connectors: muapi=${hasMuapi} krea=${hasKrea} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
       )
     }
   } catch (error) {
