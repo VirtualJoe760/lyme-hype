@@ -27,7 +27,9 @@ export function ConnectionsPanel(): React.JSX.Element {
       })
       if (report) {
         setLastReport(
-          `Stored: ${report.fieldLabel} · ${report.length} chars · …${report.last4} — value never left the main process.`
+          `Stored: ${report.fieldLabel} · ${report.length} chars · ${
+            report.last4 ? `…${report.last4}` : 'tail hidden (short secret)'
+          } — value never left the main process.`
         )
       } else {
         setLastReport('Cancelled — nothing stored.')
@@ -63,7 +65,8 @@ export function ConnectionsPanel(): React.JSX.Element {
             <div className="info">
               <div className="name">{report.connectorId}</div>
               <div className="meta">
-                {report.fieldLabel} · {report.length} chars · …{report.last4}
+                {report.fieldLabel} · {report.length} chars ·{' '}
+                {report.last4 ? `…${report.last4}` : '····'}
               </div>
             </div>
             <button

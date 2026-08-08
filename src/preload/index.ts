@@ -16,7 +16,11 @@ const api = {
   },
   sessions: {
     load: (): Promise<PersistedState | null> => ipcRenderer.invoke(IPC.sessionsLoad),
-    save: (state: PersistedState): Promise<void> => ipcRenderer.invoke(IPC.sessionsSave, state)
+    save: (state: PersistedState): Promise<void> => ipcRenderer.invoke(IPC.sessionsSave, state),
+    // Blocking save for the beforeunload flush, when there's no time to await.
+    saveSync: (state: PersistedState): void => {
+      ipcRenderer.sendSync(IPC.sessionsSaveSync, state)
+    }
   },
   agent: {
     ping: (prompt: string): Promise<AgentPingResult | null> =>

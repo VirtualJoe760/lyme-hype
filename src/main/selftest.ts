@@ -36,6 +36,20 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     fail(`vault: ${error instanceof Error ? error.message : String(error)}`)
   }
 
+  // 1b. Short secrets must not disclose their tail in the report
+  try {
+    const shortReport = storeSecret('selftest-short', 'PIN', 'abc')
+    const decrypts = readSecretValue('selftest-short') === 'abc'
+    deleteSecret('selftest-short')
+    if (shortReport.last4 === '' && shortReport.length === 3 && decrypts) {
+      log('vault short-secret: PASS (tail suppressed, value still recoverable)')
+    } else {
+      fail(`vault short-secret: last4 leaked "${shortReport.last4}"`)
+    }
+  } catch (error) {
+    fail(`vault short-secret: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
   // 2. Sessions persistence round-trip (restores the user's real state after)
   try {
     const original = loadState()

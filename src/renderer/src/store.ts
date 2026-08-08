@@ -91,6 +91,7 @@ interface StudioStore {
   setConnectionsOpen(open: boolean): void
 
   pingAgent(): Promise<void>
+  flushPersist(): void
 }
 
 function newSession(index: number): Session {
@@ -147,8 +148,26 @@ export const useStudio = create<StudioStore>((set, get) => {
 
   function scheduleStubReady(nodeId: string): void {
     setTimeout(() => {
-      const exists = get().nodes.some((n) => n.id === nodeId)
-      if (exists) patchNodeData(nodeId, { status: 'ready' })
+      const inActive = get().nodes.some((n) => n.id === nodeId)
+      if (inActive) {
+        patchNodeData(nodeId, { status: 'ready' })
+        return
+      }
+      // The node's session was switched away before the timer fired, so it now
+      // lives only in the serialized sessions array — flip it there, or it stays
+      // stuck "Rendering…" until the next app start. A since-deleted node is a
+      // no-op under the map.
+      const sessions = get().sessions.map((session) => {
+        if (!session.nodes.some((n) => n.id === nodeId)) return session
+        return {
+          ...session,
+          nodes: session.nodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, status: 'ready' as const } } : n
+          )
+        }
+      })
+      set({ sessions })
+      persist()
     }, STUB_RENDER_MS)
   }
 
@@ -426,6 +445,22 @@ export const useStudio = create<StudioStore>((set, get) => {
       } finally {
         unsubscribe()
       }
+    },
+
+    flushPersist() {
+      if (!get().loaded) return
+      if (persistTimer) {
+        clearTimeout(persistTimer)
+        persistTimer = null
+      }
+      const state: PersistedState = {
+        sessions: syncedSessions(),
+        activeSessionId: get().activeSessionId
+      }
+      // Synchronous — this runs during beforeunload, when there's no time to
+      // await. Falls back to async save under the browser-preview mock.
+      if (bridge.isElectron) bridge.sessions.saveSync(state)
+      else void bridge.sessions.save(state)
     }
   }
 })

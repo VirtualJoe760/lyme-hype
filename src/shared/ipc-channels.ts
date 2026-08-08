@@ -5,6 +5,7 @@ export const IPC = {
 
   sessionsLoad: 'sessions:load',
   sessionsSave: 'sessions:save',
+  sessionsSaveSync: 'sessions:save-sync',
 
   agentPing: 'agent:ping',
   agentStream: 'agent:stream',

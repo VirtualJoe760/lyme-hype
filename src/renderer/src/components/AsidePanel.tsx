@@ -73,6 +73,7 @@ export function AsidePanel(): React.JSX.Element {
       label: file.name,
       mediaType: kind,
       source: 'upload',
+      motionGfx: mediaTab === 'motion' || undefined,
       filePath: file.path
     })
   }
@@ -91,6 +92,7 @@ export function AsidePanel(): React.JSX.Element {
       label,
       mediaType: 'video',
       source: 'link',
+      motionGfx: mediaTab === 'motion' || undefined,
       sourceUrl: url,
       // Linked media gets downloaded/transcoded before it's usable (Phase 4) —
       // the rendering state mirrors that from day one.

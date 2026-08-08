@@ -1,5 +1,11 @@
 import './secure.css'
 
+// The credential window must never navigate away from itself — a dropped file
+// or link would otherwise load foreign content that still carries secureBridge.
+// The main process blocks the navigation too; this stops the drop at the source.
+window.addEventListener('dragover', (e) => e.preventDefault())
+window.addEventListener('drop', (e) => e.preventDefault())
+
 interface SecureBridge {
   init(): Promise<{ connectorName: string; fieldLabel: string } | null>
   submit(value: string): Promise<boolean>

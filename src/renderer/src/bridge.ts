@@ -12,6 +12,7 @@ export interface Bridge {
   sessions: {
     load(): Promise<PersistedState | null>
     save(state: PersistedState): Promise<void>
+    saveSync(state: PersistedState): void
   }
   agent: {
     ping(prompt: string): Promise<AgentPingResult | null>
@@ -47,6 +48,9 @@ function createBrowserMock(): Bridge {
     sessions: {
       load: async () => state,
       save: async (next) => {
+        state = next
+      },
+      saveSync: (next) => {
         state = next
       }
     },

@@ -46,7 +46,11 @@ export function storeSecret(connectorId: string, fieldLabel: string, value: stri
     fieldLabel,
     ciphertext: safeStorage.encryptString(value).toString('base64'),
     length: value.length,
-    last4: value.slice(-4),
+    // Suppress the tail for short secrets — last-4 of a <8-char value discloses
+    // most or all of it, which would defeat the whole reporting contract
+    // (AGENTS.md rule 5). This single choke point also keeps plaintext out of
+    // the vault metadata and the renderer display.
+    last4: value.length >= 8 ? value.slice(-4) : '',
     savedAt: new Date().toISOString()
   }
   const vault = readVault()

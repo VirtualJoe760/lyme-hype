@@ -3,6 +3,38 @@ import { BrowserWindow, app, shell } from 'electron'
 import { registerIpc } from './ipc'
 import { runSelfTest } from './selftest'
 
+/**
+ * Lyme Hype's own documents (studio + secure modal) are the only navigation
+ * targets any window may load. A dropped file/link, a stray window.open, or a
+ * spoofed page must never navigate a window that carries the privileged preload
+ * (window.lyme / secureBridge) — that would hand the whole bridge, including the
+ * credential flow, to arbitrary content. Enforced app-wide so it covers the
+ * main window, the secure modal, and anything created later.
+ */
+function isOwnAppUrl(url: string): boolean {
+  const devUrl = process.env['ELECTRON_RENDERER_URL']
+  if (devUrl && url.startsWith(devUrl)) return true
+  if (url.startsWith('file://')) return true
+  return false
+}
+
+function hardenNavigation(): void {
+  app.on('web-contents-created', (_event, contents) => {
+    contents.on('will-navigate', (event, url) => {
+      if (!isOwnAppUrl(url)) event.preventDefault()
+    })
+    contents.on('will-redirect', (event, url) => {
+      if (!isOwnAppUrl(url)) event.preventDefault()
+    })
+    contents.setWindowOpenHandler(({ url }) => {
+      // External links open in the user's real browser; nothing opens a new
+      // Electron window carrying our preload.
+      if (/^https?:\/\//.test(url)) shell.openExternal(url)
+      return { action: 'deny' }
+    })
+  })
+}
+
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1440,
@@ -22,11 +54,6 @@ function createMainWindow(): BrowserWindow {
 
   window.on('ready-to-show', () => window.show())
 
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
   if (process.env['ELECTRON_RENDERER_URL']) {
     window.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -37,6 +64,8 @@ function createMainWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  hardenNavigation()
+
   const mainWindow = createMainWindow()
   registerIpc(mainWindow)
 

@@ -12,14 +12,26 @@ const FILE_FILTERS: Record<string, Electron.FileFilter[]> = {
   audio: [{ name: 'Audio', extensions: ['mp3', 'wav'] }]
 }
 
-let registered = false
+let handlersRegistered = false
+// Rebindable so the macOS activate path (which creates a fresh window after the
+// first one is closed) retargets every handler instead of leaving them closed
+// over a destroyed window. Handlers still register exactly once — re-running
+// ipcMain.handle for the same channel throws.
+let mainWindow: BrowserWindow | null = null
 
-export function registerIpc(mainWindow: BrowserWindow): void {
-  if (registered) return
-  registered = true
+function isMainSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
+  return (
+    mainWindow !== null &&
+    !mainWindow.isDestroyed() &&
+    event.sender.id === mainWindow.webContents.id
+  )
+}
 
-  const fromMainWindow = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean =>
-    !mainWindow.isDestroyed() && event.sender.id === mainWindow.webContents.id
+export function registerIpc(window: BrowserWindow): void {
+  mainWindow = window
+
+  if (handlersRegistered) return
+  handlersRegistered = true
 
   ipcMain.on(IPC.windowMinimize, (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())
   ipcMain.on(IPC.windowMaximize, (e) => {
@@ -30,23 +42,31 @@ export function registerIpc(mainWindow: BrowserWindow): void {
   })
   ipcMain.on(IPC.windowClose, (e) => BrowserWindow.fromWebContents(e.sender)?.close())
 
-  ipcMain.handle(IPC.sessionsLoad, (e) => (fromMainWindow(e) ? loadState() : null))
+  ipcMain.handle(IPC.sessionsLoad, (e) => (isMainSender(e) ? loadState() : null))
   ipcMain.handle(IPC.sessionsSave, (e, state: PersistedState) => {
-    if (!fromMainWindow(e)) return
+    if (!isMainSender(e)) return
     saveState(state)
+  })
+  // Synchronous companion for the beforeunload flush — the renderer is being
+  // torn down, so it can't await an async save. sendSync blocks until saveState
+  // (itself synchronous) returns.
+  ipcMain.on(IPC.sessionsSaveSync, (e, state: PersistedState) => {
+    if (isMainSender(e)) saveState(state)
+    e.returnValue = true
   })
 
   ipcMain.handle(IPC.agentPing, async (e, prompt: string) => {
-    if (!fromMainWindow(e)) return null
+    if (!isMainSender(e)) return null
+    const target = mainWindow
     return runAgentPrompt(prompt, (event) => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC.agentStream, event)
+      if (target && !target.isDestroyed()) {
+        target.webContents.send(IPC.agentStream, event)
       }
     })
   })
 
   ipcMain.handle(IPC.mediaPickFile, async (e, kind: string) => {
-    if (!fromMainWindow(e)) return null
+    if (!isMainSender(e) || !mainWindow) return null
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile'],
       filters: FILE_FILTERS[kind] ?? []
@@ -58,12 +78,12 @@ export function registerIpc(mainWindow: BrowserWindow): void {
   })
 
   ipcMain.handle(IPC.secretRequest, (e, request: SecretRequest) => {
-    if (!fromMainWindow(e)) return null
+    if (!isMainSender(e) || !mainWindow) return null
     return requestSecret(mainWindow, request)
   })
-  ipcMain.handle(IPC.secretList, (e) => (fromMainWindow(e) ? listSecretReports() : []))
+  ipcMain.handle(IPC.secretList, (e) => (isMainSender(e) ? listSecretReports() : []))
   ipcMain.handle(IPC.secretDelete, (e, connectorId: string) => {
-    if (!fromMainWindow(e)) return
+    if (!isMainSender(e)) return
     deleteSecret(connectorId)
   })
 
