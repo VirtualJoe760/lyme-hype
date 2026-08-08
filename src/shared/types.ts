@@ -206,6 +206,28 @@ export interface ConnectorSuggestion {
   note?: string
 }
 
+/** One resolved timeline clip handed to the ffmpeg export (order = array order). */
+export interface TimelineExportClip {
+  /** lyme-asset:// URL of the source media. */
+  src: string
+  mediaType: MediaType
+  /** Non-destructive in/out points (seconds); baked into the output here. */
+  trimIn?: number
+  trimOut?: number
+  /** Video's own audio silenced in the output. */
+  muted?: boolean
+}
+
+export interface CutExportResult {
+  ok: boolean
+  outPath?: string
+  /** Set when the user cancels the save dialog — not an error. */
+  canceled?: boolean
+  /** ffmpeg not found on this machine (not bundled/configured yet). */
+  ffmpegMissing?: boolean
+  error?: string
+}
+
 export interface ChatRealtyListing {
   listingKey: string
   address: string

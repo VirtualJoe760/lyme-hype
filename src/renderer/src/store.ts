@@ -3,13 +3,15 @@ import { create } from 'zustand'
 import type {
   AgentStreamEvent,
   CanvasNodeState,
+  CutExportResult,
   MediaNodeData,
   MediaType,
   PersistedState,
   Session,
   SourceMethod,
   StudioView,
-  ThemeId
+  ThemeId,
+  TimelineExportClip
 } from '@shared/types'
 import { bridge } from './bridge'
 
@@ -92,6 +94,8 @@ interface StudioStore {
   removeNode(id: string): void
   sendToTimeline(nodeId: string): void
   removeClip(clipId: string): void
+  moveClip(clipId: string, dir: -1 | 1): void
+  exportTimeline(): Promise<CutExportResult | null>
 
   openCombine(sourceId: string, targetId: string): void
   closeCombine(): void
@@ -408,6 +412,42 @@ export const useStudio = create<StudioStore>((set, get) => {
       if (clip && get().nodes.some((n) => n.id === clip.nodeId)) {
         patchNodeData(clip.nodeId, { sentToTimeline: false })
       }
+    },
+
+    moveClip(clipId, dir) {
+      const session = activeSession()
+      if (!session) return
+      const clips = [...session.cutRoom]
+      const idx = clips.findIndex((c) => c.id === clipId)
+      const swap = idx + dir
+      if (idx < 0 || swap < 0 || swap >= clips.length) return
+      const tmp = clips[idx]
+      clips[idx] = clips[swap]
+      clips[swap] = tmp
+      updateSession(session.id, { cutRoom: clips })
+    },
+
+    async exportTimeline() {
+      const session = activeSession()
+      if (!session) return null
+      // Resolve each timeline clip to its live node so trims/mute set after it
+      // was sent are honored. Only nodes with real media are exportable.
+      const clips: TimelineExportClip[] = []
+      for (const clip of session.cutRoom) {
+        const node = get().nodes.find((n) => n.id === clip.nodeId)
+        if (!node?.data.src) continue
+        clips.push({
+          src: node.data.src,
+          mediaType: node.data.mediaType,
+          trimIn: node.data.trimIn,
+          trimOut: node.data.trimOut,
+          muted: node.data.audioMuted
+        })
+      }
+      if (clips.length === 0) {
+        return { ok: false, error: 'No exportable clips — the timeline needs video nodes with real media.' }
+      }
+      return bridge.cutRoom.export(clips)
     },
 
     openCombine(sourceId, targetId) {

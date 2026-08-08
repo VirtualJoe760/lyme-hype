@@ -9,13 +9,15 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  CutExportResult,
   GenerationParams,
   GenerationResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
   SecretReport,
-  SecretRequest
+  SecretRequest,
+  TimelineExportClip
 } from '../shared/types'
 
 const api = {
@@ -57,6 +59,10 @@ const api = {
   generate: {
     run: (params: GenerationParams): Promise<GenerationResult | null> =>
       ipcRenderer.invoke(IPC.generateRun, params)
+  },
+  cutRoom: {
+    export: (clips: TimelineExportClip[]): Promise<CutExportResult | null> =>
+      ipcRenderer.invoke(IPC.cutRoomExport, clips)
   },
   chatRealty: {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),

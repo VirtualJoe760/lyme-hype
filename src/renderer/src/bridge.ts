@@ -7,13 +7,15 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  CutExportResult,
   GenerationParams,
   GenerationResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
   SecretReport,
-  SecretRequest
+  SecretRequest,
+  TimelineExportClip
 } from '@shared/types'
 
 export interface Bridge {
@@ -38,6 +40,9 @@ export interface Bridge {
   }
   generate: {
     run(params: GenerationParams): Promise<GenerationResult | null>
+  }
+  cutRoom: {
+    export(clips: TimelineExportClip[]): Promise<CutExportResult | null>
   }
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>
@@ -118,6 +123,12 @@ function createBrowserMock(): Bridge {
         error: 'Generation runs in the Electron main process — unavailable in browser preview.'
       })
     },
+    cutRoom: {
+      export: async () => ({
+        ok: false,
+        error: 'Export runs in the Electron main process — unavailable in browser preview.'
+      })
+    },
     chatRealty: {
       status: async () => ({ connected: false }),
       pull: async () => ({
@@ -165,6 +176,7 @@ function createElectronBridge(): Bridge {
     agent: lyme.agent,
     media: lyme.media,
     generate: lyme.generate,
+    cutRoom: lyme.cutRoom,
     chatRealty: lyme.chatRealty,
     connectors: lyme.connectors,
     modelProviders: lyme.modelProviders,

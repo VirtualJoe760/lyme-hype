@@ -130,6 +130,22 @@ export async function importUrlAsset(sourceUrl: string, mediaType?: MediaType): 
   return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: buffer.length }
 }
 
+/** Resolves a lyme-asset://asset/<file> URL back to its on-disk path (for ffmpeg
+ *  input at export). Returns null for a non-asset URL or a missing file — the
+ *  same flat-filename, no-traversal rule as the protocol handler. */
+export function assetPathForUrl(url: string): string | null {
+  if (!url.startsWith(`${ASSET_SCHEME}://`)) return null
+  let name: string
+  try {
+    name = normalize(new URL(url).pathname).replace(/^([/\\.]+)/, '')
+  } catch {
+    return null
+  }
+  const filePath = join(assetsDir(), name)
+  if (!filePath.startsWith(assetsDir()) || !existsSync(filePath)) return null
+  return filePath
+}
+
 /** Test helper: confirm a saved asset is readable and non-empty. */
 export function readAssetBytes(fileName: string): number {
   const filePath = join(assetsDir(), fileName)

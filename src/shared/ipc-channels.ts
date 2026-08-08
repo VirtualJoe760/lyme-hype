@@ -17,6 +17,8 @@ export const IPC = {
 
   generateRun: 'generate:run',
 
+  cutRoomExport: 'cutroom:export',
+
   chatRealtyStatus: 'chatrealty:status',
   chatRealtyPull: 'chatrealty:pull',
 

@@ -17,6 +17,7 @@ import {
   setActiveModelProvider
 } from './model-providers'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
+import { buildConcatArgs, resolveFfmpeg } from './ffmpeg'
 import { runGeneration } from './generation'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -318,6 +319,39 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`generation wiring: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 11. ffmpeg export — verify the pure command builder (no ffmpeg executed) and
+  //     that discovery resolves without throwing (null is fine = not installed).
+  try {
+    const args = buildConcatArgs(
+      [
+        { path: 'a.mp4', trimIn: 1, trimOut: 3 },
+        { path: 'b.mp4', muted: true }
+      ],
+      'out.mp4'
+    )
+    const s = args.join(' ')
+    const wellFormed =
+      args.filter((a) => a === '-i').length === 2 &&
+      s.includes('concat=n=2:v=1:a=1') &&
+      s.includes('trim=start=1:end=3') &&
+      s.includes('volume=0') &&
+      args[args.length - 1] === 'out.mp4'
+    let discovery = 'threw'
+    try {
+      const r = resolveFfmpeg()
+      discovery = r ? `found (${r.source})` : 'none (unbundled)'
+    } catch {
+      discovery = 'threw'
+    }
+    if (wellFormed && discovery !== 'threw') {
+      log(`ffmpeg export: PASS (concat args well-formed; discovery: ${discovery})`)
+    } else {
+      fail(`ffmpeg export: wellFormed=${wellFormed} discovery=${discovery}`)
+    }
+  } catch (error) {
+    fail(`ffmpeg export: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

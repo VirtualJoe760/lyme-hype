@@ -86,15 +86,18 @@ Implemented in `src/renderer/src/components/StoryboardView.tsx`; store actions i
 - **Done when:** block out five panels, promote one, watch it become a real generating node. *(Verified end-to-end in the browser mock: add → edit → reorder → promote → same node lands on Canvas as a "gen" node; the Storyboard entry flips to "On canvas →". No console errors.)*
 - Ref: [canvas-node-model.md](canvas-node-model.md).
 
-## Phase 7 — Cut Room / ffmpeg timeline
+## Phase 7 — Cut Room / ffmpeg timeline — EXPORT PIPELINE BUILT (binary + publish deferred to the user)
 
-- Bundle ffmpeg per the Phase 0 decision — pick the specific prebuilt package, verify LGPL-only.
-- Send-to-timeline action on video/audio nodes.
-- Basic sequential concatenation + export to a file.
-- Drag-to-combine on the timeline itself (clip-onto-clip → transition dialog) is a stretch goal — append-only can ship first.
-- Subtitle burn-in: wire a speech-to-text MCP connection (Whisper-based) to produce timed captions, ffmpeg muxes/burns them at export. Depends on Phase 3's connector model already being in place.
-- Publish export destination: port jpsrealtor's Instagram/YouTube OAuth account-linking flow (not an MCP connection — see connections-and-credentials.md). Requires an explicit confirm step before firing — publishing is immediate, no draft state at the API level.
-- **Done when:** two or more clips can be sent to Cut Room and exported as a single rendered file, with or without burned-in subtitles, with a working publish-to-Instagram path behind a real confirm step.
+Export pipeline in `src/main/ffmpeg.ts`; Cut Room UI reworked in `CutRoom.tsx`; store actions `moveClip`/`exportTimeline`.
+
+- [x] Send-to-timeline action on video/audio nodes (already existed; now gated on `status === 'ready'`).
+- [x] **Cut Room UX:** reorder clips (◀ ▶ via `moveClip`), per-clip trimmed/muted flags, remove, and an Export button with an inline status (Exported ✓ / Export failed with the reason as tooltip). Verified end-to-end in the browser mock: send → clip lands with reorder controls → Export enables → the no-real-media guard surfaces correctly.
+- [x] **Sequential concat + export to a file.** `exportTimeline` resolves each timeline clip to its live node (so trims/mute set in Play are honored), and `buildConcatArgs` builds a single-pass ffmpeg `filter_complex`: per clip trim → normalize to a 1080×1920 reels canvas (scale+pad+fps) and a uniform audio format → `volume=0` for muted → `concat`. The export IPC opens a native save dialog then runs ffmpeg. `buildConcatArgs` is pure and self-tested (selftest §11).
+- [~] **ffmpeg binary is NOT bundled — deliberately deferred to you.** AGENTS.md §7 requires an LGPL-only build and says don't assume a package guarantees that; verifying provenance is a decision, not something to guess blind. `resolveFfmpeg()` finds a binary via `LYME_FFMPEG_PATH`, a drop-in at `userData/bin/ffmpeg[.exe]`, or system PATH, and returns a clear "no ffmpeg" error otherwise — so the pipeline is ready the moment an LGPL build is chosen. **Remaining:** pick/verify the LGPL build, bundle it, and run one real multi-clip export.
+- Drag-to-combine on the timeline itself (clip-onto-clip → transition dialog) — still a stretch goal; append + reorder ships first.
+- [ ] Subtitle burn-in: wire a speech-to-text MCP connection (Whisper-based) to produce timed captions, ffmpeg muxes/burns them at export. Still open.
+- [ ] **Publish export destination — deferred to a session with you.** Porting jpsrealtor's Instagram/YouTube OAuth account-linking flow needs a review against the real jpsrealtor project (not from memory), a registered OAuth app, and — per AGENTS.md §6 — publishing is immediate with no API-level draft, so the UI must force a deliberate confirm. That's an irreversible, outward-facing action, so it isn't built blind here.
+- **Done when:** two or more clips can be sent to Cut Room and exported as a single rendered file, with or without burned-in subtitles, with a working publish-to-Instagram path behind a real confirm step. *(Pipeline + UI done; needs the ffmpeg binary for a real export, and the publish port is the remaining outward-facing piece.)*
 - Ref: [canvas-node-model.md](canvas-node-model.md), [README.md](README.md) Status.
 
 ## Phase 8 — Premiere Pro plugin (UXP)

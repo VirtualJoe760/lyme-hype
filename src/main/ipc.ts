@@ -5,10 +5,12 @@ import type {
   GenerationParams,
   ModelProviderDef,
   PersistedState,
-  SecretRequest
+  SecretRequest,
+  TimelineExportClip
 } from '@shared/types'
 import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { runAgentPrompt } from './agent'
+import { exportTimeline } from './ffmpeg'
 import { runGeneration } from './generation'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
@@ -124,6 +126,17 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.generateRun, (e, params: GenerationParams) => {
     if (!isMainSender(e)) return null
     return runGeneration(params)
+  })
+
+  ipcMain.handle(IPC.cutRoomExport, async (e, clips: TimelineExportClip[]) => {
+    if (!isMainSender(e) || !mainWindow) return null
+    const picked = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export timeline',
+      defaultPath: 'lyme-cut.mp4',
+      filters: [{ name: 'MP4 video', extensions: ['mp4'] }]
+    })
+    if (picked.canceled || !picked.filePath) return { ok: false, canceled: true }
+    return exportTimeline(clips, picked.filePath)
   })
 
   ipcMain.handle(IPC.chatRealtyStatus, (e) => (isMainSender(e) ? { connected: hasChatRealtyToken() } : null))
