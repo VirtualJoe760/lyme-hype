@@ -99,6 +99,9 @@ lyme-hype/
 │   │                     mcp-client.ts (stdio MCP client) + mcp-probe.ts (connection check),
 │   │                     chatrealty.ts (pull listing photos + the ChatRealty connector
 │   │                     template), connectors-store.ts (generic connector CRUD + live test),
+│   │                     connector-templates.ts (muapi/ElevenLabs built-ins), claude-auth.ts
+│   │                     (Claude default login + explicit overrides), model-providers.ts
+│   │                     (agent LLM: Claude default / Kimi / custom Anthropic-compatible),
 │   │                     asset-store.ts (lyme-asset:// protocol for saved media),
 │   │                     selftest.ts (LYME_SELFTEST=1 plumbing check).
 │   ├── preload/          index.ts (the narrow `window.lyme` bridge — the studio renderer's whole
@@ -108,8 +111,8 @@ lyme-hype/
 │                         src/store.ts (zustand), src/bridge.ts (real IPC or browser-preview
 │                         mock), src/components/* (TitleBar, Toolbar, SessionsRail, CanvasArea +
 │                         MediaNode, StoryboardView placeholder, AsidePanel + AgentCard +
-│                         ChatRealtyPull, CutRoom, CombineDialog, ConnectionsPanel),
-│                         src/secure/* (modal page).
+│                         ChatRealtyPull, CutRoom, CombineDialog, settings/* (full-screen
+│                         Settings shell + Connectors/Models tabs)), src/secure/* (modal page).
 ├── electron.vite.config.ts   Main/preload/renderer builds; two renderer entries (studio + modal).
 ├── tsconfig.json / .node.json / .web.json   Strict TS; `npm run typecheck` covers both sides.
 └── package.json          electron-vite 2 / Vite 5 / React 18 / Electron 38 — version rationale in

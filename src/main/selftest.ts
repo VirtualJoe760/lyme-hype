@@ -8,6 +8,13 @@ import {
   claudeAuthOverrideKind
 } from './claude-auth'
 import { deleteConnector, listConnectors, saveConnector } from './connectors-store'
+import {
+  deleteModelProvider,
+  listModelProviders,
+  resolveActiveProvider,
+  saveModelProvider,
+  setActiveModelProvider
+} from './model-providers'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -239,6 +246,40 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`claude auth: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 9. Model providers — Claude default is present+active by default; a custom
+  //    Anthropic-compatible provider round-trips and can be made active, which
+  //    resolveActiveProvider reflects. Restores the default afterward.
+  try {
+    const initial = listModelProviders()
+    const claudeDefault = initial.find((p) => p.id === 'claude-default')
+    const kimi = initial.find((p) => p.id === 'kimi')
+    saveModelProvider({
+      id: 'selftest-provider',
+      name: 'Self Test Provider',
+      kind: 'anthropic-compatible',
+      baseUrl: 'http://localhost:9999',
+      model: 'test-model',
+      secretFieldLabel: 'API key'
+    })
+    storeSecret('selftest-provider', 'API key', 'sk-provider-dummy')
+    setActiveModelProvider('selftest-provider')
+    const resolved = resolveActiveProvider()
+    const activeIsCustom = resolved.def.id === 'selftest-provider' && resolved.key === 'sk-provider-dummy'
+    setActiveModelProvider('claude-default')
+    deleteSecret('selftest-provider')
+    deleteModelProvider('selftest-provider')
+    const restored = resolveActiveProvider().def.id === 'claude-default'
+    if (claudeDefault?.active && kimi?.builtin && activeIsCustom && restored) {
+      log('model providers: PASS (Claude default active; Kimi template present; custom provider activates + resolves; restored)')
+    } else {
+      fail(
+        `model providers: default-active=${!!claudeDefault?.active} kimi=${!!kimi?.builtin} activeCustom=${activeIsCustom} restored=${restored}`
+      )
+    }
+  } catch (error) {
+    fail(`model providers: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

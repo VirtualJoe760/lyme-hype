@@ -10,7 +10,7 @@ export function SessionsRail(): React.JSX.Element {
   const selectSession = useStudio((s) => s.selectSession)
   const renameSession = useStudio((s) => s.renameSession)
   const deleteSession = useStudio((s) => s.deleteSession)
-  const setConnectionsOpen = useStudio((s) => s.setConnectionsOpen)
+  const openSettings = useStudio((s) => s.openSettings)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
@@ -93,15 +93,18 @@ export function SessionsRail(): React.JSX.Element {
             )}
           </div>
         ))}
-        <div className="rail-divider" />
-        <div
-          className="session-item rail-util"
-          onClick={() => setConnectionsOpen(true)}
-          title="Connections and credentials"
-        >
-          <span className="name">Connections</span>
-        </div>
       </div>
+      <button
+        className="rail-settings"
+        onClick={() => openSettings('connectors')}
+        title="Settings — connectors & models"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        {!collapsed && <span>Settings</span>}
+      </button>
     </div>
   )
 }

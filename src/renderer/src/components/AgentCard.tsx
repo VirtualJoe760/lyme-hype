@@ -1,40 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ClaudeAuthOverrideKind } from '@shared/types'
+import type { ModelProviderView } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
-
-const API_KEY_CREDENTIAL_ID = 'anthropic-claude-api-key'
-const OAUTH_TOKEN_CREDENTIAL_ID = 'anthropic-claude-oauth-token'
-
-const OVERRIDE_LABEL: Record<ClaudeAuthOverrideKind, string> = {
-  none: 'using this machine’s Claude Code login',
-  apiKey: 'API key override set',
-  oauthToken: 'setup-token override set'
-}
 
 export function AgentCard(): React.JSX.Element {
   const agent = useStudio((s) => s.agent)
   const pingAgent = useStudio((s) => s.pingAgent)
-  const [override, setOverride] = useState<ClaudeAuthOverrideKind | null>(null)
+  const openSettings = useStudio((s) => s.openSettings)
+  const [activeProvider, setActiveProvider] = useState<ModelProviderView | null>(null)
 
-  const refreshClaude = useCallback(async () => {
-    const status = await bridge.agent.claudeStatus()
-    setOverride(status?.override ?? 'none')
+  const refresh = useCallback(async () => {
+    const providers = await bridge.modelProviders.list()
+    setActiveProvider(providers.find((p) => p.active) ?? null)
   }, [])
 
   useEffect(() => {
-    void refreshClaude()
-  }, [refreshClaude])
-
-  async function setOverrideKey(kind: 'apiKey' | 'oauthToken'): Promise<void> {
-    const report = await bridge.secrets.request({
-      connectorId: kind === 'apiKey' ? API_KEY_CREDENTIAL_ID : OAUTH_TOKEN_CREDENTIAL_ID,
-      connectorName: 'Claude (Anthropic)',
-      fieldLabel:
-        kind === 'apiKey' ? 'Anthropic API key (sk-ant-…)' : 'Setup-token (from `claude setup-token`)'
-    })
-    if (report) await refreshClaude()
-  }
+    void refresh()
+  }, [refresh])
 
   const meta: string[] = []
   if (agent.lastCostUsd !== null) meta.push(`$${agent.lastCostUsd.toFixed(4)}`)
@@ -60,15 +42,10 @@ export function AgentCard(): React.JSX.Element {
       </button>
       {bridge.isElectron && (
         <div className="claude-key-row">
-          <span className="meta">Claude: {override === null ? '…' : OVERRIDE_LABEL[override]}</span>
-          <div className="conn-actions">
-            <button className="conn-mini" onClick={() => void setOverrideKey('oauthToken')}>
-              Use setup-token
-            </button>
-            <button className="conn-mini" onClick={() => void setOverrideKey('apiKey')}>
-              Use API key
-            </button>
-          </div>
+          <span className="meta">Model: {activeProvider?.name ?? '…'}</span>
+          <button className="conn-mini" onClick={() => openSettings('models')}>
+            Change
+          </button>
         </div>
       )}
     </div>

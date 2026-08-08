@@ -21,6 +21,11 @@ export const IPC = {
   connectorsDelete: 'connectors:delete',
   connectorsTest: 'connectors:test',
 
+  modelProvidersList: 'model-providers:list',
+  modelProvidersSave: 'model-providers:save',
+  modelProvidersDelete: 'model-providers:delete',
+  modelProvidersSetActive: 'model-providers:set-active',
+
   secretRequest: 'secret:request',
   secretList: 'secret:list',
   secretDelete: 'secret:delete',

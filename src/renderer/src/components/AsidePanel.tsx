@@ -45,7 +45,7 @@ export function AsidePanel(): React.JSX.Element {
   const collapsed = useStudio((s) => s.asideCollapsed)
   const toggle = useStudio((s) => s.toggleAside)
   const addNode = useStudio((s) => s.addNode)
-  const setConnectionsOpen = useStudio((s) => s.setConnectionsOpen)
+  const openSettings = useStudio((s) => s.openSettings)
 
   const [mediaTab, setMediaTab] = useState<MediaTab>('video')
   const [modeTab, setModeTab] = useState<ModeTab>('keyframe')
@@ -125,8 +125,8 @@ export function AsidePanel(): React.JSX.Element {
           </span>
           <span
             className="conn-chip add"
-            title="Connections"
-            onClick={() => setConnectionsOpen(true)}
+            title="Manage connectors in Settings"
+            onClick={() => openSettings('connectors')}
           >
             +
           </span>

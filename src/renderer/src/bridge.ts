@@ -6,6 +6,8 @@ import type {
   ConnectorDef,
   ConnectorTestResult,
   ConnectorView,
+  ModelProviderDef,
+  ModelProviderView,
   PersistedState,
   SecretReport,
   SecretRequest
@@ -36,6 +38,12 @@ export interface Bridge {
     save(def: ConnectorDef): Promise<void>
     delete(id: string): Promise<void>
     test(id: string): Promise<ConnectorTestResult | null>
+  }
+  modelProviders: {
+    list(): Promise<ModelProviderView[]>
+    save(def: ModelProviderDef): Promise<void>
+    delete(id: string): Promise<void>
+    setActive(id: string): Promise<void>
   }
   secrets: {
     request(request: SecretRequest): Promise<SecretReport | null>
@@ -102,6 +110,12 @@ function createBrowserMock(): Bridge {
         error: 'Connections run in the Electron main process — unavailable in browser preview.'
       })
     },
+    modelProviders: {
+      list: async () => [],
+      save: async () => {},
+      delete: async () => {},
+      setActive: async () => {}
+    },
     secrets: {
       request: async () => null,
       list: async () => secrets,
@@ -123,6 +137,7 @@ function createElectronBridge(): Bridge {
     media: lyme.media,
     chatRealty: lyme.chatRealty,
     connectors: lyme.connectors,
+    modelProviders: lyme.modelProviders,
     secrets: lyme.secrets
   }
 }

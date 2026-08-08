@@ -66,6 +66,23 @@ Researched the generation tools Joseph named (Krea, Seedance, Dreamina, muapi, E
 
 Until those land, `muapi` and `ElevenLabs` (both stdio + API key) are seeded as built-in templates in the Connections panel (`src/main/connector-templates.ts`); a credential is entered through the native secure modal and stored in `safeStorage`, exactly like ChatRealty.
 
+## Settings (full-screen) — Connectors + Models
+
+Connectors and model selection both live in a full-screen **Settings** surface, opened by the
+gear at the bottom of the Sessions rail (it replaced the old "Connections" rail item). Two tabs:
+
+- **Connectors** — the generic MCP connector manager described above (built-in templates: ChatRealty,
+  muapi, ElevenLabs; plus add-any custom stdio/http; credential via the secure modal; live test).
+- **Models** — which LLM backs the agent (`src/main/model-providers.ts`). The default is **Claude via
+  this machine's own Claude Code login** (no config). Any Anthropic-API-compatible endpoint can be
+  selected instead: **Kimi K3** ships as a built-in template (`https://api.moonshot.ai/anthropic`,
+  model `kimi-k3`), and a fully custom provider (a local/OpenAI model behind an Anthropic-shaping
+  proxy — LM Studio 0.4.1+, LiteLLM, claude-code-proxy) can be added with base URL + model + key.
+  `agent.ts` injects `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` + the model for non-default
+  providers; the active provider is persisted in `model-providers.json`, its key in `safeStorage`.
+  This is the seam for "different providers for different context" — swap the orchestration model
+  without touching anything else.
+
 ## The agent as setup copilot — not an OAuth bypass
 
 First framing, and why it's wrong: having the agent autonomously click through a provider's OAuth consent screen on the user's behalf. Rejected — a consent screen exists specifically so a *human* approves "this app gets access to that data." An agent doing that instead likely violates the provider's ToS and defeats the one moment in the flow that's supposed to require a person.

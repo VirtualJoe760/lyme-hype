@@ -12,6 +12,8 @@ import type {
 } from '@shared/types'
 import { bridge } from './bridge'
 
+export type SettingsTab = 'connectors' | 'models'
+
 export type MediaFlowNode = Node<MediaNodeData, 'media'>
 
 let idCounter = 0
@@ -56,7 +58,8 @@ interface StudioStore {
   nodes: MediaFlowNode[]
   railCollapsed: boolean
   asideCollapsed: boolean
-  connectionsOpen: boolean
+  settingsOpen: boolean
+  settingsTab: SettingsTab
   combine: CombineTarget | null
   agent: AgentUiState
 
@@ -91,7 +94,9 @@ interface StudioStore {
 
   toggleRail(): void
   toggleAside(): void
-  setConnectionsOpen(open: boolean): void
+  openSettings(tab?: SettingsTab): void
+  closeSettings(): void
+  setSettingsTab(tab: SettingsTab): void
 
   pingAgent(): Promise<void>
   pullChatRealtyPhotos(query: string): Promise<{ ok: boolean; count: number; error?: string }>
@@ -182,7 +187,8 @@ export const useStudio = create<StudioStore>((set, get) => {
     nodes: [],
     railCollapsed: false,
     asideCollapsed: false,
-    connectionsOpen: false,
+    settingsOpen: false,
+    settingsTab: 'connectors',
     combine: null,
     agent: {
       status: 'idle',
@@ -410,8 +416,16 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({ asideCollapsed: !get().asideCollapsed })
     },
 
-    setConnectionsOpen(open) {
-      set({ connectionsOpen: open })
+    openSettings(tab) {
+      set({ settingsOpen: true, ...(tab ? { settingsTab: tab } : {}) })
+    },
+
+    closeSettings() {
+      set({ settingsOpen: false })
+    },
+
+    setSettingsTab(tab) {
+      set({ settingsTab: tab })
     },
 
     async pingAgent() {

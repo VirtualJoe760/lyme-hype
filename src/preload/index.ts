@@ -8,6 +8,8 @@ import type {
   ConnectorDef,
   ConnectorTestResult,
   ConnectorView,
+  ModelProviderDef,
+  ModelProviderView,
   PersistedState,
   SecretReport,
   SecretRequest
@@ -52,6 +54,12 @@ const api = {
     delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.connectorsDelete, id),
     test: (id: string): Promise<ConnectorTestResult | null> =>
       ipcRenderer.invoke(IPC.connectorsTest, id)
+  },
+  modelProviders: {
+    list: (): Promise<ModelProviderView[]> => ipcRenderer.invoke(IPC.modelProvidersList),
+    save: (def: ModelProviderDef): Promise<void> => ipcRenderer.invoke(IPC.modelProvidersSave, def),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.modelProvidersDelete, id),
+    setActive: (id: string): Promise<void> => ipcRenderer.invoke(IPC.modelProvidersSetActive, id)
   },
   secrets: {
     request: (request: SecretRequest): Promise<SecretReport | null> =>

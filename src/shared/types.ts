@@ -1,3 +1,30 @@
+/**
+ * The agent's LLM backend. The default is Claude via this machine's own Claude
+ * Code login; other providers are any Anthropic-API-compatible endpoint (Kimi's
+ * hosted one, or a local/OpenAI model behind a translation proxy that exposes an
+ * Anthropic-shaped API). The agent injects ANTHROPIC_BASE_URL + auth + model.
+ */
+export type ModelProviderKind = 'claude-default' | 'anthropic-compatible'
+
+export interface ModelProviderDef {
+  id: string
+  name: string
+  kind: ModelProviderKind
+  /** anthropic-compatible only: the endpoint the SDK targets via ANTHROPIC_BASE_URL. */
+  baseUrl?: string
+  /** anthropic-compatible only: the model id to request. */
+  model?: string
+  /** Label shown in the secure modal when collecting this provider's key. */
+  secretFieldLabel: string
+  builtin?: boolean
+  docUrl?: string
+}
+
+export interface ModelProviderView extends ModelProviderDef {
+  hasCredential: boolean
+  active: boolean
+}
+
 export type ClaudeAuthOverrideKind = 'none' | 'apiKey' | 'oauthToken'
 
 export interface ClaudeAuthStatus {

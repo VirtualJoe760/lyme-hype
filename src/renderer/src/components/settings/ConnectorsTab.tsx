@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ConnectorAuthType, ConnectorKind, ConnectorView } from '@shared/types'
-import { bridge } from '../bridge'
-import { useStudio } from '../store'
+import { bridge } from '../../bridge'
 
 interface DraftConnector {
   name: string
@@ -41,8 +40,7 @@ function parseEnv(text: string): Record<string, string> {
   return out
 }
 
-export function ConnectionsPanel(): React.JSX.Element {
-  const setConnectionsOpen = useStudio((s) => s.setConnectionsOpen)
+export function ConnectorsTab(): React.JSX.Element {
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState<DraftConnector>(EMPTY_DRAFT)
@@ -111,37 +109,29 @@ export function ConnectionsPanel(): React.JSX.Element {
   }
 
   return (
-    <div className="connections-sheet">
-      <div className="sheet-head">
-        <h2>Connections</h2>
-        <button className="panel-btn" title="Close" onClick={() => setConnectionsOpen(false)}>
-          ✕
-        </button>
-      </div>
-      <div className="sheet-body">
-        <p>
-          Generation and data tools attach as MCP connections — a generic model, not a fixed list.
-          Credentials are typed only into the native secure modal and stored with OS encryption
-          (DPAPI); this window and the agent only ever see field name, length, and last 4.
+    <div className="settings-section">
+      <p className="settings-intro">
+        Generation and data tools attach as MCP connections — a generic model, not a fixed list.
+        Credentials are typed only into the native secure modal and stored with OS encryption
+        (DPAPI); this window and the agent only ever see field name, length, and last 4.
+      </p>
+      {!bridge.isElectron && (
+        <p className="settings-intro">
+          Connections run in the Electron app — this browser preview can only show the layout.
         </p>
+      )}
 
-        {!bridge.isElectron && (
-          <p>Connections run in the Electron app — this browser preview can only show the layout.</p>
-        )}
-
-        <div className="sheet-section-label">Connectors</div>
+      <div className="settings-grid">
         {connectors.map((c) => (
-          <div key={c.id} className="cred-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <div key={c.id} className="settings-card">
+            <div className="settings-card-head">
               <div className="info">
                 <div className="name">
                   {c.name}
                   {c.builtin && <span className="conn-tag">template</span>}
                 </div>
                 <div className="meta">
-                  {c.kind} · {c.authType}
-                  {' · '}
-                  {c.hasCredential ? 'credential set' : 'no credential'}
+                  {c.kind} · {c.authType} · {c.hasCredential ? 'credential set' : 'no credential'}
                 </div>
               </div>
               {!c.builtin && (
@@ -173,92 +163,92 @@ export function ConnectionsPanel(): React.JSX.Element {
             {testResult[c.id] && <div className="conn-test">{testResult[c.id]}</div>}
           </div>
         ))}
+      </div>
 
-        {!adding ? (
-          <button className="action-btn" onClick={() => setAdding(true)}>
-            + Add connector
-          </button>
-        ) : (
-          <div className="add-connector">
-            <div className="sheet-section-label">New connector</div>
-            <input
-              className="link-input cr-input"
-              placeholder="Name (e.g. Seedance)"
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
-            <div className="tab-row">
-              <button className={draft.kind === 'stdio' ? 'active' : ''} onClick={() => setDraft({ ...draft, kind: 'stdio' })}>
-                stdio (command)
-              </button>
-              <button className={draft.kind === 'http' ? 'active' : ''} onClick={() => setDraft({ ...draft, kind: 'http' })}>
-                http (url)
-              </button>
-            </div>
-            {draft.kind === 'stdio' ? (
-              <>
-                <input
-                  className="link-input cr-input"
-                  placeholder="Command (e.g. npx)"
-                  value={draft.command}
-                  onChange={(e) => setDraft({ ...draft, command: e.target.value })}
-                />
-                <input
-                  className="link-input cr-input"
-                  placeholder="Args (space-separated, e.g. -y @some/mcp-server)"
-                  value={draft.args}
-                  onChange={(e) => setDraft({ ...draft, args: e.target.value })}
-                />
-              </>
-            ) : (
+      {!adding ? (
+        <button className="action-btn settings-add" onClick={() => setAdding(true)}>
+          + Add connector
+        </button>
+      ) : (
+        <div className="add-connector">
+          <div className="sheet-section-label">New connector</div>
+          <input
+            className="link-input cr-input"
+            placeholder="Name (e.g. Seedance)"
+            value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          />
+          <div className="tab-row">
+            <button className={draft.kind === 'stdio' ? 'active' : ''} onClick={() => setDraft({ ...draft, kind: 'stdio' })}>
+              stdio (command)
+            </button>
+            <button className={draft.kind === 'http' ? 'active' : ''} onClick={() => setDraft({ ...draft, kind: 'http' })}>
+              http (url)
+            </button>
+          </div>
+          {draft.kind === 'stdio' ? (
+            <>
               <input
                 className="link-input cr-input"
-                placeholder="Server URL (https://…)"
-                value={draft.url}
-                onChange={(e) => setDraft({ ...draft, url: e.target.value })}
+                placeholder="Command (e.g. npx)"
+                value={draft.command}
+                onChange={(e) => setDraft({ ...draft, command: e.target.value })}
               />
-            )}
-            <textarea
-              className="prompt-area"
-              style={{ minHeight: 48 }}
-              placeholder="Non-secret env, one PER=line (optional)"
-              value={draft.env}
-              onChange={(e) => setDraft({ ...draft, env: e.target.value })}
+              <input
+                className="link-input cr-input"
+                placeholder="Args (space-separated, e.g. -y @some/mcp-server)"
+                value={draft.args}
+                onChange={(e) => setDraft({ ...draft, args: e.target.value })}
+              />
+            </>
+          ) : (
+            <input
+              className="link-input cr-input"
+              placeholder="Server URL (https://…)"
+              value={draft.url}
+              onChange={(e) => setDraft({ ...draft, url: e.target.value })}
             />
-            <div className="tab-row">
-              {(['none', 'apiKey', 'bearer'] as ConnectorAuthType[]).map((a) => (
-                <button key={a} className={draft.authType === a ? 'active' : ''} onClick={() => setDraft({ ...draft, authType: a })}>
-                  {a}
-                </button>
-              ))}
-            </div>
-            {draft.authType !== 'none' && (
-              <>
-                <input
-                  className="link-input cr-input"
-                  placeholder={draft.kind === 'stdio' ? 'Secret env var (e.g. API_TOKEN)' : 'Auth header (e.g. Authorization)'}
-                  value={draft.secretKey}
-                  onChange={(e) => setDraft({ ...draft, secretKey: e.target.value })}
-                />
-                <input
-                  className="link-input cr-input"
-                  placeholder="Credential label (shown in the secure modal)"
-                  value={draft.secretFieldLabel}
-                  onChange={(e) => setDraft({ ...draft, secretFieldLabel: e.target.value })}
-                />
-              </>
-            )}
-            <div className="btn-row" style={{ marginTop: 10 }}>
-              <button className="btn" onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT) }}>
-                Cancel
+          )}
+          <textarea
+            className="prompt-area"
+            style={{ minHeight: 48 }}
+            placeholder="Non-secret env, one PER=line (optional)"
+            value={draft.env}
+            onChange={(e) => setDraft({ ...draft, env: e.target.value })}
+          />
+          <div className="tab-row">
+            {(['none', 'apiKey', 'bearer'] as ConnectorAuthType[]).map((a) => (
+              <button key={a} className={draft.authType === a ? 'active' : ''} onClick={() => setDraft({ ...draft, authType: a })}>
+                {a}
               </button>
-              <button className="btn primary" disabled={!draft.name.trim()} onClick={() => void saveDraft()}>
-                Save{draft.authType !== 'none' ? ' + set credential' : ''}
-              </button>
-            </div>
+            ))}
           </div>
-        )}
-      </div>
+          {draft.authType !== 'none' && (
+            <>
+              <input
+                className="link-input cr-input"
+                placeholder={draft.kind === 'stdio' ? 'Secret env var (e.g. API_TOKEN)' : 'Auth header (e.g. Authorization)'}
+                value={draft.secretKey}
+                onChange={(e) => setDraft({ ...draft, secretKey: e.target.value })}
+              />
+              <input
+                className="link-input cr-input"
+                placeholder="Credential label (shown in the secure modal)"
+                value={draft.secretFieldLabel}
+                onChange={(e) => setDraft({ ...draft, secretFieldLabel: e.target.value })}
+              />
+            </>
+          )}
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <button className="btn" onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT) }}>
+              Cancel
+            </button>
+            <button className="btn primary" disabled={!draft.name.trim()} onClick={() => void saveDraft()}>
+              Save{draft.authType !== 'none' ? ' + set credential' : ''}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

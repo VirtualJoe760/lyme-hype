@@ -1,12 +1,17 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { PersistedState, SecretRequest } from '@shared/types'
-import type { ConnectorDef } from '@shared/types'
+import type { ConnectorDef, ModelProviderDef, PersistedState, SecretRequest } from '@shared/types'
 import { runAgentPrompt } from './agent'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteConnector, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { deleteSecret, listSecretReports } from './credential-vault'
+import {
+  deleteModelProvider,
+  listModelProviders,
+  saveModelProvider,
+  setActiveModelProvider
+} from './model-providers'
 import { registerSecureCredentialIpc, requestSecret } from './secure-credential'
 import { loadState, saveState } from './sessions-store'
 
@@ -101,6 +106,20 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.connectorsTest, (e, id: string) => {
     if (!isMainSender(e)) return null
     return testConnector(id)
+  })
+
+  ipcMain.handle(IPC.modelProvidersList, (e) => (isMainSender(e) ? listModelProviders() : []))
+  ipcMain.handle(IPC.modelProvidersSave, (e, def: ModelProviderDef) => {
+    if (!isMainSender(e)) return
+    saveModelProvider(def)
+  })
+  ipcMain.handle(IPC.modelProvidersDelete, (e, id: string) => {
+    if (!isMainSender(e)) return
+    deleteModelProvider(id)
+  })
+  ipcMain.handle(IPC.modelProvidersSetActive, (e, id: string) => {
+    if (!isMainSender(e)) return
+    setActiveModelProvider(id)
   })
 
   ipcMain.handle(IPC.secretRequest, (e, request: SecretRequest) => {

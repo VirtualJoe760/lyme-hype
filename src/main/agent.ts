@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import type { AgentPingResult, AgentStreamEvent } from '@shared/types'
 import { resolveClaudeAuthOverride } from './claude-auth'
+import { resolveActiveProvider } from './model-providers'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
 
@@ -26,17 +27,28 @@ export async function runAgentPrompt(
     const { query } = await loadSdk()
     onEvent({ kind: 'status', text: 'Contacting agent…' })
 
-    // Default: no env override, so the SDK authenticates with this machine's own
-    // Claude Code login (the same subscription-backed credential `claude
-    // setup-token` mints) — that's the normal path for a personal tool. An
-    // explicit override (a different API key or OAuth token) is opt-in.
-    const override = resolveClaudeAuthOverride()
-    const authEnv =
-      override?.kind === 'oauthToken'
-        ? { CLAUDE_CODE_OAUTH_TOKEN: override.value }
-        : override?.kind === 'apiKey'
-          ? { ANTHROPIC_API_KEY: override.value }
-          : null
+    // Which LLM backs the agent. Claude-default = this machine's own Claude Code
+    // login (or an explicit Claude override). Any other provider is an
+    // Anthropic-API-compatible endpoint (Kimi, or a local/OpenAI model behind a
+    // proxy) reached via ANTHROPIC_BASE_URL + a bearer token + an explicit model.
+    const provider = resolveActiveProvider()
+    let authEnv: Record<string, string> | null = null
+    let model: string | undefined
+
+    if (provider.def.kind === 'anthropic-compatible' && provider.def.baseUrl && provider.key) {
+      authEnv = { ANTHROPIC_BASE_URL: provider.def.baseUrl, ANTHROPIC_AUTH_TOKEN: provider.key }
+      model = provider.def.model
+    } else {
+      // Claude default: no env override → SDK uses the machine's Claude Code
+      // login. An explicit Claude API key / setup-token override is opt-in.
+      const override = resolveClaudeAuthOverride()
+      authEnv =
+        override?.kind === 'oauthToken'
+          ? { CLAUDE_CODE_OAUTH_TOKEN: override.value }
+          : override?.kind === 'apiKey'
+            ? { ANTHROPIC_API_KEY: override.value }
+            : null
+    }
 
     const stream = query({
       prompt,
@@ -48,6 +60,7 @@ export async function runAgentPrompt(
         // or any repo CLAUDE.md — Lyme Hype defines its own context.
         settingSources: [],
         ...(authEnv ? { env: { ...process.env, ...authEnv } } : {}),
+        ...(model ? { model } : {}),
         systemPrompt:
           'You are the Lyme Hype studio agent, embedded in a desktop content-creation app. Answer briefly.',
         cwd: app.getPath('userData')

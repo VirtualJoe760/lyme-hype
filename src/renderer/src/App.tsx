@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { AsidePanel } from './components/AsidePanel'
 import { CanvasArea } from './components/CanvasArea'
 import { CombineDialog } from './components/CombineDialog'
-import { ConnectionsPanel } from './components/ConnectionsPanel'
 import { CutRoom } from './components/CutRoom'
+import { Settings } from './components/settings/Settings'
 import { SessionsRail } from './components/SessionsRail'
 import { TitleBar } from './components/TitleBar'
 import { Toolbar } from './components/Toolbar'
@@ -13,7 +13,7 @@ export default function App(): React.JSX.Element {
   const loaded = useStudio((s) => s.loaded)
   const init = useStudio((s) => s.init)
   const combine = useStudio((s) => s.combine)
-  const connectionsOpen = useStudio((s) => s.connectionsOpen)
+  const settingsOpen = useStudio((s) => s.settingsOpen)
 
   useEffect(() => {
     void init()
@@ -38,7 +38,7 @@ export default function App(): React.JSX.Element {
         )}
       </div>
       {combine && <CombineDialog />}
-      {connectionsOpen && <ConnectionsPanel />}
+      {settingsOpen && <Settings />}
     </div>
   )
 }
