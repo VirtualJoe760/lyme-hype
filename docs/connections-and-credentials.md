@@ -61,10 +61,10 @@ Researched the generation tools Joseph named (Krea, Seedance, Dreamina, muapi, E
 
 **Three transport gaps this surfaced — the Phase 4 connector work:**
 1. ~~**http-MCP client**~~ **DONE.** `src/main/mcp-http.ts` speaks the Streamable-HTTP MCP transport (POST JSON-RPC, JSON *or* `text/event-stream` responses, `Mcp-Session-Id`). `testConnector` probes http as well as stdio, and generation attaches http connectors to the Agent SDK (`{type:'http',url,headers}`). Krea and fal are flipped to available with bearer-`Authorization` http templates; the credential injects as a header via `httpAuthHeaders`.
-2. **MCP OAuth** — Yapper (and Krea's no-key option) authenticate the MCP connection via OAuth, not a stored API key. This is closer to the publishing-account OAuth mechanism than the stdio+env-key path. Still open.
-3. **Gemini stdio wrapper** — Google ships no trustworthy first-party media-generation MCP; the clean path is a thin bundled `@google/genai` stdio server rather than depending on an unvetted community package. Still open.
+2. ~~**MCP OAuth**~~ **DONE.** `src/main/mcp-oauth.ts` runs the standard MCP OAuth client flow (RFC 9728 resource discovery → RFC 8414 metadata → RFC 7591 dynamic registration → PKCE in the system browser → loopback redirect → token exchange). Tokens store in the vault under the connector id — `hasCredential` reads "account connected" — and refresh silently at use. The credential boundary holds in its strongest form: with OAuth *nobody* types a secret anywhere, and the agent still only ever sees connected/not-connected.
+3. ~~**Gemini stdio wrapper**~~ **DONE.** `resources/gemini-mcp.cjs` — a dependency-free plain-Node stdio MCP server calling the Generative Language REST API with `GEMINI_API_KEY` from its env (vault-injected). Image (Nano Banana) and video (Veo long-running op + in-process authed download). Returns `RESULT_FILE:` paths since Gemini hands back bytes/authed URIs rather than public URLs.
 
-`muapi` + `ElevenLabs` (stdio) and now `Krea` + `fal` (http) are all installable from the suggestions catalog (`src/main/connector-suggestions.ts`); a credential is entered through the native secure modal and stored in `safeStorage`, exactly like ChatRealty.
+The whole catalog is now installable: `muapi` + `ElevenLabs` + `Gemini` (stdio), `Krea` + `fal` (http key), `Yapper` (http OAuth) — from `src/main/connector-suggestions.ts`. Key-based credentials enter through the native secure modal; OAuth connects through the browser; both land in `safeStorage`, exactly like ChatRealty.
 
 ## Settings (full-screen) — Connectors + Models
 

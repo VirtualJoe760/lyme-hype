@@ -56,9 +56,15 @@ decided vs. still open.
    deliberate confirm before any publish action fires, regardless of how the underlying OAuth flow
    is ported in.
 
-7. **ffmpeg must be an LGPL-only build.** Lyme Hype is closed-source; a GPL-component ffmpeg build
-   would create copyleft obligations we don't want. Verify whichever prebuilt package gets used
-   actually guarantees LGPL-only before depending on it — don't assume.
+7. **ffmpeg licensing only matters at distribution — don't gate work on it now.** (Corrected
+   2026-08-08; the old "must be LGPL-only" version of this rule was over-imagined during planning.)
+   Lyme Hype is a personal tool: running any ffmpeg build locally — including the user's installed
+   GPL build on PATH — infringes nothing, because GPL/LGPL obligations attach to *distributing*
+   software, not using it. The app also shells out to ffmpeg as a separate process rather than
+   linking it. IF the app is ever packaged and given to others, revisit then: bundle a verified
+   LGPL build (e.g. BtbN's `-lgpl` variants) and switch the export encoder from `libx264` (GPL,
+   absent in LGPL builds) to `openh264` — and verify the binary with `ffmpeg -version` (no
+   `--enable-gpl` / `--enable-nonfree` in the configuration line) rather than trusting a label.
 
 8. **Env files and credentials never reach git.** Same rule as every other project here — stage by
    explicit path, never `git add -A`, confirm `.gitignore` coverage with `git check-ignore -v

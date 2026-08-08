@@ -56,6 +56,7 @@ export interface Bridge {
     suggestions(): Promise<ConnectorSuggestion[]>
     addSuggestion(id: string): Promise<ConnectorDef | null>
     openKeyPage(id: string): Promise<void>
+    oauthConnect(id: string): Promise<{ ok: boolean; error?: string } | null>
   }
   modelProviders: {
     list(): Promise<ModelProviderView[]>
@@ -148,7 +149,11 @@ function createBrowserMock(): Bridge {
       }),
       suggestions: async () => [],
       addSuggestion: async () => null,
-      openKeyPage: async () => {}
+      openKeyPage: async () => {},
+      oauthConnect: async () => ({
+        ok: false,
+        error: 'OAuth runs in the Electron main process — unavailable in browser preview.'
+      })
     },
     modelProviders: {
       list: async () => [],

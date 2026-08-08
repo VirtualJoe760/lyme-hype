@@ -206,6 +206,9 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     const hasMuapi = suggestions.some((s) => s.id === 'muapi' && s.available)
     // Krea is now an available http connector (http-MCP transport landed).
     const hasKrea = suggestions.some((s) => s.id === 'krea' && s.available)
+    // Gemini (bundled stdio wrapper) and Yapper (MCP OAuth) are now installable too.
+    const hasGemini = suggestions.some((s) => s.id === 'gemini' && s.available)
+    const hasYapper = suggestions.some((s) => s.id === 'yapper' && s.available)
     // Custom connector round-trip (all removable now).
     saveConnector({
       id: 'selftest-conn',
@@ -231,6 +234,8 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     if (
       hasMuapi &&
       hasKrea &&
+      hasGemini &&
+      hasYapper &&
       kreaHttp &&
       added &&
       removed &&
@@ -238,11 +243,11 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
       muapiInstalled
     ) {
       log(
-        `connectors: PASS (${suggestions.length} suggestions; stdio + http add-from-suggestion round-trip; all removable)`
+        `connectors: PASS (${suggestions.length} suggestions, all installable; stdio + http add-from-suggestion round-trip; all removable)`
       )
     } else {
       fail(
-        `connectors: muapi=${hasMuapi} krea=${hasKrea} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
+        `connectors: muapi=${hasMuapi} krea=${hasKrea} gemini=${hasGemini} yapper=${hasYapper} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
       )
     }
   } catch (error) {

@@ -29,6 +29,7 @@ export const IPC = {
   connectorsSuggestions: 'connectors:suggestions',
   connectorsAddSuggestion: 'connectors:add-suggestion',
   connectorsOpenKeyPage: 'connectors:open-key-page',
+  connectorsOauthConnect: 'connectors:oauth-connect',
 
   modelProvidersList: 'model-providers:list',
   modelProvidersSave: 'model-providers:save',

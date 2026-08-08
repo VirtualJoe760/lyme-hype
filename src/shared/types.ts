@@ -145,7 +145,9 @@ export interface AgentPingResult {
 }
 
 export type ConnectorKind = 'stdio' | 'http'
-export type ConnectorAuthType = 'none' | 'apiKey' | 'bearer'
+/** 'oauth' = the MCP server authorizes via an OAuth browser flow (http only);
+ *  tokens are stored in the vault, never typed by anyone. */
+export type ConnectorAuthType = 'none' | 'apiKey' | 'bearer' | 'oauth'
 
 /**
  * A generic MCP connector — the product requirement is that a user can add one

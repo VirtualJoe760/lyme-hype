@@ -12,6 +12,7 @@ import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store
 import { runAgentPrompt } from './agent'
 import { exportTimeline } from './ffmpeg'
 import { runGeneration } from './generation'
+import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
@@ -168,6 +169,19 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.connectorsOpenKeyPage, (e, id: string) => {
     if (!isMainSender(e)) return
     openSuggestionKeyPage(id)
+  })
+  ipcMain.handle(IPC.connectorsOauthConnect, async (e, id: string) => {
+    if (!isMainSender(e)) return null
+    const def = listConnectors().find((c) => c.id === id)
+    if (!def || def.authType !== 'oauth' || !def.url) {
+      return { ok: false, error: 'Not an OAuth http connector.' }
+    }
+    try {
+      await startOAuthConnect(def.id, def.url)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
   })
 
   ipcMain.handle(IPC.modelProvidersList, (e) => (isMainSender(e) ? listModelProviders() : []))

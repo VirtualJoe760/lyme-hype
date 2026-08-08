@@ -1,4 +1,5 @@
-import { shell } from 'electron'
+import { join } from 'node:path'
+import { app, shell } from 'electron'
 import type { ConnectorDef, ConnectorSuggestion } from '@shared/types'
 import { CHATREALTY_CONNECTOR_ID, chatRealtyConnectorDef, hasChatRealtyToken } from './chatrealty'
 import { saveConnector } from './connectors-store'
@@ -115,22 +116,41 @@ const CATALOG: CatalogEntry[] = [
   {
     id: 'gemini',
     name: 'Google Gemini',
-    blurb: 'Nano Banana image + Veo video. Needs a small stdio wrapper (coming); image/video are paid-tier.',
+    blurb: 'Nano Banana image + Veo video via our bundled wrapper. Image/video are paid-tier keys.',
     category: 'multi',
     keyPageUrl: 'https://aistudio.google.com/apikey',
-    available: false,
-    note: 'Bundled @google/genai wrapper is a Phase 4 item.',
-    template: () => null
+    available: true,
+    note: 'Runs the bundled resources/gemini-mcp.cjs wrapper with your GEMINI_API_KEY.',
+    template: () => ({
+      id: 'gemini',
+      name: 'Google Gemini',
+      kind: 'stdio',
+      command: 'node',
+      // Resolved at install time; in dev app.getAppPath() is the repo root.
+      args: [join(app.getAppPath(), 'resources', 'gemini-mcp.cjs')],
+      authType: 'apiKey',
+      secretKey: 'GEMINI_API_KEY',
+      secretFieldLabel: 'Gemini API key',
+      docUrl: 'https://aistudio.google.com/apikey'
+    })
   },
   {
     id: 'yapper',
     name: 'Yapper',
-    blurb: 'Seedance/Sora/Kling video studio. Hosted MCP is OAuth-only — needs MCP OAuth support (coming).',
+    blurb: 'Seedance/Sora/Kling video studio over remote http MCP — connects with an OAuth login, no key to paste.',
     category: 'video',
     keyPageUrl: 'https://yapper.so/account/developer',
-    available: false,
-    note: 'MCP OAuth support is a Phase 4 item.',
-    template: () => null
+    available: true,
+    note: 'Add, then hit "Connect account" — approval happens in your browser.',
+    template: () => ({
+      id: 'yapper',
+      name: 'Yapper',
+      kind: 'http',
+      url: 'https://yapper.so/mcp/connector',
+      authType: 'oauth',
+      secretFieldLabel: 'OAuth (browser sign-in)',
+      docUrl: 'https://yapper.so/account/developer'
+    })
   }
 ]
 

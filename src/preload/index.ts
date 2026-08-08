@@ -78,7 +78,9 @@ const api = {
     suggestions: (): Promise<ConnectorSuggestion[]> => ipcRenderer.invoke(IPC.connectorsSuggestions),
     addSuggestion: (id: string): Promise<ConnectorDef | null> =>
       ipcRenderer.invoke(IPC.connectorsAddSuggestion, id),
-    openKeyPage: (id: string): Promise<void> => ipcRenderer.invoke(IPC.connectorsOpenKeyPage, id)
+    openKeyPage: (id: string): Promise<void> => ipcRenderer.invoke(IPC.connectorsOpenKeyPage, id),
+    oauthConnect: (id: string): Promise<{ ok: boolean; error?: string } | null> =>
+      ipcRenderer.invoke(IPC.connectorsOauthConnect, id)
   },
   modelProviders: {
     list: (): Promise<ModelProviderView[]> => ipcRenderer.invoke(IPC.modelProvidersList),

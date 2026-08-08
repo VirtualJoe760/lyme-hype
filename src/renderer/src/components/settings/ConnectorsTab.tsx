@@ -79,6 +79,12 @@ export function ConnectorsTab(): React.JSX.Element {
 
   async function addSuggestion(s: ConnectorSuggestion): Promise<void> {
     const def = await bridge.connectors.addSuggestion(s.id)
+    if (def && def.authType === 'oauth') {
+      // No typed secret — the account connects via the browser flow.
+      await refresh()
+      await connectAccount(def.id)
+      return
+    }
     if (def && def.authType !== 'none') {
       await bridge.secrets.request({
         connectorId: def.id,
@@ -87,6 +93,21 @@ export function ConnectorsTab(): React.JSX.Element {
       })
     }
     await refresh()
+  }
+
+  async function connectAccount(id: string): Promise<void> {
+    setBusyId(id)
+    setTestResult((r) => ({ ...r, [id]: 'Waiting for browser approval…' }))
+    try {
+      const result = await bridge.connectors.oauthConnect(id)
+      setTestResult((r) => ({
+        ...r,
+        [id]: result?.ok ? '✓ Account connected' : `✕ ${result?.error ?? 'Connect failed'}`
+      }))
+    } finally {
+      setBusyId(null)
+      await refresh()
+    }
   }
 
   async function setCredential(view: ConnectorView): Promise<void> {
@@ -117,6 +138,8 @@ export function ConnectorsTab(): React.JSX.Element {
   async function saveDraft(): Promise<void> {
     if (!draft.name.trim()) return
     const id = slugId(draft.name)
+    // oauth is http-only and carries no typed secret.
+    const authType: ConnectorAuthType = draft.kind === 'stdio' && draft.authType === 'oauth' ? 'apiKey' : draft.authType
     await bridge.connectors.save({
       id,
       name: draft.name.trim(),
@@ -125,12 +148,15 @@ export function ConnectorsTab(): React.JSX.Element {
       args: draft.kind === 'stdio' ? draft.args.split(/\s+/).filter(Boolean) : undefined,
       url: draft.kind === 'http' ? draft.url.trim() : undefined,
       env: parseEnv(draft.env),
-      authType: draft.authType,
-      secretKey: draft.authType !== 'none' ? draft.secretKey.trim() || undefined : undefined,
-      secretFieldLabel: draft.secretFieldLabel.trim() || 'API key'
+      authType,
+      secretKey: authType === 'apiKey' || authType === 'bearer' ? draft.secretKey.trim() || undefined : undefined,
+      secretFieldLabel:
+        authType === 'oauth' ? 'OAuth (browser sign-in)' : draft.secretFieldLabel.trim() || 'API key'
     })
     await refresh()
-    if (draft.authType !== 'none') {
+    if (authType === 'oauth') {
+      await connectAccount(id)
+    } else if (authType !== 'none') {
       await bridge.secrets.request({
         connectorId: id,
         connectorName: draft.name.trim(),
@@ -171,7 +197,14 @@ export function ConnectorsTab(): React.JSX.Element {
                   {c.builtin && <span className="conn-tag">template</span>}
                 </div>
                 <div className="meta">
-                  {c.kind} · {c.authType} · {c.hasCredential ? 'credential set' : 'no credential'}
+                  {c.kind} · {c.authType} ·{' '}
+                  {c.authType === 'oauth'
+                    ? c.hasCredential
+                      ? 'account connected'
+                      : 'not connected'
+                    : c.hasCredential
+                      ? 'credential set'
+                      : 'no credential'}
                 </div>
               </div>
               {!c.builtin && (
@@ -189,16 +222,20 @@ export function ConnectorsTab(): React.JSX.Element {
               )}
             </div>
             <div className="conn-actions">
-              {c.authType !== 'none' && (
-                <button className="conn-mini" onClick={() => void setCredential(c)}>
-                  {c.hasCredential ? 'Replace credential' : 'Set credential'}
+              {c.authType === 'oauth' ? (
+                <button className="conn-mini" disabled={busyId === c.id} onClick={() => void connectAccount(c.id)}>
+                  {c.hasCredential ? 'Reconnect account' : 'Connect account'}
                 </button>
+              ) : (
+                c.authType !== 'none' && (
+                  <button className="conn-mini" onClick={() => void setCredential(c)}>
+                    {c.hasCredential ? 'Replace credential' : 'Set credential'}
+                  </button>
+                )
               )}
-              {c.kind === 'stdio' && (
-                <button className="conn-mini" disabled={busyId === c.id} onClick={() => void runTest(c.id)}>
-                  Test
-                </button>
-              )}
+              <button className="conn-mini" disabled={busyId === c.id} onClick={() => void runTest(c.id)}>
+                Test
+              </button>
             </div>
             {testResult[c.id] && <div className="conn-test">{testResult[c.id]}</div>}
           </div>
@@ -302,13 +339,20 @@ export function ConnectorsTab(): React.JSX.Element {
             onChange={(e) => setDraft({ ...draft, env: e.target.value })}
           />
           <div className="tab-row">
-            {(['none', 'apiKey', 'bearer'] as ConnectorAuthType[]).map((a) => (
+            {(
+              ['none', 'apiKey', 'bearer', ...(draft.kind === 'http' ? (['oauth'] as const) : [])] as ConnectorAuthType[]
+            ).map((a) => (
               <button key={a} className={draft.authType === a ? 'active' : ''} onClick={() => setDraft({ ...draft, authType: a })}>
                 {a}
               </button>
             ))}
           </div>
-          {draft.authType !== 'none' && (
+          {draft.authType === 'oauth' && (
+            <p className="settings-blurb" style={{ margin: '2px 0 6px' }}>
+              OAuth connectors sign in through your browser after saving — nothing to paste.
+            </p>
+          )}
+          {draft.authType !== 'none' && draft.authType !== 'oauth' && (
             <>
               <input
                 className="link-input cr-input"
@@ -329,7 +373,8 @@ export function ConnectorsTab(): React.JSX.Element {
               Cancel
             </button>
             <button className="btn primary" disabled={!draft.name.trim()} onClick={() => void saveDraft()}>
-              Save{draft.authType !== 'none' ? ' + set credential' : ''}
+              Save
+              {draft.authType === 'oauth' ? ' + connect account' : draft.authType !== 'none' ? ' + set credential' : ''}
             </button>
           </div>
         </div>

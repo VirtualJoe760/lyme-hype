@@ -4,7 +4,19 @@ import { app } from 'electron'
 import type { ConnectorDef, ConnectorTestResult, ConnectorView } from '@shared/types'
 import { readSecretValue } from './credential-vault'
 import { httpAuthHeaders, probeHttpMcp } from './mcp-http'
+import { getOAuthAccessToken } from './mcp-oauth'
 import { probeStdioMcp, type McpProbeResult } from './mcp-probe'
+
+/** Auth headers for an http connector, whatever its auth type. OAuth resolves
+ *  (and silently refreshes) the vault-stored token; key types inject the typed
+ *  secret. Empty when not connected — the probe then reports the 401 honestly. */
+export async function resolveHttpHeaders(def: ConnectorDef): Promise<Record<string, string>> {
+  if (def.authType === 'oauth') {
+    const token = await getOAuthAccessToken(def.id)
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+  return httpAuthHeaders(def.authType, def.secretKey, readSecretValue(def.id))
+}
 
 function storeFile(): string {
   return join(app.getPath('userData'), 'connectors.json')
@@ -69,7 +81,7 @@ export async function testConnector(id: string): Promise<ConnectorTestResult> {
     if (def.authType !== 'none' && def.secretKey && token) env[def.secretKey] = token
     probe = await probeStdioMcp({ command: def.command, args: def.args ?? [], env })
   } else if (def.kind === 'http' && def.url) {
-    probe = await probeHttpMcp({ url: def.url, headers: httpAuthHeaders(def.authType, def.secretKey, token) })
+    probe = await probeHttpMcp({ url: def.url, headers: await resolveHttpHeaders(def) })
   } else {
     return { ok: false, error: 'Connector is missing a command (stdio) or url (http).' }
   }

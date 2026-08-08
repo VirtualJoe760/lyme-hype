@@ -1,10 +1,9 @@
 import { app } from 'electron'
 import type { GenerationParams, GenerationResult } from '@shared/types'
-import { importUrlAsset } from './asset-store'
+import { importFileAsset, importUrlAsset } from './asset-store'
 import { resolveClaudeAuthOverride } from './claude-auth'
-import { listConnectors } from './connectors-store'
+import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
-import { httpAuthHeaders } from './mcp-http'
 import { resolveActiveProvider } from './model-providers'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
@@ -42,12 +41,12 @@ function mcpName(connectorId: string): string {
  * A connector that needs a key but has none is skipped rather than attached to
  * fail.
  */
-function buildMcpServers(restrictId?: string): {
+async function buildMcpServers(restrictId?: string): Promise<{
   servers: Record<string, McpServerConfig>
   allowedTools: string[]
   attached: string[]
   skipped: string[]
-} {
+}> {
   const servers: Record<string, McpServerConfig> = {}
   const allowedTools: string[] = []
   const attached: string[] = []
@@ -64,10 +63,16 @@ function buildMcpServers(restrictId?: string): {
     const name = mcpName(def.id)
     if (def.kind === 'stdio' && def.command) {
       const env: Record<string, string> = { ...(def.env ?? {}) }
-      if (def.secretKey && token) env[def.secretKey] = token
+      if (def.secretKey && token && def.authType !== 'oauth') env[def.secretKey] = token
       servers[name] = { command: def.command, args: def.args ?? [], env }
     } else if (def.kind === 'http' && def.url) {
-      servers[name] = { type: 'http', url: def.url, headers: httpAuthHeaders(def.authType, def.secretKey, token) }
+      const headers = await resolveHttpHeaders(def)
+      if (def.authType === 'oauth' && !headers['Authorization']) {
+        // Connected-then-expired with no refresh path — attaching would just 401.
+        skipped.push(def.id)
+        continue
+      }
+      servers[name] = { type: 'http', url: def.url, headers }
     } else {
       skipped.push(def.id)
       continue
@@ -106,12 +111,13 @@ function buildPrompt(params: GenerationParams): string {
   if (params.resolution) lines.push(`Resolution: ${params.resolution}.`)
   lines.push(
     'Use exactly one connected generation tool that produces this media type. Wait for it to finish.',
-    'Then reply with a single line — either `RESULT_URL: <direct https URL to the generated file>` or `RESULT_ERROR: <short reason>` — and nothing else.'
+    'Then reply with a single line and nothing else: `RESULT_URL: <direct https URL>` for a URL result, `RESULT_FILE: <absolute local path>` if the tool returned a local file path, or `RESULT_ERROR: <short reason>`.'
   )
   return lines.join('\n')
 }
 
 const RESULT_URL_RE = /RESULT_URL:\s*(https?:\/\/\S+)/i
+const RESULT_FILE_RE = /RESULT_FILE:\s*(.+)/i
 const RESULT_ERROR_RE = /RESULT_ERROR:\s*(.+)/i
 const ANY_URL_RE = /(https?:\/\/[^\s"'<>)]+)/i
 
@@ -120,7 +126,7 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
 
   if (!params.prompt.trim()) return fail('Enter a prompt to generate.')
 
-  const { servers, allowedTools, attached, skipped } = buildMcpServers(params.connectorId)
+  const { servers, allowedTools, attached, skipped } = await buildMcpServers(params.connectorId)
   if (attached.length === 0) {
     return fail(
       params.connectorId
@@ -200,8 +206,9 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     }
 
     const errMatch = text.match(RESULT_ERROR_RE)
+    const fileMatch = text.match(RESULT_FILE_RE)
     const urlMatch = text.match(RESULT_URL_RE) ?? text.match(ANY_URL_RE)
-    if (!urlMatch) {
+    if (!urlMatch && !fileMatch) {
       return {
         ok: false,
         mediaType: params.mediaType,
@@ -210,7 +217,11 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       }
     }
 
-    const saved = await importUrlAsset(urlMatch[1].trim(), params.mediaType)
+    // File results (e.g. the bundled Gemini wrapper) are copied into the asset
+    // store; URL results are downloaded into it.
+    const saved = fileMatch
+      ? importFileAsset(fileMatch[1].trim())
+      : await importUrlAsset(urlMatch![1].trim(), params.mediaType)
     return {
       ok: true,
       src: saved.url,
