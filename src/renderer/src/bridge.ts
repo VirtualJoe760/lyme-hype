@@ -21,6 +21,7 @@ export interface Bridge {
   agent: {
     ping(prompt: string): Promise<AgentPingResult | null>
     onStream(callback: (event: AgentStreamEvent) => void): () => void
+    claudeStatus(): Promise<{ hasKey: boolean } | null>
   }
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
@@ -76,7 +77,8 @@ function createBrowserMock(): Bridge {
         durationMs: 0,
         error: 'Agent runs in the Electron main process — unavailable in browser preview.'
       }),
-      onStream: () => () => {}
+      onStream: () => () => {},
+      claudeStatus: async () => ({ hasKey: false })
     },
     media: {
       pickFile: async () => null

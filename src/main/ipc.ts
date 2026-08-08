@@ -3,6 +3,7 @@ import { IPC } from '@shared/ipc-channels'
 import type { PersistedState, SecretRequest } from '@shared/types'
 import type { ConnectorDef } from '@shared/types'
 import { runAgentPrompt } from './agent'
+import { hasClaudeApiKey } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteConnector, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { deleteSecret, listSecretReports } from './credential-vault'
@@ -57,6 +58,8 @@ export function registerIpc(window: BrowserWindow): void {
     if (isMainSender(e)) saveState(state)
     e.returnValue = true
   })
+
+  ipcMain.handle(IPC.claudeStatus, (e) => (isMainSender(e) ? { hasKey: hasClaudeApiKey() } : null))
 
   ipcMain.handle(IPC.agentPing, async (e, prompt: string) => {
     if (!isMainSender(e)) return null

@@ -33,7 +33,8 @@ const api = {
       const listener = (_: unknown, event: AgentStreamEvent): void => callback(event)
       ipcRenderer.on(IPC.agentStream, listener)
       return () => ipcRenderer.removeListener(IPC.agentStream, listener)
-    }
+    },
+    claudeStatus: (): Promise<{ hasKey: boolean } | null> => ipcRenderer.invoke(IPC.claudeStatus)
   },
   media: {
     pickFile: (kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null> =>

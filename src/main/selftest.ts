@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { BrowserWindow, app, net } from 'electron'
 import { runAgentPrompt } from './agent'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import { CLAUDE_CREDENTIAL_ID, hasClaudeApiKey } from './claude-auth'
 import { deleteConnector, listConnectors, saveConnector } from './connectors-store'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
 import { probeStdioMcp } from './mcp-probe'
@@ -211,6 +212,23 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`connectors: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 8. BYO Claude key resolution — storing a key makes hasClaudeApiKey true;
+  //    removing it falls back to the machine login (what the agent test above
+  //    used). Doesn't call Anthropic — just verifies the resolve plumbing.
+  try {
+    const before = hasClaudeApiKey()
+    storeSecret(CLAUDE_CREDENTIAL_ID, 'Anthropic API key', 'sk-ant-selftest-dummy')
+    const withKey = hasClaudeApiKey()
+    deleteSecret(CLAUDE_CREDENTIAL_ID)
+    if (withKey && hasClaudeApiKey() === before) {
+      log(`claude byo-key: PASS (resolve toggles with the vault; dev fallback=${!before})`)
+    } else {
+      fail(`claude byo-key: withKey=${withKey} restored=${hasClaudeApiKey()} before=${before}`)
+    }
+  } catch (error) {
+    fail(`claude byo-key: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

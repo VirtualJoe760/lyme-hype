@@ -37,6 +37,7 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
 - [connections-and-credentials.md](connections-and-credentials.md) — the generic connector model (no predetermined list), the agent-as-setup-copilot browser flow, and the credential boundary that keeps secrets out of the agent's context entirely.
 - [build-plan.md](build-plan.md) — the actual build order: eight phases from Electron scaffold through packaging, what blocks what, and what "done" looks like at each step.
 - [fable-5-kickoff.md](fable-5-kickoff.md) — the handoff prompt for whichever session picks up Phase 1.
+- [monetization.md](monetization.md) — how Lyme Hype gets paid: BYO flat-fee first (thinkbigjoe login + Stripe), managed tier later, and the three BYO layers (license / Claude key / connector keys).
 
 ## Platform direction
 

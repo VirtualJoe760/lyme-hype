@@ -9,6 +9,7 @@ export const IPC = {
 
   agentPing: 'agent:ping',
   agentStream: 'agent:stream',
+  claudeStatus: 'claude:status',
 
   mediaPickFile: 'media:pick-file',
 

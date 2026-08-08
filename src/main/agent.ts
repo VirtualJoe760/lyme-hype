@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import type { AgentPingResult, AgentStreamEvent } from '@shared/types'
+import { resolveClaudeApiKey } from './claude-auth'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
 
@@ -25,6 +26,11 @@ export async function runAgentPrompt(
     const { query } = await loadSdk()
     onEvent({ kind: 'status', text: 'Contacting agent…' })
 
+    // BYO Anthropic API key: when the user has stored one, force API-key auth by
+    // passing it in the SDK env. When absent (dev), the SDK falls back to this
+    // machine's Claude Code login. Packaged builds require a stored key.
+    const apiKey = resolveClaudeApiKey()
+
     const stream = query({
       prompt,
       options: {
@@ -34,6 +40,7 @@ export async function runAgentPrompt(
         // The studio agent must not inherit this machine's Claude Code settings
         // or any repo CLAUDE.md — Lyme Hype defines its own context.
         settingSources: [],
+        ...(apiKey ? { env: { ...process.env, ANTHROPIC_API_KEY: apiKey } } : {}),
         systemPrompt:
           'You are the Lyme Hype studio agent, embedded in a desktop content-creation app. Answer briefly.',
         cwd: app.getPath('userData')

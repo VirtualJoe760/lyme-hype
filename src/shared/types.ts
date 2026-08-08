@@ -1,3 +1,7 @@
+/** Vault id for the user's own Anthropic API key (BYO Claude). Shared so main
+ *  and renderer reference the same key. */
+export const CLAUDE_CREDENTIAL_ID = 'anthropic-claude'
+
 export type MediaType = 'image' | 'video' | 'audio'
 export type SourceMethod = 'generate' | 'upload' | 'link'
 export type NodeStatus = 'rendering' | 'ready'
