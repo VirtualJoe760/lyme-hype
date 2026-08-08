@@ -6,6 +6,16 @@
   height: 100%;
 }
 
+/* Section/panel headers ride the dot-matrix heading font alongside real h-tags. */
+.panel-head span,
+.sheet-section-label,
+.agent-card .title,
+.cutroom .head,
+.tile-name,
+.settings-title {
+  font-family: var(--heading-font);
+}
+
 /* ---------- titlebar ---------- */
 
 .titlebar {

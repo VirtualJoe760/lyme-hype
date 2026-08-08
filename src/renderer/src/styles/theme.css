@@ -33,6 +33,12 @@
   --mono: 'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace;
   --brand-font: 'Bitcount Prop Single', var(--mono);
   --arcade-font: 'Press Start 2P', var(--mono);
+  /* Font roles: dot-matrix brand font for titles + headings, Jost for body and
+     small text. Press Start 2P (--arcade-font) is reserved for specific
+     decorative spots only — apply it deliberately via the .arcade utility, never
+     globally (it's too illegible as body text). */
+  --heading-font: var(--brand-font);
+  --body-font: 'Jost Variable', var(--sans);
 }
 
 * {
@@ -51,9 +57,24 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--sans);
+  font-family: var(--body-font);
   font-size: 13px;
   user-select: none;
+}
+
+/* Titles + headings ride the dot-matrix brand font. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--heading-font);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+/* Opt-in retro accent — Press Start 2P on the few spots that want it. */
+.arcade {
+  font-family: var(--arcade-font);
 }
 
 button {
