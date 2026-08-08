@@ -109,6 +109,18 @@ interface StudioStore {
   movePanel(nodeId: string, dir: -1 | 1): void
   promotePanel(nodeId: string): void
 
+  generateMedia(input: {
+    label: string
+    mediaType: MediaType
+    prompt: string
+    motionGfx?: boolean
+    aspectRatio?: string
+    durationSec?: number
+    resolution?: string
+    position?: { x: number; y: number }
+    nodeId?: string
+  }): Promise<void>
+
   toggleRail(): void
   toggleAside(): void
   openSettings(tab?: SettingsTab): void
@@ -173,29 +185,32 @@ export const useStudio = create<StudioStore>((set, get) => {
     persist()
   }
 
-  function scheduleStubReady(nodeId: string): void {
-    setTimeout(() => {
-      const inActive = get().nodes.some((n) => n.id === nodeId)
-      if (inActive) {
-        patchNodeData(nodeId, { status: 'ready' })
-        return
+  /**
+   * Patches a node whether it's in the live active session or has since been
+   * switched away into the serialized sessions array — the latter is why an
+   * async job (stub timer, real generation) that outlives a session switch
+   * doesn't leave a node stuck "Rendering…". A since-deleted node is a no-op.
+   */
+  function patchNodeAnywhere(nodeId: string, patch: Partial<MediaNodeData>): void {
+    if (get().nodes.some((n) => n.id === nodeId)) {
+      patchNodeData(nodeId, patch)
+      return
+    }
+    const sessions = get().sessions.map((session) => {
+      if (!session.nodes.some((n) => n.id === nodeId)) return session
+      return {
+        ...session,
+        nodes: session.nodes.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n
+        )
       }
-      // The node's session was switched away before the timer fired, so it now
-      // lives only in the serialized sessions array — flip it there, or it stays
-      // stuck "Rendering…" until the next app start. A since-deleted node is a
-      // no-op under the map.
-      const sessions = get().sessions.map((session) => {
-        if (!session.nodes.some((n) => n.id === nodeId)) return session
-        return {
-          ...session,
-          nodes: session.nodes.map((n) =>
-            n.id === nodeId ? { ...n, data: { ...n.data, status: 'ready' as const } } : n
-          )
-        }
-      })
-      set({ sessions })
-      persist()
-    }, STUB_RENDER_MS)
+    })
+    set({ sessions })
+    persist()
+  }
+
+  function scheduleStubReady(nodeId: string): void {
+    setTimeout(() => patchNodeAnywhere(nodeId, { status: 'ready' }), STUB_RENDER_MS)
   }
 
   return {
@@ -554,7 +569,76 @@ export const useStudio = create<StudioStore>((set, get) => {
         )
       })
       persist()
-      scheduleStubReady(nodeId)
+      // A promoted panel with a note becomes a real generation; without one it
+      // falls back to the stub lifecycle (nothing to prompt with yet).
+      const note = (node.data.note ?? '').trim()
+      if (note) {
+        void get().generateMedia({
+          nodeId,
+          label: node.data.label,
+          mediaType: node.data.mediaType,
+          prompt: note
+        })
+      } else {
+        scheduleStubReady(nodeId)
+      }
+    },
+
+    async generateMedia(input) {
+      const id = input.nodeId ?? nextId('node')
+      // A fresh Generate creates the rendering node; a promote reuses the panel
+      // node (already flipped to rendering) — only create when it's new.
+      if (!input.nodeId) {
+        const node: MediaFlowNode = {
+          id,
+          type: 'media',
+          position: input.position ?? {
+            x: 80 + Math.random() * 300,
+            y: 80 + Math.random() * 220
+          },
+          data: {
+            label: input.label,
+            mediaType: input.mediaType,
+            source: 'generate',
+            status: 'rendering',
+            swatch: pickSwatch(),
+            motionGfx: input.motionGfx
+          }
+        }
+        set({ nodes: [...get().nodes, node] })
+        persist()
+      }
+
+      let result: Awaited<ReturnType<typeof bridge.generate.run>> = null
+      try {
+        result = await bridge.generate.run({
+          mediaType: input.mediaType,
+          prompt: input.prompt,
+          aspectRatio: input.aspectRatio,
+          durationSec: input.durationSec,
+          resolution: input.resolution
+        })
+      } catch (error) {
+        result = {
+          ok: false,
+          mediaType: input.mediaType,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+
+      if (result?.ok && result.src) {
+        patchNodeAnywhere(id, {
+          src: result.src,
+          status: 'ready',
+          error: undefined,
+          genNote: result.note
+        })
+      } else {
+        patchNodeAnywhere(id, {
+          status: 'error',
+          error: result?.error ?? 'Generation failed.'
+        })
+      }
     },
 
     toggleRail() {

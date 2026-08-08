@@ -19,7 +19,22 @@ const MIME_EXT: Record<string, string> = {
   'image/jpg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
-  'image/gif': '.gif'
+  'image/gif': '.gif',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+  'audio/mp4': '.m4a',
+  'audio/ogg': '.ogg'
+}
+
+const MEDIA_TYPE_DEFAULT_EXT: Record<MediaType, string> = {
+  image: '.png',
+  video: '.mp4',
+  audio: '.mp3'
 }
 
 const EXT_MEDIA_TYPE: Record<string, MediaType> = {
@@ -96,14 +111,20 @@ export function importFileAsset(srcPath: string): SavedAsset {
   return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: statSync(dest).size }
 }
 
-/** Downloads a remote media URL into the asset store. Real transcode of
- *  non-web-playable containers is deferred to the ffmpeg pass (Phase 7). */
-export async function importUrlAsset(sourceUrl: string): Promise<SavedAsset> {
+/** Downloads a remote media URL into the asset store. The extension is resolved
+ *  from the URL path, then the response Content-Type, then a media-type default —
+ *  generation tools often hand back extension-less or query-string URLs. Real
+ *  transcode of non-web-playable containers is deferred to the ffmpeg pass
+ *  (Phase 7). */
+export async function importUrlAsset(sourceUrl: string, mediaType?: MediaType): Promise<SavedAsset> {
   const res = await net.fetch(sourceUrl)
   if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`)
   const buffer = Buffer.from(await res.arrayBuffer())
   const urlExt = extname(new URL(sourceUrl).pathname).toLowerCase()
-  const ext = EXT_MEDIA_TYPE[urlExt] ? urlExt : '.mp4'
+  const contentType = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  const ext = EXT_MEDIA_TYPE[urlExt]
+    ? urlExt
+    : (MIME_EXT[contentType] ?? (mediaType ? MEDIA_TYPE_DEFAULT_EXT[mediaType] : '.mp4'))
   const fileName = `${randomUUID()}${ext}`
   writeFileSync(join(assetsDir(), fileName), buffer)
   return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: buffer.length }

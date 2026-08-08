@@ -33,24 +33,34 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
   const openPlay = useStudio((s) => s.openPlay)
 
   const rendering = data.status === 'rendering'
-  const timelineEligible = data.mediaType !== 'image' && !rendering
+  const errored = data.status === 'error'
+  const ready = data.status === 'ready'
+  const timelineEligible = data.mediaType !== 'image' && ready
   const playable = timelineEligible
 
   const capPrefix =
     data.mediaType === 'video' ? '▶ ' : data.mediaType === 'audio' ? '♪ ' : ''
 
   return (
-    <div className={`media-node${selected ? ' selected' : ''}${rendering ? ' rendering' : ''}`}>
+    <div
+      className={`media-node${selected ? ' selected' : ''}${rendering ? ' rendering' : ''}${
+        errored ? ' errored' : ''
+      }`}
+    >
       <span className={`src-badge ${data.listingKey ? 'link' : data.source}`}>
         {data.listingKey ? 'mls' : data.motionGfx ? 'gfx' : SOURCE_BADGE[data.source]}
       </span>
       <div
         className={`thumb${
-          !rendering && !data.src && data.mediaType !== 'audio' ? ` sw${data.swatch}` : ''
+          !rendering && !errored && !data.src && data.mediaType !== 'audio' ? ` sw${data.swatch}` : ''
         }`}
       >
         {rendering ? (
           'Rendering…'
+        ) : errored ? (
+          <span className="thumb-error" title={data.error}>
+            ⚠ failed
+          </span>
         ) : data.src && data.mediaType === 'video' ? (
           <video src={data.src} muted preload="metadata" className="thumb-img" />
         ) : data.src && data.mediaType === 'image' ? (

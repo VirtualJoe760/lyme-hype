@@ -45,6 +45,7 @@ export function AsidePanel(): React.JSX.Element {
   const collapsed = useStudio((s) => s.asideCollapsed)
   const toggle = useStudio((s) => s.toggleAside)
   const addNode = useStudio((s) => s.addNode)
+  const generateMedia = useStudio((s) => s.generateMedia)
   const openSettings = useStudio((s) => s.openSettings)
 
   const [mediaTab, setMediaTab] = useState<MediaTab>('video')
@@ -58,11 +59,15 @@ export function AsidePanel(): React.JSX.Element {
   const linkEligible = mediaTab === 'video' || mediaTab === 'motion'
 
   function handleGenerate(): void {
-    addNode({
+    if (!prompt.trim()) return
+    void generateMedia({
       label: labelFromPrompt(prompt, mediaTab),
       mediaType: tabToMediaType(mediaTab),
-      source: 'generate',
-      motionGfx: mediaTab === 'motion' || undefined
+      prompt: prompt.trim(),
+      motionGfx: mediaTab === 'motion' || undefined,
+      aspectRatio: aspect,
+      durationSec: parseInt(duration, 10) || undefined,
+      resolution
     })
   }
 
@@ -212,8 +217,9 @@ export function AsidePanel(): React.JSX.Element {
           }}
         />
         <p className="aside-note">
-          Generation is stubbed — nodes land with placeholder thumbnails until real generation
-          connections arrive in Phase 4.
+          Generate hands the prompt to the agent, which calls a connected generation tool and drops
+          the result on the canvas. Add a generation connector in Settings › Connectors — a node
+          shows an error if none is set up.
         </p>
 
         <ChatRealtyPull />

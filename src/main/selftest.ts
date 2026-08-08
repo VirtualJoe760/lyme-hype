@@ -17,6 +17,7 @@ import {
   setActiveModelProvider
 } from './model-providers'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
+import { runGeneration } from './generation'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
 import { loadState, saveState } from './sessions-store'
@@ -289,6 +290,21 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`model providers: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 10. Generation wiring — DELIBERATELY only the empty-prompt guard, which
+  //     returns before touching any connector or the agent. Passing a real
+  //     prompt here would fire a live (billed) generation on whatever connector
+  //     the user has installed, so the self-test never does that.
+  try {
+    const guarded = await runGeneration({ mediaType: 'video', prompt: '   ' })
+    if (!guarded.ok && /prompt/i.test(guarded.error ?? '')) {
+      log('generation wiring: PASS (module loads; empty-prompt guard returns before any live call)')
+    } else {
+      fail(`generation wiring: guard did not fire (ok=${guarded.ok}, error=${guarded.error})`)
+    }
+  } catch (error) {
+    fail(`generation wiring: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

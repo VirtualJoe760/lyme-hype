@@ -7,6 +7,8 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  GenerationParams,
+  GenerationResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
@@ -33,6 +35,9 @@ export interface Bridge {
       kind: 'image' | 'video' | 'audio'
     ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null>
     importUrl(url: string): Promise<{ name: string; src: string | null; error: string | null } | null>
+  }
+  generate: {
+    run(params: GenerationParams): Promise<GenerationResult | null>
   }
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>
@@ -106,6 +111,13 @@ function createBrowserMock(): Bridge {
         error: 'Media import runs in the Electron main process — unavailable in browser preview.'
       })
     },
+    generate: {
+      run: async (params) => ({
+        ok: false,
+        mediaType: params.mediaType,
+        error: 'Generation runs in the Electron main process — unavailable in browser preview.'
+      })
+    },
     chatRealty: {
       status: async () => ({ connected: false }),
       pull: async () => ({
@@ -152,6 +164,7 @@ function createElectronBridge(): Bridge {
     sessions: lyme.sessions,
     agent: lyme.agent,
     media: lyme.media,
+    generate: lyme.generate,
     chatRealty: lyme.chatRealty,
     connectors: lyme.connectors,
     modelProviders: lyme.modelProviders,

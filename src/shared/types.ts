@@ -36,8 +36,30 @@ export type ThemeId = 'lime-cut' | 'night-terminal' | 'zest'
 
 export type MediaType = 'image' | 'video' | 'audio'
 export type SourceMethod = 'generate' | 'upload' | 'link'
-export type NodeStatus = 'rendering' | 'ready'
+export type NodeStatus = 'rendering' | 'ready' | 'error'
 export type StudioView = 'canvas' | 'storyboard'
+
+/** A generation request from the renderer. The agent picks the actual MCP tool. */
+export interface GenerationParams {
+  mediaType: MediaType
+  prompt: string
+  aspectRatio?: string
+  durationSec?: number
+  resolution?: string
+  /** Restrict to a single connector by id; omit to let the agent choose. */
+  connectorId?: string
+}
+
+export interface GenerationResult {
+  ok: boolean
+  /** lyme-asset:// URL of the imported result, when ok. */
+  src?: string
+  mediaType: MediaType
+  /** Short provenance note (tool/model/cost) for display. */
+  note?: string
+  costUsd?: number | null
+  error?: string
+}
 
 export interface MediaNodeData {
   label: string
@@ -58,6 +80,10 @@ export interface MediaNodeData {
   /** Provenance for connection-sourced nodes (e.g. ChatRealty listing). */
   detailUrl?: string
   listingKey?: string
+  /** Short provenance note from a real generation (tool/model). */
+  genNote?: string
+  /** Failure reason when status is 'error' (e.g. generation failed). */
+  error?: string
   /** Non-destructive in/out points (seconds) set in Play view; playback and
    *  export clamp to these without altering the underlying file. */
   trimIn?: number

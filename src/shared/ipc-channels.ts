@@ -15,6 +15,8 @@ export const IPC = {
   mediaImport: 'media:import',
   mediaImportUrl: 'media:import-url',
 
+  generateRun: 'generate:run',
+
   chatRealtyStatus: 'chatrealty:status',
   chatRealtyPull: 'chatrealty:pull',
 

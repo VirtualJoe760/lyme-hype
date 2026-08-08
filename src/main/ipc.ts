@@ -1,8 +1,15 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { ConnectorDef, ModelProviderDef, PersistedState, SecretRequest } from '@shared/types'
+import type {
+  ConnectorDef,
+  GenerationParams,
+  ModelProviderDef,
+  PersistedState,
+  SecretRequest
+} from '@shared/types'
 import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { runAgentPrompt } from './agent'
+import { runGeneration } from './generation'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
@@ -112,6 +119,11 @@ export function registerIpc(window: BrowserWindow): void {
     } catch (err) {
       return { name: '', src: null, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle(IPC.generateRun, (e, params: GenerationParams) => {
+    if (!isMainSender(e)) return null
+    return runGeneration(params)
   })
 
   ipcMain.handle(IPC.chatRealtyStatus, (e) => (isMainSender(e) ? { connected: hasChatRealtyToken() } : null))

@@ -494,6 +494,21 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
+.media-node.errored {
+  border-color: var(--danger);
+}
+
+.media-node.errored .thumb {
+  background: var(--panel);
+}
+
+.thumb-error {
+  color: var(--danger);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: help;
+}
+
 @keyframes pulse {
   0%,
   100% {

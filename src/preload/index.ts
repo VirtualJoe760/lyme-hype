@@ -9,6 +9,8 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  GenerationParams,
+  GenerationResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
@@ -51,6 +53,10 @@ const api = {
       url: string
     ): Promise<{ name: string; src: string | null; error: string | null } | null> =>
       ipcRenderer.invoke(IPC.mediaImportUrl, url)
+  },
+  generate: {
+    run: (params: GenerationParams): Promise<GenerationResult | null> =>
+      ipcRenderer.invoke(IPC.generateRun, params)
   },
   chatRealty: {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),
