@@ -6,7 +6,7 @@ import {
   type CatalogModel
 } from '@shared/model-catalog'
 import type { NodeManifest, NodeToolDef, ToolIcon } from '@shared/node-manifest'
-import type { ConnectorView, TrainedStyle } from '@shared/types'
+import type { ConnectorView, MediaType, TrainedStyle } from '@shared/types'
 import { useStudio } from '../store'
 import { Button } from './ui/Button'
 
@@ -63,6 +63,9 @@ export function NodePanel(props: {
   const focusNode = useStudio((s) => s.focusNode)
   const openSettings = useStudio((s) => s.openSettings)
   const openEditor = useStudio((s) => s.openEditor)
+  const applyHandoff = useStudio((s) => s.applyHandoff)
+  const setNodeInput = useStudio((s) => s.setNodeInput)
+  const nodeInputs = useStudio((s) => s.nodeInputs)
   const editorMask = useStudio((s) => s.editor?.mask)
 
   // Selecting s.nodes (a stable reference) and filtering in a memo — a selector that
@@ -77,6 +80,9 @@ export function NodePanel(props: {
   const [takes, setTakes] = useState(1)
   const [styleId, setStyleId] = useState('')
   const [refs, setRefs] = useState<string[]>([])
+  const [voice, setVoice] = useState('')
+  const [loraKind, setLoraKind] = useState<'subject' | 'style'>('subject')
+  const [steps, setSteps] = useState(1000)
   const [openSetting, setOpenSetting] = useState<string | null>(null)
   const [params, setParams] = useState<Record<string, string>>(() =>
     Object.fromEntries(manifest.parameters.map((p) => [p.id, p.options?.[0] ?? '']))
@@ -129,25 +135,64 @@ export function NodePanel(props: {
       ? `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
       : undefined
 
+    const inputs = nodeInputs[manifest.id] ?? {}
+    const sourceSrc = activeTake?.src
+
     stageGenerate(manifest.id, {
       label: `${manifest.id}_${Date.now().toString().slice(-4)}`,
       mediaType: manifest.media,
       prompt: prompt.trim(),
-      takes,
+      takes: tool.editorMode === 'mask' ? 1 : takes,
       modelId: model?.id,
       connectorId: style ? (style.connectorId ?? 'fal') : model?.connectorId,
       modelHint: styleHint ?? model?.providerModelId,
       referenceImagePaths: refs.length > 0 ? refs : undefined,
+      maskDataUrl: tool.editorMode === 'mask' ? editorMask : undefined,
+      // A masked edit needs the image it is editing, not just the mask.
+      sourceMediaPath: tool.editorMode === 'mask' ? sourceSrc : inputs['sourceVideo'],
+      startFramePath: inputs['startFrame'] ?? inputs['sourceImage'],
+      endFramePath: inputs['endFrame'],
+      referenceAudioPaths: inputs['audioTrack'] ? [inputs['audioTrack']] : undefined,
+      extendVideoPath: tool.id === 'extend' ? sourceSrc : undefined,
       aspectRatio: params['aspect'],
       resolution: params['resolution'],
       durationSec: params['duration'] ? parseInt(params['duration'], 10) : undefined
     })
   }
 
+  // A tool that edits through the canvas surface cannot run until that surface has
+  // produced its input — an Inpaint button with no mask would generate an unmasked
+  // image and silently replace the take.
+  const needsMask = tool.editorMode === 'mask'
+  const blockedReason = !canRun
+    ? 'Connect a tool to run'
+    : needsMask && !editorMask
+      ? 'Brush a mask first'
+      : tool.editorMode && tool.editorMode !== 'mask'
+        ? `${tool.label} isn’t built yet`
+        : null
+
+  /** Settings whose value is a piece of media picked off the canvas. Each maps to the
+   *  same handoff role name, so a pill-delivered artifact and a hand-picked one land
+   *  in the same slot. */
+  const MEDIA_ROLES: Record<string, { role: string; media: MediaType }> = {
+    startFrame: { role: 'startFrame', media: 'image' },
+    endFrame: { role: 'endFrame', media: 'image' },
+    sourceMedia: { role: 'sourceVideo', media: 'video' },
+    person: { role: 'faceSource', media: 'image' }
+  }
+
   function settingValue(kind: string): string {
     if (kind === 'takes') return String(takes)
     if (kind === 'style') return style ? style.name.slice(0, 9) : 'none'
     if (kind === 'refs') return refs.length ? String(refs.length) : 'none'
+    if (kind === 'voice') return voice ? voice.slice(0, 9) : 'default'
+    if (kind === 'loraKind') return loraKind
+    if (kind === 'steps') return String(steps)
+    if (kind === 'caption') return 'auto'
+    if (kind === 'language') return 'en'
+    const mediaRole = MEDIA_ROLES[kind]
+    if (mediaRole) return (nodeInputs[manifest.id] ?? {})[mediaRole.role] ? 'set' : 'none'
     return 'none'
   }
 
@@ -215,6 +260,14 @@ export function NodePanel(props: {
                   setTakes(takes >= 8 ? 1 : takes === 1 ? 2 : takes === 2 ? 4 : 8)
                   return
                 }
+                if (s.kind === 'loraKind') {
+                  setLoraKind(loraKind === 'subject' ? 'style' : 'subject')
+                  return
+                }
+                if (s.kind === 'steps') {
+                  setSteps(steps >= 2000 ? 500 : steps + 500)
+                  return
+                }
                 setOpenSetting(openSetting === s.id ? null : s.id)
               }}
             >
@@ -246,6 +299,58 @@ export function NodePanel(props: {
               {s.name}
             </button>
           ))}
+        </div>
+      )}
+
+      {openSetting && MEDIA_ROLES[manifest.settings.find((s) => s.id === openSetting)?.kind ?? ''] && (
+        <div className="np-pop">
+          {(() => {
+            const kind = manifest.settings.find((s) => s.id === openSetting)!.kind
+            const { role, media } = MEDIA_ROLES[kind]
+            const options = nodes.filter(
+              (n) => n.data.mediaType === media && n.data.status === 'ready' && n.data.src
+            )
+            const current = (nodeInputs[manifest.id] ?? {})[role]
+            if (options.length === 0) {
+              return <span className="np-pop-empty">no {media} on the canvas to use</span>
+            }
+            return options.map((n) => (
+              <button
+                key={n.id}
+                className={`np-ref${current === n.data.src ? ' on' : ''}`}
+                title={n.data.label}
+                onClick={() =>
+                  setNodeInput(manifest.id, role, current === n.data.src ? undefined : n.data.src)
+                }
+              >
+                {media === 'image' ? (
+                  <img src={n.data.src} alt={n.data.label} />
+                ) : (
+                  <video src={n.data.src} muted />
+                )}
+              </button>
+            ))
+          })()}
+        </div>
+      )}
+
+      {openSetting === 'voice' && (
+        <div className="np-pop">
+          <button className={`np-pill${voice === '' ? ' on' : ''}`} onClick={() => setVoice('')}>
+            default
+          </button>
+          {(props.styles ?? [])
+            .filter((s) => s.voiceName)
+            .map((s) => (
+              <button
+                key={s.id}
+                className={`np-pill${voice === s.voiceName ? ' on' : ''}`}
+                onClick={() => setVoice(s.voiceName ?? '')}
+              >
+                {s.voiceName}
+              </button>
+            ))}
+          <span className="np-pop-empty">voices come from Reference people (Settings › Trained styles)</span>
         </div>
       )}
 
@@ -300,9 +405,11 @@ export function NodePanel(props: {
         </div>
       )}
 
-      {editorMask && tool.editorMode === 'mask' && (
+      {needsMask && (
         <div className="np-local">
-          mask ready — not yet handed to the generation call (build-plan Phase 19)
+          {editorMask
+            ? 'mask ready — painted areas get regenerated'
+            : 'no mask yet — the canvas opened, brush one there'}
         </div>
       )}
 
@@ -341,10 +448,10 @@ export function NodePanel(props: {
 
       <Button
         variant="block-primary"
-        disabled={!canRun || !prompt.trim()}
+        disabled={!!blockedReason || !prompt.trim()}
         onClick={run}
       >
-        {canRun ? `${tool.verb}${takes > 1 ? ` ${takes}` : ''}` : 'Connect a tool to run'}
+        {blockedReason ?? `${tool.verb}${takes > 1 && !needsMask ? ` ${takes}` : ''}`}
       </Button>
 
       <Button
@@ -367,7 +474,7 @@ export function NodePanel(props: {
                 key={`${h.to}-${h.role}`}
                 className={`np-pill${h.ready ? '' : ' dim'}`}
                 title={h.ready ? `${h.to} — ${h.label}` : `needs ${h.requires ?? 'nothing'}`}
-                onClick={() => h.ready && commitStage(manifest.id)}
+                onClick={() => h.ready && applyHandoff(manifest.id, h.to, h.role)}
               >
                 {h.to} · {h.label}
               </button>

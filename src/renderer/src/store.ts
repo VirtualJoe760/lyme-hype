@@ -344,10 +344,22 @@ interface StudioStore {
       endFramePath?: string
       referenceAudioPaths?: string[]
       sourceMediaPath?: string
+      maskDataUrl?: string
       extendVideoPath?: string
       extendVideoDurationSec?: number
     }
   ): void
+
+  /** Commit the active take and open the target node with it already filled into the
+   *  role the handoff names — a pill that says "as its start frame" has to actually
+   *  set the start frame. */
+  applyHandoff(fromManifestId: string, to: string, role: string): void
+  /** Set by applyHandoff; AsidePanel navigates to it and clears it. */
+  pendingNodeScreen: string | null
+  clearPendingNodeScreen(): void
+  /** Inputs carried into a node by a handoff, keyed by manifest id then role. */
+  nodeInputs: Record<string, Record<string, string>>
+  setNodeInput(manifestId: string, role: string, src: string | undefined): void
   /** Active take → a real canvas node. Returns its id, or null when there is
    *  nothing ready to commit. */
   commitStage(manifestId: string): string | null
@@ -573,6 +585,8 @@ export const useStudio = create<StudioStore>((set, get) => {
     theme: 'lime-cut',
     playNodeId: null,
     editor: null,
+    pendingNodeScreen: null,
+    nodeInputs: {},
     playFrom: 'canvas',
     combine: null,
     agent: {
@@ -1338,6 +1352,7 @@ export const useStudio = create<StudioStore>((set, get) => {
               endFramePath: input.endFramePath,
               referenceAudioPaths: input.referenceAudioPaths,
               sourceMediaPath: input.sourceMediaPath,
+              maskDataUrl: input.maskDataUrl,
               extendVideoPath: input.extendVideoPath,
               extendVideoDurationSec: input.extendVideoDurationSec
             })
@@ -1356,6 +1371,29 @@ export const useStudio = create<StudioStore>((set, get) => {
           )
         })()
       }
+    },
+
+    clearPendingNodeScreen() {
+      set({ pendingNodeScreen: null })
+    },
+
+    setNodeInput(manifestId, role, src) {
+      const all = get().nodeInputs
+      const forNode = { ...(all[manifestId] ?? {}) }
+      if (src) forNode[role] = src
+      else delete forNode[role]
+      set({ nodeInputs: { ...all, [manifestId]: forNode } })
+    },
+
+    applyHandoff(fromManifestId, to, role) {
+      const stage = readStage(fromManifestId)
+      const take = stage.takes[stage.activeIndex]
+      if (!take || take.status !== 'ready' || !take.src) return
+      const src = take.src
+      // Commit first: the artifact has to exist as a node to be an input to anything.
+      get().commitStage(fromManifestId)
+      get().setNodeInput(to, role, src)
+      set({ pendingNodeScreen: to })
     },
 
     commitStage(manifestId) {

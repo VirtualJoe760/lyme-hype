@@ -129,6 +129,12 @@ export interface GenerationParams {
   /** The face/performance media to drive (Deepfake's source video or still
    *  photo) — lyme-asset:// URL or absolute path, resolved main-side. */
   sourceMediaPath?: string
+  /** Resolved main-side from maskDataUrl — the on-disk mask path handed to tools. */
+  maskPath?: string
+  /** Inpaint mask painted in the canvas editor — a `data:image/png;base64,…` URL
+   *  the main process writes to the asset store before handing the agent a path.
+   *  Painted areas are what gets regenerated. */
+  maskDataUrl?: string
   /** A previously generated video to extend by ~7s (Veo via the Gemini
    *  wrapper's gemini_extend_video) — lyme-asset:// URL or absolute path,
    *  resolved main-side. Set alongside `extendVideoDurationSec` when the

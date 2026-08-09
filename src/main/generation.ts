@@ -1,6 +1,12 @@
 import { app } from 'electron'
 import type { GenerationParams, GenerationResult } from '@shared/types'
-import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
+import {
+  assetPathForUrl,
+  importFileAsset,
+  importUrlAsset,
+  mediaTypeForPath,
+  saveImageAsset
+} from './asset-store'
 import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
@@ -137,6 +143,12 @@ function buildPrompt(params: GenerationParams): string {
       'If the chosen tool accepts a reference_image_paths parameter, pass these absolute paths to it.'
     )
   }
+  if (params.maskPath) {
+    lines.push(
+      `INPAINT MASK on disk: ${params.maskPath} — the painted (opaque) areas are the region to regenerate; transparent areas must be preserved exactly.`,
+      'This is a masked edit, not a fresh generation: pass the source image AND this mask to a tool that accepts a mask parameter (fal-ai/flux-krea-lora/inpainting, or gpt-image-2 via the images/edits mask field). If no connected tool accepts a mask, say so with RESULT_ERROR rather than generating an unmasked image.'
+    )
+  }
   if (params.startFramePath) {
     lines.push(
       `First-frame image on disk: ${params.startFramePath} — for a tool with a literal start_frame_path parameter (e.g. gemini_generate_video), pass it there directly. Otherwise (e.g. fal's run_model/submit_job), call get_model_schema first and use whatever field name that model's schema expects for a starting image (commonly image_url, start_image_url, or first_frame_image) — do not assume start_frame_path is a real parameter on every tool.`
@@ -195,6 +207,15 @@ function toDiskPath(ref: string): string | null {
   return ref
 }
 
+/** The mask is painted in the renderer and arrives as a data URL; wrappers read files,
+ *  so it lands in the asset store first and travels as a path like every other input. */
+function maskDataUrlToPath(dataUrl: string): string | undefined {
+  const match = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(dataUrl)
+  if (!match) return undefined
+  const saved = saveImageAsset(match[2], match[1])
+  return assetPathForUrl(saved.url) ?? undefined
+}
+
 export async function runGeneration(params: GenerationParams): Promise<GenerationResult> {
   const fail = (error: string): GenerationResult => ({ ok: false, mediaType: params.mediaType, error })
 
@@ -211,7 +232,8 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       ?.map(toDiskPath)
       .filter((p): p is string => p !== null),
     sourceMediaPath: params.sourceMediaPath ? (toDiskPath(params.sourceMediaPath) ?? undefined) : undefined,
-    extendVideoPath: params.extendVideoPath ? (toDiskPath(params.extendVideoPath) ?? undefined) : undefined
+    extendVideoPath: params.extendVideoPath ? (toDiskPath(params.extendVideoPath) ?? undefined) : undefined,
+    maskPath: params.maskDataUrl ? maskDataUrlToPath(params.maskDataUrl) : undefined
   }
 
   const restrictIds =

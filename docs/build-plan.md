@@ -200,7 +200,7 @@ Reference implementation for everything after it. Rows per the concept's §01.
 - [x] Refuse-when-empty — verified in the browser preview: zero ready models renders "Connect a tool to run", disabled.
 - [x] Reference-image picker (canvas image nodes) + trained-style square that still routes through whichever backend trained the style.
 
-## Phase 18 — Artifact handoffs between nodes — PARTIAL
+## Phase 18 — Artifact handoffs between nodes ✅ (2026-08-09)
 
 - [x] `ARTIFACT_HANDOFFS` + `handoffsFor()` — 12 routes, capability-gated.
 - [x] "Continue in" pill row, capability-gated, appearing only once an artifact exists.
@@ -213,13 +213,13 @@ The largest single item, and the one with real UI risk.
 
 - [x] `editor` state beside `playNodeId`; `App.tsx` swaps the middle pane and hides the rail.
 - [x] Mask brush (brush/erase/clear/size, coords scaled into image space, PNG export). **No zoom/pan yet.** Built and typechecked but NOT visually exercised — it needs a ready artifact, which needs a live billed generation.
-- [ ] Mask is NOT handed to the generation call — `GenerationParams` has no mask field and main-side has no handling. The panel says so in place rather than implying otherwise.
+- [x] Mask wired end to end: `maskDataUrl` → `saveImageAsset` → `maskPath` → an explicit masked-edit instruction in `buildPrompt` that tells the agent to fail rather than generate unmasked. Inpaint is disabled until a mask exists.
 - [ ] Panel keeps prompt + model pills + action; only the artifact surface moves.
 - [ ] Expand and Reframe are modes of the surface but render an honest "not built yet" line.
 
-## Phase 20 — Roll the shell out to the other nodes — BLOCKED, deliberately
+## Phase 20 — Roll the shell out to the other nodes — MOSTLY DONE
 
-- [ ] **Blocked on settings kinds.** All four manifests exist, but the shell implements only `style`, `refs` and `takes`. Swapping video/audio/lora/deepfake onto it today would REGRESS shipped behavior — Yapper voice browsing, the Suno fallback, LoRA dataset management, Deepfake person/source pickers. Build `voice`, `sourceMedia`, `startFrame`/`endFrame`, `loraKind`/`steps`/`caption`, `person` first.
+- [x] **Video and Deepfake are on the shell**; `VideoScreen`/`DeepfakeScreen` deleted. Settings kinds built: media pickers (start/end frame, source, person) that share the handoff role names, plus voice, loraKind, steps. Audio and LoRA stay on their existing screens — audio's ElevenLabs/Yapper voice browsing and LoRA's dataset management are real surfaces the shell does not model yet. Original note: All four manifests exist, but the shell implements only `style`, `refs` and `takes`. Swapping video/audio/lora/deepfake onto it today would REGRESS shipped behavior — Yapper voice browsing, the Suno fallback, LoRA dataset management, Deepfake person/source pickers. Build `voice`, `sourceMedia`, `startFrame`/`endFrame`, `loraKind`/`steps`/`caption`, `person` first.
 - [ ] **Generate video** — start/end-frame settings squares, Extend tool (**only 4 models**), lipsync handoff.
 - [ ] **Create a LoRA** — preview holds the training set; Finish saves a person.
 - [ ] **Deepfake** — toolbar as a left-to-right chain (Speech → Lipsync → Face swap), preview carries stage state. Face swap is **one model, muapi** — same refuse-when-empty case.

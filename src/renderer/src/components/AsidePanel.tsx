@@ -84,38 +84,7 @@ function tileReady(
   return { ready: false, needs: need.label, options: need.anyOf.join(' / ') }
 }
 
-const ASPECTS = ['9:16', '1:1', '16:9']
-const DURATIONS = ['6s', '12s', '15s']
-const RESOLUTIONS = ['720p', '1080p']
 
-/** Yapper's video-generation catalog (docs/connectors/reference/yapper.md) —
- *  the hosted MCP connector is a full aggregator, not lipsync-only, but
- *  nothing let a user reach a specific model by id before this. Passed as
- *  `modelHint`; `generation.ts`'s buildPrompt turns it into a preference line
- *  the agent matches against yapper_start_process's own `model` enum. */
-const YAPPER_VIDEO_MODELS: { id: string; label: string }[] = [
-  { id: '', label: 'Yapper model: agent picks' },
-  { id: 'seedance-2.5', label: 'seedance-2.5 (4-30s · 720p)' },
-  { id: 'seedance-2.0', label: 'seedance-2.0 (4-15s · 2160p)' },
-  { id: 'seedance-2.0-fast', label: 'seedance-2.0-fast (4-15s · 2160p)' },
-  { id: 'seedance-2.0-mini', label: 'seedance-2.0-mini (4-15s · 720p, cheap)' },
-  { id: 'seedance-2.0-open', label: 'seedance-2.0-open (4-15s · 2160p)' },
-  { id: 'kling-3.0', label: 'kling-3.0 (4-15s · 1080p)' },
-  { id: 'kling-3.0-pro', label: 'kling-3.0-pro (4-15s · 1080p)' },
-  { id: 'veo3-quality', label: 'veo3-quality (8s · 1080p)' },
-  { id: 'veo3-fast', label: 'veo3-fast (8s · 1080p, cheap)' },
-  { id: 'sora-2', label: 'sora-2 (4-20s · 1080p)' },
-  { id: 'sora-2-pro', label: 'sora-2-pro (4-20s · 1080p)' },
-  { id: 'wan-3.0', label: 'wan-3.0 (2-30s · 1080p)' },
-  { id: 'wan-2.7', label: 'wan-2.7 (2-10s · 1080p)' },
-  { id: 'flux-3', label: 'flux-3 (5-20s · 1080p)' },
-  { id: 'minimax-h3', label: 'minimax-h3 (5-15s · 1440p)' },
-  { id: 'pixverse-v6', label: 'pixverse-v6 (1-15s · 1080p)' },
-  { id: 'grok-imagine', label: 'grok-imagine (4-15s · 720p)' },
-  { id: 'grok-imagine-v1.5', label: 'grok-imagine-v1.5 (1-15s · 720p)' },
-  { id: 'gemini-omni-flash', label: 'gemini-omni-flash (3-10s · 1080p, no frame ctrl)' },
-  { id: 'happy-horse', label: 'happy-horse (3-15s · 720p)' }
-]
 
 let generateCounter = 0
 function labelFromPrompt(prompt: string, prefix: string): string {
@@ -185,233 +154,6 @@ function ResultRow(props: { nodeId: string | null }): React.JSX.Element | null {
         view →
       </button>
     </div>
-  )
-}
-
-function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
-  const generateMedia = useStudio((s) => s.generateMedia)
-  const nodes = useStudio((s) => s.nodes)
-  const [prompt, setPrompt] = useState('')
-  const [aspect, setAspect] = useState('9:16')
-  const [duration, setDuration] = useState('12s')
-  const [resultId, setResultId] = useState<string | null>(null)
-  const [showMore, setShowMore] = useState(false)
-  const [resolution, setResolution] = useState('1080p')
-  // Routing intent (catalog.md): muapi is the video primary when installed.
-  const muapiReady = connectorReady(props.connectors, 'muapi')
-  const geminiReady = connectorReady(props.connectors, 'gemini')
-  const yapperReady = connectorReady(props.connectors, 'yapper')
-  const falReady = connectorReady(props.connectors, 'fal')
-  const [connector, setConnector] = useState(muapiReady ? 'muapi' : '')
-  const [startFrameNodeId, setStartFrameNodeId] = useState('')
-  const [yapperModel, setYapperModel] = useState('')
-  // i2v used to force gemini unconditionally (docs/architecture/capability-map.md
-  // §2's "i2v everywhere except Gemini needs asset-upload first" — fal's half of
-  // that gap closed 2026-08-09, this picker is the UI half). Only offered once
-  // fal is actually connected; gemini stays the default either way.
-  const [i2vConnector, setI2vConnector] = useState<'gemini' | 'fal'>('gemini')
-  const { ready } = tileReady(props.connectors, 'video')
-
-  // Extend an existing clip (Veo, +7s per call, 148s chained-extension cap) —
-  // a separate flow from fresh generation, docs/ui/node-enrichment-strategy.md
-  // Recommendations #3. Only Gemini's wrapper supports this.
-  const extendableNodes = nodes.filter(
-    (n) => n.data.mediaType === 'video' && n.data.status === 'ready' && n.data.src && !n.data.panel
-  )
-  const [extendNodeId, setExtendNodeId] = useState('')
-  const [extendPrompt, setExtendPrompt] = useState('')
-  const [extendResultId, setExtendResultId] = useState<string | null>(null)
-  const extendNode = extendableNodes.find((n) => n.id === extendNodeId)
-  const extendCurrentSec = extendNode?.data.videoDurationSec
-  const VEO_EXTENSION_CAP_SEC = 148
-  const extendWouldExceedCap =
-    extendCurrentSec !== undefined && extendCurrentSec + 7 > VEO_EXTENSION_CAP_SEC
-
-  // i2v: only Gemini's Veo wrapper accepts a start_frame_path today (capability
-  // map §2 — muapi/fal need asset-upload first, still open plumbing), so
-  // picking a starting frame overrides whatever connector is otherwise chosen.
-  const imageNodes = nodes.filter(
-    (n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src && !n.data.panel
-  )
-  const startFrameSrc = imageNodes.find((n) => n.id === startFrameNodeId)?.data.src
-  const effectiveConnectorId = startFrameSrc
-    ? i2vConnector
-    : yapperModel
-      ? 'yapper'
-      : connector || undefined
-  const runOk = startFrameSrc
-    ? i2vConnector === 'fal'
-      ? falReady
-      : geminiReady
-    : yapperModel
-      ? yapperReady
-      : ready
-  const runLabel = startFrameSrc
-    ? i2vConnector === 'fal'
-      ? falReady
-        ? 'runs on fal · i2v (agent picks a catalog model)'
-        : 'i2v needs fal connected'
-      : geminiReady
-        ? 'runs on gemini · i2v start frame (Veo)'
-        : 'i2v needs gemini connected'
-    : yapperModel
-      ? yapperReady
-        ? `runs on yapper · ${yapperModel}`
-        : 'needs yapper connected'
-      : ready
-        ? `runs on ${connector || 'agent pick'}${connector === 'muapi' ? ' · seedance' : ''}`
-        : 'no video connector connected'
-
-  return (
-    <>
-      <RunLine ok={runOk} label={runLabel} cost="$$ paid" />
-      <textarea
-        className="prompt-area"
-        placeholder="lantern spirit rising from a river of flames, chorus swell, wide shot"
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-      />
-      <ChipRow options={ASPECTS} value={aspect} onChange={setAspect} />
-      <ChipRow options={DURATIONS} value={duration} onChange={setDuration} />
-      <button className="more-toggle" onClick={() => setShowMore(!showMore)}>
-        {showMore ? '▾' : '▸'} More options
-      </button>
-      {showMore && (
-        <div className="more-body">
-          <ChipRow options={RESOLUTIONS} value={resolution} onChange={setResolution} />
-          <select
-            className="cr-input create-select"
-            value={connector}
-            onChange={(e) => setConnector(e.target.value)}
-          >
-            <option value="">Connector: agent picks</option>
-            {props.connectors.map((c) => (
-              <option key={c.id} value={c.id}>
-                Connector: {c.id}
-              </option>
-            ))}
-          </select>
-          {imageNodes.length > 0 && (
-            <select
-              className="cr-input create-select"
-              value={startFrameNodeId}
-              onChange={(e) => setStartFrameNodeId(e.target.value)}
-            >
-              <option value="">Starting frame: none (text → video)</option>
-              {imageNodes.map((n) => (
-                <option key={n.id} value={n.id}>
-                  Starting frame: {n.data.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {startFrameSrc && falReady && (
-            <select
-              className="cr-input create-select"
-              value={i2vConnector}
-              onChange={(e) => setI2vConnector(e.target.value as 'gemini' | 'fal')}
-            >
-              <option value="gemini">i2v via: gemini (Veo, verified)</option>
-              <option value="fal">i2v via: fal (catalog i2v — Kling/Seedance/WAN)</option>
-            </select>
-          )}
-          {yapperReady && (
-            <select
-              className="cr-input create-select"
-              value={yapperModel}
-              onChange={(e) => setYapperModel(e.target.value)}
-            >
-              {YAPPER_VIDEO_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      )}
-      <button
-        className="generate-btn"
-        disabled={!prompt.trim()}
-        onClick={() =>
-          setResultId(
-            generateMedia({
-              label: labelFromPrompt(prompt, 'clip'),
-              mediaType: 'video',
-              prompt: prompt.trim(),
-              aspectRatio: aspect,
-              durationSec: parseInt(duration, 10) || undefined,
-              resolution,
-              connectorId: effectiveConnectorId,
-              startFramePath: startFrameSrc,
-              modelHint: startFrameSrc ? undefined : yapperModel || undefined
-            })
-          )
-        }
-      >
-        Generate
-      </button>
-      <ResultRow nodeId={resultId} />
-      {extendableNodes.length > 0 && (
-        <div className="more-body">
-          <select
-            className="cr-input create-select"
-            value={extendNodeId}
-            onChange={(e) => setExtendNodeId(e.target.value)}
-          >
-            <option value="">Extend an existing clip: none</option>
-            {extendableNodes.map((n) => (
-              <option key={n.id} value={n.id}>
-                Extend: {n.data.label}
-                {n.data.videoDurationSec ? ` (${Math.round(n.data.videoDurationSec)}s)` : ''}
-              </option>
-            ))}
-          </select>
-          {extendNode && (
-            <>
-              <textarea
-                className="prompt-area"
-                placeholder="what happens in the next 7 seconds"
-                value={extendPrompt}
-                onChange={(e) => setExtendPrompt(e.target.value)}
-              />
-              <RunLine
-                ok={geminiReady && !extendWouldExceedCap}
-                label={
-                  !geminiReady
-                    ? 'extend needs gemini connected'
-                    : extendWouldExceedCap
-                      ? `would exceed Veo's ${VEO_EXTENSION_CAP_SEC}s cap`
-                      : extendCurrentSec !== undefined
-                        ? `runs on gemini · +7s (${Math.round(extendCurrentSec)}s → ${Math.round(extendCurrentSec + 7)}s)`
-                        : 'runs on gemini · +7s (length unknown, cap unenforced client-side)'
-                }
-                cost="$$ paid"
-              />
-              <button
-                className="generate-btn"
-                disabled={!extendPrompt.trim() || !geminiReady || extendWouldExceedCap}
-                onClick={() =>
-                  setExtendResultId(
-                    generateMedia({
-                      label: labelFromPrompt(extendPrompt, 'clip'),
-                      mediaType: 'video',
-                      prompt: extendPrompt.trim(),
-                      connectorId: 'gemini',
-                      extendVideoPath: extendNode.data.src,
-                      extendVideoDurationSec: extendCurrentSec
-                    })
-                  )
-                }
-              >
-                Extend +7s
-              </button>
-              <ResultRow nodeId={extendResultId} />
-            </>
-          )}
-        </div>
-      )}
-    </>
   )
 }
 
@@ -1111,23 +853,6 @@ function LoraScreen(props: {
  * actually Reference people (have a voice paired) — a bare trained style with
  * no voice can't drive Stage 1's speech anyway.
  */
-function suggestReferencePerson(styles: TrainedStyle[], toneHint: string): TrainedStyle | undefined {
-  const hintWords = new Set(toneHint.toLowerCase().match(/[a-z]+/g) ?? [])
-  if (hintWords.size === 0) return undefined
-  let best: TrainedStyle | undefined
-  let bestScore = 0
-  for (const style of styles) {
-    if (!style.voiceName || !style.personaTone) continue
-    const toneWords = style.personaTone.toLowerCase().match(/[a-z]+/g) ?? []
-    const score = toneWords.filter((w) => hintWords.has(w)).length
-    if (score > bestScore) {
-      best = style
-      bestScore = score
-    }
-  }
-  return best
-}
-
 /**
  * Staged, per docs/ui/node-enrichment-strategy.md's flagship build order: a
  * Reference person (trained identity + ElevenLabs voice, paired in Settings ›
@@ -1138,204 +863,6 @@ function suggestReferencePerson(styles: TrainedStyle[], toneHint: string): Train
  * the agent can chain an upload tool into a lip-sync/face-swap tool without
  * opening every installed connector.
  */
-function DeepfakeScreen(props: {
-  connectors: ConnectorView[]
-  styles: TrainedStyle[]
-  onTrainFromFace: (imageSrc: string, name: string) => void
-}): React.JSX.Element {
-  const nodes = useStudio((s) => s.nodes)
-  const addNode = useStudio((s) => s.addNode)
-  const generateMedia = useStudio((s) => s.generateMedia)
-  const deepfakeHandoff = useStudio((s) => s.deepfakeHandoff)
-  const clearDeepfakeHandoff = useStudio((s) => s.clearDeepfakeHandoff)
-
-  const [personId, setPersonId] = useState('')
-  const [voiceName, setVoiceName] = useState('')
-  const [script, setScript] = useState('')
-  const [faceNodeId, setFaceNodeId] = useState('')
-  const [speechBusy, setSpeechBusy] = useState(false)
-  const [speechStatus, setSpeechStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
-  const [speechSrc, setSpeechSrc] = useState<string | null>(null)
-  const [resultId, setResultId] = useState<string | null>(null)
-  const [handoffNote, setHandoffNote] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!deepfakeHandoff) return
-    setScript(deepfakeHandoff.script)
-    const suggested = suggestReferencePerson(props.styles, deepfakeHandoff.toneHint)
-    if (suggested) {
-      setPersonId(suggested.id)
-      setHandoffNote(
-        `Script sent from Storyboard. Feeling "${deepfakeHandoff.toneHint}" matched "${suggested.name}" — pick a different Reference person if that's wrong.`
-      )
-    } else {
-      setHandoffNote(
-        deepfakeHandoff.toneHint
-          ? `Script sent from Storyboard. No Reference person's tone matched "${deepfakeHandoff.toneHint}" — pick one below, or tag a person's tone in Settings › Trained styles.`
-          : 'Script sent from Storyboard.'
-      )
-    }
-    clearDeepfakeHandoff()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepfakeHandoff])
-
-  const person = props.styles.find((s) => s.id === personId)
-  const elevenlabsReady = connectorReady(props.connectors, 'elevenlabs')
-  const faceConnectorIds = ['yapper', 'muapi'].filter((id) => connectorReady(props.connectors, id))
-  const ready = faceConnectorIds.length > 0
-  const effectiveVoice = voiceName.trim() || person?.voiceName || ''
-
-  const faceNodes = nodes.filter(
-    (n) =>
-      (n.data.mediaType === 'video' || n.data.mediaType === 'image') &&
-      n.data.status === 'ready' &&
-      n.data.src &&
-      !n.data.panel
-  )
-  const faceNode = faceNodes.find((n) => n.id === faceNodeId)
-  const faceImageSrc = faceNode?.data.mediaType === 'image' ? faceNode.data.src : undefined
-
-  async function generateSpeech(): Promise<void> {
-    setSpeechBusy(true)
-    setSpeechStatus(null)
-    try {
-      const result = await bridge.audioTools.tts({ text: script, voiceName: effectiveVoice || undefined })
-      if (result?.ok && result.src) {
-        addNode({
-          label: labelFromPrompt(script, 'df-speech'),
-          mediaType: 'audio',
-          source: 'generate',
-          src: result.src,
-          startRendering: false
-        })
-        setSpeechSrc(result.src)
-        setSpeechStatus({ kind: 'ok', text: 'Speech generated — audio node added to the canvas.' })
-      } else {
-        setSpeechStatus({ kind: 'error', text: result?.error ?? 'Speech generation failed.' })
-      }
-    } finally {
-      setSpeechBusy(false)
-    }
-  }
-
-  function generateFace(): void {
-    const faceSrc = faceNode?.data.src
-    if (!speechSrc || !faceSrc) return
-    const chainNote =
-      faceConnectorIds.includes('muapi') && faceConnectorIds.includes('yapper')
-        ? 'Preferred route: muapi — call its own upload tool on the source media and the speech audio to get hosted URLs (if not already URLs), then muapi_edit_lipsync with those URLs. If the source is only a still photo (no source performance video), use muapi_enhance_face_swap in image mode instead — that swaps identity but will not move the mouth to match speech. Yapper is the fallback: import the same hosted URLs as Yapper assets (yapper_import_asset), then start a video-lipsync process with model "max".'
-        : faceConnectorIds.includes('muapi')
-          ? 'Use muapi: call its own upload tool on the source media and the speech audio to get hosted URLs, then muapi_edit_lipsync with those URLs (or muapi_enhance_face_swap in image mode if the source is only a still photo, no source video).'
-          : 'Use Yapper: if the source media and speech audio are not already Yapper assets, import each by URL with yapper_import_asset (they need to already be hosted somewhere reachable — this connector has no local-file-upload tool), then start a video-lipsync process with model "max".'
-
-    setResultId(
-      generateMedia({
-        label: labelFromPrompt(script, 'df'),
-        mediaType: 'video',
-        prompt: [
-          'Talking-avatar lip-sync: drive the source face/performance media with the already-generated speech audio — do not regenerate the speech.',
-          person ? `Reference person: "${person.name}".` : undefined,
-          `Script that was spoken: "${script.trim()}"`,
-          chainNote
-        ]
-          .filter(Boolean)
-          .join(' '),
-        connectorIds: faceConnectorIds,
-        sourceMediaPath: faceSrc,
-        referenceAudioPaths: [speechSrc]
-      })
-    )
-  }
-
-  return (
-    <>
-      <RunLine
-        ok={ready}
-        label={ready ? `${faceConnectorIds.join(' + ')} · lip-sync/face` : 'Yapper or muapi not connected'}
-        cost="credits"
-      />
-      <p className="aside-help">
-        Staged talking-avatar: pick a Reference person (identity + voice, paired in Settings ›
-        Trained styles), write the script, generate the speech, then drive a source video or photo
-        with it.
-      </p>
-      {handoffNote && <p className="cr-msg">{handoffNote}</p>}
-
-      {props.styles.length > 0 && (
-        <select
-          className="cr-input create-select"
-          value={personId}
-          onChange={(e) => setPersonId(e.target.value)}
-        >
-          <option value="">Reference person: none (type a voice name below)</option>
-          {props.styles.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-              {s.voiceName ? ` · voice: ${s.voiceName}` : ' · no voice yet'}
-            </option>
-          ))}
-        </select>
-      )}
-      <input
-        className="cr-input create-select"
-        placeholder="ElevenLabs voice name (from the person above, or type one)"
-        value={voiceName}
-        onChange={(e) => setVoiceName(e.target.value)}
-      />
-      <textarea
-        className="prompt-area"
-        placeholder="The script they deliver…"
-        value={script}
-        onChange={(e) => setScript(e.target.value)}
-      />
-      <button
-        className="action-btn"
-        disabled={!elevenlabsReady || speechBusy || !script.trim()}
-        title={elevenlabsReady ? undefined : 'ElevenLabs not connected'}
-        onClick={() => void generateSpeech()}
-      >
-        {speechBusy ? 'Generating speech…' : '1 · Generate speech (ElevenLabs)'}
-      </button>
-      {speechStatus && (
-        <p className={`cr-msg ${speechStatus.kind === 'ok' ? 'done' : 'error'}`}>{speechStatus.text}</p>
-      )}
-
-      {faceNodes.length > 0 ? (
-        <select
-          className="cr-input create-select"
-          value={faceNodeId}
-          onChange={(e) => setFaceNodeId(e.target.value)}
-        >
-          <option value="">Face/performance media: pick a canvas node…</option>
-          {faceNodes.map((n) => (
-            <option key={n.id} value={n.id}>
-              ({n.data.mediaType}) {n.data.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <p className="aside-note">
-          No ready video/image node on the canvas yet — upload or generate one first.
-        </p>
-      )}
-      {faceImageSrc && (
-        <button
-          className="action-btn"
-          onClick={() =>
-            props.onTrainFromFace(faceImageSrc, person ? `${person.name} — LoRA` : faceNode!.data.label)
-          }
-        >
-          ◈ Train a LoRA from this photo
-        </button>
-      )}
-      <button className="generate-btn" disabled={!ready || !speechSrc || !faceNode} onClick={generateFace}>
-        2 · Lip-sync / face
-      </button>
-      <ResultRow nodeId={resultId} />
-    </>
-  )
-}
-
 function UploadScreen(props: { done: () => void }): React.JSX.Element {
   const addNode = useStudio((s) => s.addNode)
   async function upload(kind: 'video' | 'image' | 'audio'): Promise<void> {
@@ -1417,11 +944,21 @@ export function AsidePanel(): React.JSX.Element {
   const [styles, setStyles] = useState<TrainedStyle[]>([])
   const [loraPrefill, setLoraPrefill] = useState<{ imageSrc: string; name: string } | null>(null)
   const deepfakeHandoff = useStudio((s) => s.deepfakeHandoff)
+  const pendingNodeScreen = useStudio((s) => s.pendingNodeScreen)
+  const clearPendingNodeScreen = useStudio((s) => s.clearPendingNodeScreen)
 
   useEffect(() => {
     void bridge.connectors.list().then(setConnectors)
     void bridge.lora.list().then(setStyles)
   }, [screen])
+
+  // An artifact handoff names the node it goes to; this is what makes the pill's
+  // promise true instead of a relabelled Finish.
+  useEffect(() => {
+    if (!pendingNodeScreen) return
+    setScreen(pendingNodeScreen as Screen)
+    clearPendingNodeScreen()
+  }, [pendingNodeScreen, clearPendingNodeScreen])
 
   useEffect(() => {
     if (deepfakeHandoff) setScreen('deepfake')
@@ -1485,7 +1022,9 @@ export function AsidePanel(): React.JSX.Element {
             })}
           </div>
         )}
-        {screen === 'video' && <VideoScreen connectors={connectors} />}
+        {screen === 'video' && (
+          <NodePanel manifest={findManifest('video')!} connectors={connectors} styles={styles} />
+        )}
         {screen === 'image' && (
           <NodePanel
             manifest={findManifest('image')!}
@@ -1506,14 +1045,7 @@ export function AsidePanel(): React.JSX.Element {
         {screen === 'isolate' && <IsolateScreen />}
         {screen === 'lora' && <LoraScreen connectors={connectors} prefill={loraPrefill} />}
         {screen === 'deepfake' && (
-          <DeepfakeScreen
-            connectors={connectors}
-            styles={styles}
-            onTrainFromFace={(imageSrc, name) => {
-              setLoraPrefill({ imageSrc, name })
-              setScreen('lora')
-            }}
-          />
+          <NodePanel manifest={findManifest('deepfake')!} connectors={connectors} styles={styles} />
         )}
         {screen === 'upload' && <UploadScreen done={home} />}
         {screen === 'link' && <LinkScreen done={home} />}
