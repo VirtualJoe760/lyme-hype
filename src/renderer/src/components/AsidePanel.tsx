@@ -432,6 +432,7 @@ function AudioScreen(props: {
 }): React.JSX.Element {
   const addNode = useStudio((s) => s.addNode)
   const focusNode = useStudio((s) => s.focusNode)
+  const generateMedia = useStudio((s) => s.generateMedia)
   const [job, setJob] = useState<AudioJob>('voice')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
@@ -456,6 +457,14 @@ function AudioScreen(props: {
   // tier and needs no ElevenLabs connection, but it's a single default voice
   // with no browsing/preview yet — a smaller feature than the ElevenLabs path.
   const useYapperVoiceFallback = !ready && yapperTtsReady
+  // Music-only fallback: ElevenLabs's compose_music has no substitute inside
+  // ElevenLabs itself, but muapi's Suno wrapper (`muapi_audio_create` — full
+  // songs, not `muapi_audio_from_text`'s MMAudio SFX) covers the same job
+  // through the agent path, same as Deepfake's muapi/yapper chain.
+  const muapiReady = connectorReady(props.connectors, 'muapi')
+  const useMuapiMusicFallback = !ready && muapiReady
+  const [instrumental, setInstrumental] = useState(false)
+  const [musicResultId, setMusicResultId] = useState<string | null>(null)
 
   const [voiceQuery, setVoiceQuery] = useState('')
   const [voices, setVoices] = useState<VoiceEntry[] | null>(null)
@@ -502,6 +511,25 @@ function AudioScreen(props: {
     } finally {
       setPreviewing(null)
     }
+  }
+
+  function composeMusicViaMuapi(): void {
+    // Agent-driven, not a direct REST call like the other jobs — muapi's Suno
+    // wrapper runs through the same generateMedia/ResultRow lifecycle Video
+    // and Deepfake already use, so the node renders on the canvas itself
+    // instead of this screen's synchronous ok/src status line.
+    setStatus(null)
+    setMusicResultId(
+      generateMedia({
+        label: labelFromPrompt(text, 'music'),
+        mediaType: 'audio',
+        prompt: [text.trim(), instrumental ? 'Instrumental only, no vocals.' : undefined]
+          .filter(Boolean)
+          .join(' '),
+        connectorId: 'muapi',
+        modelHint: 'suno'
+      })
+    )
   }
 
   async function run(kind: AudioJob): Promise<void> {
@@ -564,15 +592,25 @@ function AudioScreen(props: {
   return (
     <>
       <RunLine
-        ok={ready || yapperTtsReady}
+        ok={ready || yapperTtsReady || muapiReady}
         label={
           ready
             ? 'elevenlabs · direct tool calls'
-            : yapperTtsReady
-              ? 'yapper free tier · voice only, no ElevenLabs connected'
-              : 'ElevenLabs not connected'
+            : yapperTtsReady && muapiReady
+              ? 'yapper free tier (voice) + muapi Suno (music), no ElevenLabs connected'
+              : yapperTtsReady
+                ? 'yapper free tier · voice only, no ElevenLabs connected'
+                : muapiReady
+                  ? 'muapi Suno · music only, no ElevenLabs connected'
+                  : 'ElevenLabs not connected'
         }
-        cost={ready ? '$ per generation' : yapperTtsReady ? 'free daily tier (voice) · $ once connected' : '$ per generation'}
+        cost={
+          ready
+            ? '$ per generation'
+            : yapperTtsReady || muapiReady
+              ? 'free daily tier (voice) / credits (music) · $ once connected'
+              : '$ per generation'
+        }
       />
       <div className="tab-row">
         {(['voice', 'music', 'sfx', 'clone'] as AudioJob[]).map((j) => (
@@ -653,16 +691,46 @@ function AudioScreen(props: {
 
       {job === 'music' && (
         <>
+          {useMuapiMusicFallback && (
+            <p className="aside-help">
+              ElevenLabs isn't connected — composing with muapi's Suno wrapper instead. Full songs,
+              agent-routed (credits, not a fixed per-track price); connect ElevenLabs in Settings
+              for the direct compose_music path.
+            </p>
+          )}
           <textarea
             className="prompt-area"
             placeholder="lo-fi citrus groove, 90 bpm, warm tape hiss"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <ChipRow options={['30s', '60s', '120s']} value={musicLength} onChange={setMusicLength} />
-          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run('music')}>
-            {busy ? 'Composing…' : '♪ Compose music'}
-          </button>
+          {useMuapiMusicFallback ? (
+            <>
+              <label className="mgfx-row">
+                <input
+                  type="checkbox"
+                  checked={instrumental}
+                  onChange={(e) => setInstrumental(e.target.checked)}
+                />
+                Instrumental only (no vocals)
+              </label>
+              <button className="generate-btn" disabled={!text.trim()} onClick={composeMusicViaMuapi}>
+                ♪ Compose music (muapi · Suno)
+              </button>
+              <ResultRow nodeId={musicResultId} />
+            </>
+          ) : (
+            <>
+              <ChipRow options={['30s', '60s', '120s']} value={musicLength} onChange={setMusicLength} />
+              <button
+                className="generate-btn"
+                disabled={busy || !ready || !text.trim()}
+                onClick={() => void run('music')}
+              >
+                {busy ? 'Composing…' : '♪ Compose music'}
+              </button>
+            </>
+          )}
         </>
       )}
 

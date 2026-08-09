@@ -7,6 +7,60 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Tenth autonomous run: Generate audio (row 5), Suno-via-muapi music fallback — row closed
+
+Picked up exactly where the ninth run's resume note said to: row 5's one remaining item,
+Suno-via-muapi as a music alternative when ElevenLabs isn't connected. Read the reference doc
+(`docs/connectors/reference/muapi.md`) first — `muapi_audio_create` is Suno full-song generation
+(`prompt`/`title`/`tags`/`make_instrumental` → job → audio URL), distinct from
+`muapi_audio_from_text` (MMAudio SFX/ambience, already out of scope here) — then read
+`AudioScreen`'s `run()` function and confirmed `elevenlabs-tools.ts`'s `music()` is a hard
+ElevenLabs-only call (`withElevenLabs()`, fails outright with no connector fallback if ElevenLabs
+isn't connected — the Music tab's Compose button wasn't even gated on `ready` before this pass, so
+clicking it without ElevenLabs connected just produced an error).
+
+**What I built:** `AudioScreen` gained a `useMuapiMusicFallback` flag (`!ready && muapiReady`,
+same shape as the Voice job's existing `useYapperVoiceFallback`). Unlike the Yapper TTS fallback
+— a synchronous REST call that fits the screen's uniform `run()`/await/`addNode` pattern —
+`muapi_audio_create` is agent-driven, so this needed the *other* generation shape already proven
+elsewhere in this file: `VideoScreen` and `DeepfakeScreen` both call the store's `generateMedia`
+(which creates a rendering canvas node immediately and resolves async) and track it with
+`ResultRow`, the shared rendering→ready/error component. The Music tab now branches on the
+fallback: when active, a new `composeMusicViaMuapi()` calls `generateMedia({mediaType: 'audio',
+connectorId: 'muapi', modelHint: 'suno', ...})` and the tab renders `<ResultRow
+nodeId={musicResultId} />` instead of the direct-path status line. `modelHint: 'suno'` matters
+specifically because muapi exposes two audio tools and the agent needs a nudge toward the music
+one, not the SFX one. Picked up a genuinely useful small feature for free while in there: an
+"Instrumental only (no vocals)" checkbox that appends "Instrumental only, no vocals." to the
+prompt text — this is `muapi_audio_create`'s own `make_instrumental` parameter, exposed to the
+agent as a plain-language directive in the prompt rather than adding a new typed field to
+`GenerationParams`, the same embedded-directive pattern the Deepfake screen's Stage 2 "chain note"
+already established for steering the agent's tool choice through free text. Also tightened a
+pre-existing gap while touching this code: the direct (ElevenLabs) Compose button is now disabled
+when ElevenLabs isn't connected and no fallback applies, instead of being clickable straight into
+a guaranteed error — matching how the Voice tab already gates its own button.
+
+**Verified:** fresh `npm install` (no `node_modules` in this sandbox), then `npm run typecheck`
+(`tsconfig.node.json` + `tsconfig.web.json`) — clean, zero errors. **Not run live** — no muapi API
+key configured in this sandbox, and live generation spend is out of scope for the autonomous
+routine regardless (`AGENTS.md` §0). The plumbing itself isn't new — `generateMedia` →
+`generation.ts`'s `buildMcpServers`/agent-turn path is the exact mechanism rows 1–3 already
+exercised for Deepfake, Motion graphics, and Generate video — so the only genuinely unverified
+part is whether the agent reliably picks `muapi_audio_create` over `muapi_audio_from_text` given
+the `modelHint`, which needs a joint session with a real key to actually watch.
+
+**Docs updated in this commit** (doc-drift-is-a-bug, `AGENTS.md` §1.3): `creative-nodes.md`'s
+Generate audio · Music row, `capability-map.md` (the Audio · music routing row, and §4's "Suno via
+muapi" bullet flipped from "still open" to "now wired" with the actual implementation shape), and
+the strategy doc's row 5 status block (second-pass entry appended).
+
+**Row 5 is now fully `done`** — both named items (Yapper TTS fallback, Suno-via-muapi) shipped
+across the ninth and tenth runs. Next run should move to row 6, Create a LoRA (the "train from this
+deepfake's reference photos" shortcut, unblocked now that row 1's Reference-person concept
+exists).
+
+---
+
 ## 2026-08-09 — Ninth autonomous run: Generate audio (row 5), Yapper free-tier TTS fallback
 
 Checked rows 1–4 first: rows 1–3 are `done` or joint-session-only per their own notes, and row 4's

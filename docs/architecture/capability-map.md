@@ -92,7 +92,7 @@ $0.03 vs. $0.06/image).
 | Generate image · production | `image-production` | muapi + hint "Midjourney" | tier toggle |
 | Generate image · with style | `lora-use` | routes by the style's own `connectorId` — fal (weights-URL hint) or krea (`styles:[{id}]` hint, tier picks K2 medium/large) | — |
 | Audio · voice | `audio-tts` (+`voice-library`) | ElevenLabs direct call | Yapper `/audio/speech` direct REST call (free daily tier, one default voice, no browsing) when ElevenLabs isn't connected and a Yapper REST key is set |
-| Audio · music | `audio-music` | ElevenLabs | muapi/Suno unwired ○ |
+| Audio · music | `audio-music` | ElevenLabs | muapi's Suno wrapper (agent-routed, `connectorId: 'muapi'`) when ElevenLabs isn't connected and muapi is |
 | Audio · SFX | `audio-sfx` | ElevenLabs | — |
 | Audio · clone | `voice-clone` | ElevenLabs | — |
 | Motion gfx · batch/final | `image-gen`, `image-ref-conditioning` | gemini/openai pick | — |
@@ -136,11 +136,16 @@ several connectors can satisfy one node.
   its `model` arg now offers veo-3.1-lite at ~8× cheaper for reveals — the Motion graphics
   wizard's Animate stage surfaces this as a quality-tier picker, 2026-08-09 enrichment run;
   previously the wrapper supported it but nothing in the UI ever set the `model` arg.)
-- **Suno via muapi** as a music alternative when ElevenLabs isn't connected — still open; unlike
-  the TTS fallback below, `muapi_audio_create` is an agent-driven MCP tool, not a direct REST call,
-  so wiring it means routing the Generate audio · Music job through `generation.ts`'s agent path
-  rather than a synchronous fetch. **Yapper's free daily-tier TTS** is now wired (2026-08-09
-  enrichment run, row 5): `yapper-rest.ts`'s `synthesizeYapperSpeech()` calls the same
+- **Suno via muapi** as a music alternative when ElevenLabs isn't connected — now wired (2026-08-09
+  enrichment run, row 5 second pass): unlike the TTS fallback below, `muapi_audio_create` is an
+  agent-driven MCP tool, not a direct REST call, so the Generate audio · Music job routes through
+  `generateMedia`/`generation.ts`'s agent path (`connectorId: 'muapi'`, `modelHint: 'suno'`) instead
+  of a synchronous fetch, and renders through the same `ResultRow` rendering-node lifecycle Video
+  and Deepfake already use rather than this screen's `ok`/`src` status line. An instrumental-only
+  checkbox appends "Instrumental only, no vocals." to the prompt for `make_instrumental` rather than
+  adding a new `GenerationParams` field, the same free-text-directive pattern Deepfake's chain note
+  already established. **Yapper's free daily-tier TTS** is also wired (2026-08-09 enrichment run,
+  row 5 first pass): `yapper-rest.ts`'s `synthesizeYapperSpeech()` calls the same
   `POST /audio/speech` endpoint documented above directly (no agent turn, no polling — the endpoint
   is synchronous), and the Generate audio · Voice job auto-routes to it when ElevenLabs isn't
   connected and the `yapper-rest` REST key is set. One default voice, no browsing (that's Yapper's

@@ -232,11 +232,33 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    `npm run typecheck` clean. **Not run live** — no Yapper REST key configured in this sandbox; the
    request/response shape (`script`/`voiceId` in, `{url, freeCharactersRemainingToday}` out) is
    read directly from `docs/connectors/reference/yapper.md`'s verified OpenAPI enumeration, same
-   confidence level as the upload flow it sits beside. **Left undone:** Suno-via-muapi as a music
-   alternative — a materially different build than the TTS fallback, since `muapi_audio_create` is
-   an agent-driven MCP tool (needs `generation.ts`'s agent path, restricted via `connectorIds`),
-   not a synchronous REST call like Yapper's speech endpoint. Real scope for a future pass, not
-   rushed into this one.
+   confidence level as the upload flow it sits beside. **Left undone (closed next pass):**
+   Suno-via-muapi as a music alternative — a materially different build than the TTS fallback, since
+   `muapi_audio_create` is an agent-driven MCP tool (needs `generation.ts`'s agent path), not a
+   synchronous REST call like Yapper's speech endpoint. Real scope for a future pass, not rushed
+   into this one.
+
+   **Status (2026-08-09 enrichment run, second pass — Suno-via-muapi shipped, row 5 fully closed):**
+   `AudioScreen`'s Music job gained a `useMuapiMusicFallback` route (`!ready && muapiReady`, same
+   naming/gating pattern as the Voice job's `useYapperVoiceFallback`) that calls the store's
+   `generateMedia` (agent path, `connectorId: 'muapi'`, `modelHint: 'suno'` to disambiguate from
+   muapi's other audio tool, `muapi_audio_from_text` — MMAudio SFX, not music) instead of the
+   direct `bridge.audioTools.music()` call ElevenLabs's `compose_music` uses. This is a genuinely
+   different UI shape than the rest of `AudioScreen`'s uniform `run()`/`addNode`-on-completion
+   pattern: `generateMedia` creates a rendering canvas node immediately and resolves async, so the
+   fallback branch renders through `ResultRow` (the same rendering→ready/error tracker Video and
+   Deepfake already use) instead of this screen's synchronous status line. Added a small,
+   real feature riding along for free: an "Instrumental only" checkbox that appends "Instrumental
+   only, no vocals." to the prompt — `muapi_audio_create`'s own `make_instrumental` param, exposed
+   without adding a new `GenerationParams` field, the same embedded-directive pattern Deepfake's
+   Stage 2 chain note already established for the agent to read and act on. `npm run typecheck`
+   clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install` in this sandbox — no
+   `node_modules` present). **Not run live** — no muapi key configured in this sandbox, and live
+   spend is out of scope for the autonomous routine regardless; the wiring reuses the same
+   `generateMedia`/`buildMcpServers` plumbing that rows 1–3 already exercised (not a new mechanism),
+   so risk is concentrated in whether the agent actually calls `muapi_audio_create` over
+   `muapi_audio_from_text` given the `modelHint`, which is unverified until a joint session. Row 5
+   has nothing left buildable blind; next run should move to row 6 (Create a LoRA).
 6. **Create a LoRA** — already dual-trainer (Krea 2 / FLUX Krea); enrich with a "train from
    this deepfake's reference photos" shortcut once step 1's Reference-person concept exists.
 7. **Combine (canvas drag-onto-node)** — still a stub. Real semantics belong here:

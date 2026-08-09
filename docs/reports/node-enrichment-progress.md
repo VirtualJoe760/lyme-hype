@@ -15,7 +15,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 2 | Motion graphics | in-progress | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. resume: muapi image-edit as a second batch source is the only item left — a genuinely different generation path (not a parameter wire-up), needs its own design pass before implementing. |
 | 3 | Generate video | done | i2v starting-frame picker (routes to gemini via `startFramePath`) + Yapper model picker (`modelHint` + `connectorId: 'yapper'`) shipped in `VideoScreen`; both named items closed. |
 | 4 | Generate image | done | Fixed a real bug (picked style always forced `connectorId: 'fal'`, ignoring `style.connectorId`); resurrected `krea-training.ts` (git-history revival) as a second, opt-in "Krea 2 direct" trainer producing `connectorId: 'krea'` styles, applied via `styles:[{id,strength}]` and honoring the tier toggle (K2 medium/large) — the first genuine production-tier LoRA path. Both named items closed in one fix. |
-| 5 | Generate audio | in-progress | Yapper free-tier TTS fallback shipped (`synthesizeYapperSpeech`, new `audio:yapper-tts` IPC channel, Voice job auto-routes when ElevenLabs isn't connected and the `yapper-rest` key is set). resume: Suno-via-muapi as a music alternative is the only item left — it's agent-driven (needs `generation.ts`'s MCP path via `connectorIds: ['muapi']`), a genuinely different shape than the direct-REST TTS fix, so it needs its own pass rather than a rushed bolt-on. |
+| 5 | Generate audio | done | Yapper free-tier TTS fallback (Voice job) shipped first pass; Suno-via-muapi music fallback (agent-routed `generateMedia`/`ResultRow`, `connectorId: 'muapi'`, `modelHint: 'suno'`, instrumental-only toggle) shipped second pass. Both named items closed. |
 | 6 | Create a LoRA | pending | "Train from this deepfake's reference photos" shortcut once Reference-person exists (needs #1). |
 | 7 | Combine (canvas) | pending | Give the stub real semantics: image+image → ref-conditioning mix; image+audio(face) → i2v + lipsync. |
 | 8 | Storyboard / Scripting | pending | Let script tone default a shot panel's voice/LoRA pick. |
@@ -29,6 +29,12 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (tenth autonomous run) — Row 5 (Generate audio) closed: built the Suno-via-muapi
+  music fallback the ninth run left open. `AudioScreen`'s Music job now routes through
+  `generateMedia` (agent path, `connectorId: 'muapi'`, `modelHint: 'suno'`) and renders via
+  `ResultRow` when ElevenLabs isn't connected and muapi is, plus a small instrumental-only toggle
+  riding along on the same change. `npm run typecheck` clean; not run live (no muapi key in this
+  sandbox). Row 5 now fully `done`. Next run: row 6 (Create a LoRA).
 - 2026-08-09 (ninth autonomous run) — Row 4 confirmed done from the eighth run's reconciliation, no
   repeat needed. Moved to row 5 (Generate audio): built the Yapper free-tier TTS fallback
   (`synthesizeYapperSpeech()` in `yapper-rest.ts`, direct `POST /audio/speech` call, no agent turn)
