@@ -150,14 +150,13 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     if (!first.ok || !first.agentSessionId) {
       fail(`conversation turn 1: ${first.error ?? 'no session id captured'}`)
     } else {
+      // Deliberately NO history here: passing it would let the transcript-
+      // replay fallback also answer "kumquat", and the assertion could no
+      // longer distinguish real resume from replay.
       const second = await runConversationTurn({
         conversationId: 'selftest-conv',
         resumeSessionId: first.agentSessionId,
-        prompt: 'What word did I ask you to remember? Reply with only that word.',
-        history: [
-          { role: 'user', text: 'Remember the word "kumquat". Reply with exactly: NOTED' },
-          { role: 'assistant', text: first.text }
-        ]
+        prompt: 'What word did I ask you to remember? Reply with only that word.'
       })
       if (second.ok && /kumquat/i.test(second.text)) {
         log(
@@ -407,9 +406,11 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
         { path: 'a.mp4', mediaType: 'video', ...base, startTime: 0, trimIn: 1, trimOut: 4, audioMuted: true, hasAudio: true },
         { path: 'b.mp4', mediaType: 'video', ...base, startTime: 4, trimIn: 0, trimOut: 6, hasAudio: true },
         // No hasAudio — a Motion-graphics overlay with no audio stream must
-        // stay out of the mix instead of referencing a missing [i:a].
-        { path: 'gfx.webm', mediaType: 'video', ...overlay, startTime: 2, trimIn: 0, trimOut: 3 },
+        // stay out of the mix instead of referencing a missing [i:a]. The
+        // inputDecoder forces libvpx-vp9 so the alpha plane survives decode.
+        { path: 'gfx.webm', mediaType: 'video', ...overlay, startTime: 2, trimIn: 0, trimOut: 3, inputDecoder: 'libvpx-vp9' },
         { path: 'still.png', mediaType: 'image', ...overlay, startTime: 6, trimIn: 0, trimOut: 2 },
+        { path: 'wm.gif', mediaType: 'image', ...overlay, startTime: 0, trimIn: 0, trimOut: 1 },
         { path: 'vo.mp3', mediaType: 'audio', ...voice, startTime: 0.5, trimIn: 0, trimOut: 8 },
         { path: 'music.mp3', mediaType: 'audio', ...mutedMusic, startTime: 0, trimIn: 0, trimOut: 10 }
       ],
@@ -419,17 +420,21 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     const wellFormed =
       // Muted track's clip contributes no input at all.
       !s.includes('music.mp3') &&
-      args.filter((a) => a === '-i').length === 5 &&
+      args.filter((a) => a === '-i').length === 6 &&
       // Canvas + per-clip overlays with enable windows at real positions.
       s.includes('color=black:s=1080x1920') &&
-      (s.match(/overlay=/g) ?? []).length === 4 &&
+      (s.match(/overlay=/g) ?? []).length === 5 &&
       s.includes("enable='between(t,4,10)'") &&
       s.includes("enable='between(t,2,5)'") &&
       // Base clips pad to the full canvas; overlay clips center instead.
       s.includes('pad=1080:1920') &&
       s.includes('overlay=(W-w)/2:(H-h)/2') &&
-      // Image stills loop for their placed duration.
+      // Image stills loop for their placed duration; gifs use -stream_loop
+      // (the gif demuxer rejects image2's -loop option).
       s.includes('-loop 1 -t 2 -i still.png') &&
+      s.includes('-stream_loop -1 -t 1 -i wm.gif') &&
+      // VP9-alpha overlays force the libvpx decoder so alpha survives.
+      s.includes('-c:v libvpx-vp9 -i gfx.webm') &&
       // Audio: voice delayed to position; a.mp4's embedded track is audioMuted
       // and b.mp4's embedded track mixes with the voice via amix.
       s.includes('adelay=500|500') &&

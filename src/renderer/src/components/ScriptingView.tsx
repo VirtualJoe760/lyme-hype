@@ -10,10 +10,14 @@ import { useActiveSession, useStudio } from '../store'
 export function ScriptingView(): React.JSX.Element {
   const session = useActiveSession()
   const busy = useStudio((s) => s.scriptingBusy)
-  const streamText = useStudio((s) => s.scriptingStream)
+  const stream = useStudio((s) => s.scriptingStream)
   const sendMessage = useStudio((s) => s.sendScriptingMessage)
   const runBreakdown = useStudio((s) => s.runShotBreakdown)
   const setView = useStudio((s) => s.setView)
+
+  // Only this session's own in-flight reply renders here — a turn started in
+  // another session must not stream into this chat.
+  const streamText = stream && stream.sessionId === session?.id ? stream.text : null
 
   const [draft, setDraft] = useState('')
   const [breakdownError, setBreakdownError] = useState<string | null>(null)
@@ -39,7 +43,9 @@ export function ScriptingView(): React.JSX.Element {
     setBreakdownError(null)
     const result = await runBreakdown()
     if (result.ok) {
-      setView('storyboard')
+      // Flip to the Storyboard only if the requesting session is still the
+      // active one — never yank a different session's view.
+      if (result.stillActive) setView('storyboard')
     } else {
       setBreakdownError(result.error ?? 'Shot breakdown failed.')
     }

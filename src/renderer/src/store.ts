@@ -260,10 +260,15 @@ interface StudioStore {
 
   /** Scripting panel (docs/ui/scripting-panel.md). */
   scriptingBusy: boolean
-  scriptingStream: string | null
+  /** Keyed to its session so a mid-turn session switch never renders one
+   *  conversation's live reply inside another's chat. */
+  scriptingStream: { sessionId: string; text: string } | null
   improvingPanelId: string | null
+  improveError: { nodeId: string; message: string } | null
   sendScriptingMessage(text: string): Promise<void>
-  runShotBreakdown(): Promise<{ ok: boolean; count: number; error?: string }>
+  /** `stillActive` tells the caller whether the originating session is still
+   *  the active one — the view flip only happens when it is. */
+  runShotBreakdown(): Promise<{ ok: boolean; count: number; stillActive?: boolean; error?: string }>
   improvePanelPrompt(nodeId: string): Promise<void>
 
   toggleRail(): void
@@ -1061,6 +1066,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     scriptingBusy: false,
     scriptingStream: null,
     improvingPanelId: null,
+    improveError: null,
 
     async sendScriptingMessage(text) {
       const trimmed = text.trim()
@@ -1078,11 +1084,14 @@ export const useStudio = create<StudioStore>((set, get) => {
       updateSession(sessionId, {
         scripting: { ...scripting, messages: [...scripting.messages, userMessage] }
       })
-      set({ scriptingBusy: true, scriptingStream: '' })
+      set({ scriptingBusy: true, scriptingStream: { sessionId, text: '' } })
 
       const unsubscribe = bridge.scripting.onStream((event) => {
         if (event.conversationId === sessionId) {
-          set({ scriptingStream: (get().scriptingStream ?? '') + event.text })
+          const current = get().scriptingStream
+          set({
+            scriptingStream: { sessionId, text: (current?.text ?? '') + event.text }
+          })
         }
       })
       try {
@@ -1158,9 +1167,42 @@ export const useStudio = create<StudioStore>((set, get) => {
           return { ok: false, count: 0, error: result?.error ?? 'Shot breakdown failed.' }
         }
         // Always fresh panels, never matched against existing ones (the
-        // firm v1 decision in the spec).
-        for (const shot of result.shots) {
-          get().addPanel({ label: shot.label, shotDescription: shot.description })
+        // firm v1 decision in the spec). The agent turn takes seconds, so the
+        // user may have switched sessions — panels must land in the session
+        // that ASKED for them, not whichever is active now.
+        const stillActive = get().activeSessionId === sessionId
+        if (stillActive) {
+          for (const shot of result.shots) {
+            get().addPanel({ label: shot.label, shotDescription: shot.description })
+          }
+        } else {
+          const sessions = get().sessions.map((s) => {
+            if (s.id !== sessionId) return s
+            let order = s.nodes
+              .filter((n) => n.data.panel)
+              .reduce((max, n) => Math.max(max, (n.data.panelOrder as number) ?? 0), 0)
+            const panels: CanvasNodeState[] = result.shots.map((shot) => {
+              order += 1
+              return {
+                id: nextId('panel'),
+                position: { x: 0, y: 0 },
+                data: {
+                  label: shot.label,
+                  mediaType: 'video' as MediaType,
+                  source: 'generate' as SourceMethod,
+                  status: 'ready' as const,
+                  swatch: pickSwatch(),
+                  panel: true,
+                  panelOrder: order,
+                  promoted: false,
+                  shotDescription: shot.description
+                }
+              }
+            })
+            return { ...s, nodes: [...s.nodes, ...panels] }
+          })
+          set({ sessions })
+          persist()
         }
         const target = get().sessions.find((s) => s.id === sessionId)
         const current = target?.scripting ?? { messages: [], totalCostUsd: 0 }
@@ -1179,7 +1221,7 @@ export const useStudio = create<StudioStore>((set, get) => {
             totalCostUsd: current.totalCostUsd + (result.costUsd ?? 0)
           }
         })
-        return { ok: true, count: result.shots.length }
+        return { ok: true, count: result.shots.length, stillActive }
       } finally {
         set({ scriptingBusy: false })
       }
@@ -1188,7 +1230,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     async improvePanelPrompt(nodeId) {
       const node = get().nodes.find((n) => n.id === nodeId)
       if (!node?.data.panel || !node.data.shotDescription || get().improvingPanelId) return
-      set({ improvingPanelId: nodeId })
+      set({ improvingPanelId: nodeId, improveError: null })
       try {
         const result = await bridge.scripting.improve({
           label: node.data.label,
@@ -1198,9 +1240,10 @@ export const useStudio = create<StudioStore>((set, get) => {
         if (result?.ok && result.prompt) {
           patchNodeAnywhere(nodeId, { note: result.prompt })
         } else {
-          patchNodeAnywhere(nodeId, {
-            note: (node.data.note ?? '') || `⚠ ${result?.error ?? 'Prompt authoring failed.'}`
-          })
+          // Never touch the note on failure — the user may have kept typing in
+          // it during the call, and error text must not become a generation
+          // prompt. Surface the failure beside the button instead.
+          set({ improveError: { nodeId, message: result?.error ?? 'Prompt authoring failed.' } })
         }
       } finally {
         set({ improvingPanelId: null })

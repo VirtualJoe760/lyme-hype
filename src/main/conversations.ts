@@ -175,9 +175,17 @@ export async function runConversationTurn(
   if (request.resumeSessionId) {
     const resumed = await runTurnOnce(request, true, onText)
     if (resumed.ok) return resumed
-    // Resume failed (stale/lost SDK session) — replay our own transcript fresh.
+    // Replay the transcript fresh ONLY when the failure looks like a lost/
+    // stale SDK session: nothing streamed and it wasn't a timeout. A turn
+    // that produced text or timed out really ran — re-running it would bill
+    // (and answer) twice for a failure resume didn't cause.
+    const timedOut = /within \d+s/.test(resumed.error ?? '')
+    const sessionLost =
+      resumed.text.length === 0 &&
+      !timedOut
+    if (!sessionLost) return resumed
     const replayed = await runTurnOnce(request, false, onText)
-    return replayed.ok ? replayed : resumed.text ? resumed : replayed
+    return replayed.ok ? replayed : resumed
   }
   return runTurnOnce(request, false, onText)
 }

@@ -62,16 +62,31 @@ export interface ResolvedTimelineClip {
    *  [i:a] would kill the whole export, so video-track clips only join the mix
    *  when this is explicitly true. Probed at export time. */
   hasAudio?: boolean
+  /** Force a specific decoder for this input. VP9/WebM alpha only survives
+   *  when decoded by libvpx-vp9 — ffmpeg's native vp9 decoder silently drops
+   *  the alpha plane, which would flatten every Motion-graphics overlay to an
+   *  opaque rectangle. Probed at export time. */
+  inputDecoder?: string
 }
 
-/** Detects an audio stream by parsing `ffmpeg -i`'s banner (no ffprobe
- *  dependency — the banner is stable enough for a boolean). */
-export function probeHasAudio(ffmpegPath: string, mediaPath: string): boolean {
+export interface MediaStreamInfo {
+  hasAudio: boolean
+  /** VP9 with an alpha side-channel (webm alpha_mode) — needs libvpx-vp9 to decode. */
+  vp9Alpha: boolean
+}
+
+/** Detects stream facts by parsing `ffmpeg -i`'s banner (no ffprobe
+ *  dependency — the banner is stable enough for booleans). */
+export function probeMediaInfo(ffmpegPath: string, mediaPath: string): MediaStreamInfo {
   try {
     const res = spawnSync(ffmpegPath, ['-hide_banner', '-i', mediaPath], { timeout: 8000 })
-    return /Stream #\d+:\d+[^\n]*Audio:/.test(String(res.stderr ?? ''))
+    const banner = String(res.stderr ?? '')
+    return {
+      hasAudio: /Stream #\d+:\d+[^\n]*Audio:/.test(banner),
+      vp9Alpha: /Video:\s*vp9/.test(banner) && /alpha_mode\s*:\s*1/.test(banner)
+    }
   } catch {
-    return false
+    return { hasAudio: false, vp9Alpha: false }
   }
 }
 
@@ -124,8 +139,15 @@ export function buildMultitrackArgs(clips: ResolvedTimelineClip[], outPath: stri
     if (existing !== undefined) return existing
     const index = inputIndex.size
     if (clip.mediaType === 'image') {
-      args.push('-loop', '1', '-t', fmtSec(clip.trimOut - clip.trimIn), '-i', clip.path)
+      if (/\.gif$/i.test(clip.path)) {
+        // The gif demuxer rejects image2's -loop option; -stream_loop covers
+        // both animated and single-frame gifs, capped by the input -t.
+        args.push('-stream_loop', '-1', '-t', fmtSec(clip.trimOut - clip.trimIn), '-i', clip.path)
+      } else {
+        args.push('-loop', '1', '-t', fmtSec(clip.trimOut - clip.trimIn), '-i', clip.path)
+      }
     } else {
+      if (clip.inputDecoder) args.push('-c:v', clip.inputDecoder)
       args.push('-i', clip.path)
     }
     inputIndex.set(clip, index)
@@ -234,18 +256,22 @@ export async function exportTimeline(
   }
 
   const resolved: ResolvedTimelineClip[] = []
-  const audioPresence = new Map<string, boolean>()
+  const probed = new Map<string, MediaStreamInfo>()
+  const infoFor = (path: string): MediaStreamInfo => {
+    let info = probed.get(path)
+    if (!info) {
+      info = probeMediaInfo(ffmpeg.path, path)
+      probed.set(path, info)
+    }
+    return info
+  }
   for (const clip of spec.clips) {
     const track = spec.tracks[clip.trackIndex]
     if (!track) continue
     const path = assetPathForUrl(clip.src)
     if (!path) continue
     if (clip.trimOut - clip.trimIn <= 0.01) continue
-    let hasAudio: boolean | undefined
-    if (track.type === 'video' && clip.mediaType === 'video' && !clip.audioMuted && !track.muted) {
-      if (!audioPresence.has(path)) audioPresence.set(path, probeHasAudio(ffmpeg.path, path))
-      hasAudio = audioPresence.get(path)
-    }
+    const info = clip.mediaType === 'video' && !track.muted ? infoFor(path) : null
     resolved.push({
       path,
       mediaType: clip.mediaType,
@@ -256,7 +282,8 @@ export async function exportTimeline(
       trimIn: clip.trimIn,
       trimOut: clip.trimOut,
       audioMuted: clip.audioMuted,
-      hasAudio
+      hasAudio: info?.hasAudio,
+      inputDecoder: info?.vp9Alpha ? 'libvpx-vp9' : undefined
     })
   }
 

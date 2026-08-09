@@ -81,10 +81,13 @@ export function extractFilePath(text: string): string | null {
 
 async function fileProducingCall(
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  timeoutMs: number
 ): Promise<AudioToolResult> {
   const outcome = await withElevenLabs(async (client) => {
-    const result = await client.callTool(toolName, args)
+    // Generation tools run long — music composition especially — so the
+    // client's default 45s tools/call timeout is far too tight here.
+    const result = await client.callTool(toolName, args, timeoutMs)
     const text = resultText(result)
     if (result.isError) return { ok: false as const, error: text || `${toolName} failed.` }
     const filePath = extractFilePath(text)
@@ -112,27 +115,32 @@ export function searchVoices(query: string): Promise<AudioToolResult> {
 export function textToSpeech(input: { text: string; voiceName?: string }): Promise<AudioToolResult> {
   const args: Record<string, unknown> = { text: input.text }
   if (input.voiceName?.trim()) args['voice_name'] = input.voiceName.trim()
-  return fileProducingCall('text_to_speech', args)
+  return fileProducingCall('text_to_speech', args, 180_000)
 }
 
 export function composeMusic(input: { prompt: string }): Promise<AudioToolResult> {
-  return fileProducingCall('compose_music', { prompt: input.prompt })
+  return fileProducingCall('compose_music', { prompt: input.prompt }, 600_000)
 }
 
 export function soundEffects(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult> {
   const args: Record<string, unknown> = { text: input.prompt }
   if (input.durationSec) args['duration_seconds'] = input.durationSec
-  return fileProducingCall('text_to_sound_effects', args)
+  return fileProducingCall('text_to_sound_effects', args, 180_000)
 }
 
 /** Voice cloning — "their own audio LoRA": sample files in, a reusable named
  *  voice out (usable from the Voice job's name field afterward). */
 export function cloneVoice(input: { name: string; filePaths: string[] }): Promise<AudioToolResult> {
   return withElevenLabs(async (client) => {
-    const result = await client.callTool('voice_clone', {
-      name: input.name,
-      files: input.filePaths
-    })
+    // Multi-file uploads run long — same reasoning as fileProducingCall.
+    const result = await client.callTool(
+      'voice_clone',
+      {
+        name: input.name,
+        files: input.filePaths
+      },
+      600_000
+    )
     const text = resultText(result)
     if (result.isError) return { ok: false as const, error: text || 'Voice clone failed.' }
     return { ok: true as const, text }

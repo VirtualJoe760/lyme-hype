@@ -22,6 +22,7 @@ export function StoryboardView(): React.JSX.Element {
   const setView = useStudio((s) => s.setView)
   const improvePanelPrompt = useStudio((s) => s.improvePanelPrompt)
   const improvingPanelId = useStudio((s) => s.improvingPanelId)
+  const improveError = useStudio((s) => s.improveError)
 
   const [installedIds, setInstalledIds] = useState<string[]>([])
   useEffect(() => {
@@ -109,6 +110,9 @@ export function StoryboardView(): React.JSX.Element {
                     {improvingPanelId === panel.id ? '…' : '✨'}
                   </button>
                 </div>
+              )}
+              {improveError?.nodeId === panel.id && (
+                <p className="panel-improve-error">⚠ {improveError.message}</p>
               )}
               <textarea
                 className="prompt-area panel-note"

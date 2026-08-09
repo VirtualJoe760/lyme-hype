@@ -84,6 +84,7 @@ export function CutRoom(): React.JSX.Element {
   const [dragClipId, setDragClipId] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const rulerRef = useRef<HTMLDivElement | null>(null)
   const mediaRefs = useRef(new Map<string, HTMLVideoElement | HTMLAudioElement>())
   const probing = useRef(new Set<string>())
 
@@ -175,6 +176,32 @@ export function CutRoom(): React.JSX.Element {
     }
   })
 
+  // Wheel-zoom must suppress the scroll container's native wheel scrolling,
+  // and React attaches onWheel passively (preventDefault is a no-op there) —
+  // so the listener is attached by hand, non-passive. Registered before the
+  // early return below (Rules of Hooks); timeAtClientX hoists.
+  useEffect(() => {
+    const el = rulerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      e.preventDefault()
+      const anchor = timeAtClientX(e.clientX)
+      const factor = e.deltaY < 0 ? 1.25 : 1 / 1.25
+      const next = Math.min(MAX_PPS, Math.max(MIN_PPS, pps * factor))
+      setPps(next)
+      // Keep the time under the cursor stationary while zooming.
+      requestAnimationFrame(() => {
+        const scroll = scrollRef.current
+        if (!scroll) return
+        const rect = scroll.getBoundingClientRect()
+        scroll.scrollLeft = anchor * next - (e.clientX - rect.left - TRACK_HEAD_W)
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pps, collapsed])
+
   if (!session || !timeline) return <div className="cutroom collapsed" />
 
   function timeAtClientX(clientX: number): number {
@@ -216,20 +243,6 @@ export function CutRoom(): React.JSX.Element {
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-  }
-
-  function onRulerWheel(e: React.WheelEvent): void {
-    const anchor = timeAtClientX(e.clientX)
-    const factor = e.deltaY < 0 ? 1.25 : 1 / 1.25
-    const next = Math.min(MAX_PPS, Math.max(MIN_PPS, pps * factor))
-    setPps(next)
-    // Keep the time under the cursor stationary while zooming.
-    requestAnimationFrame(() => {
-      const scroll = scrollRef.current
-      if (!scroll) return
-      const rect = scroll.getBoundingClientRect()
-      scroll.scrollLeft = anchor * next - (e.clientX - rect.left - TRACK_HEAD_W)
-    })
   }
 
   function fitToWindow(): void {
@@ -470,8 +483,8 @@ export function CutRoom(): React.JSX.Element {
                 <div className="tl-corner" style={{ width: TRACK_HEAD_W }} />
                 <div
                   className="tl-ruler"
+                  ref={rulerRef}
                   onPointerDown={startRulerScrub}
-                  onWheel={onRulerWheel}
                 >
                   {Array.from({ length: tickCount }, (_, i) => {
                     const t = i * step

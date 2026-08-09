@@ -993,6 +993,13 @@
   gap: 5px;
 }
 
+.panel-improve-error {
+  font-size: 10px;
+  color: var(--danger);
+  margin: 0;
+  word-break: break-word;
+}
+
 .panel-feeling-row .panel-feeling {
   flex: 1;
   margin: 0;

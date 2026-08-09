@@ -173,6 +173,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
   async function runBatch(): Promise<void> {
     setError(null)
     setPickedId(null)
+    setBusy(true)
     const items: BatchItem[] = []
     for (let v = 0; v < variations.length; v++) {
       for (let i = 0; i < IMAGES_PER_VARIATION; i++) {
@@ -203,6 +204,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
         )
       })
     )
+    setBusy(false)
   }
 
   async function runFinalPass(): Promise<void> {
@@ -446,6 +448,11 @@ export function MotionGraphicsWizard(): React.JSX.Element {
             The finished image becomes the video's end frame. A solid frame in its background color
             starts the reveal — or loop with the image as both frames.
           </p>
+          <div className="mgfx-row">
+            <button className="conn-mini" disabled={busy} onClick={() => setStage('final')}>
+              ← Back to final image
+            </button>
+          </div>
           <label className="mgfx-row">
             <span className="rail-util">Background</span>
             <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} />
@@ -497,6 +504,14 @@ export function MotionGraphicsWizard(): React.JSX.Element {
               Alpha version added to the canvas — drag it onto Video 2 in the timeline to overlay it.
             </p>
           )}
+          <button
+            className="conn-mini"
+            disabled={busy}
+            title="Back to the animate stage (e.g. to retry a failed render)"
+            onClick={() => setStage('animate')}
+          >
+            ← Back to animate
+          </button>
         </>
       )}
     </div>
