@@ -62,6 +62,8 @@ export function NodePanel(props: {
   const commitStage = useStudio((s) => s.commitStage)
   const focusNode = useStudio((s) => s.focusNode)
   const openSettings = useStudio((s) => s.openSettings)
+  const openEditor = useStudio((s) => s.openEditor)
+  const editorMask = useStudio((s) => s.editor?.mask)
 
   // Selecting s.nodes (a stable reference) and filtering in a memo — a selector that
   // returns a fresh array fails zustand's snapshot equality and loops forever.
@@ -114,6 +116,9 @@ export function NodePanel(props: {
     setNodeTool(manifest.id, next.id)
     const r = reconcileModel(stage.modelId ?? null, next.capability, ready)
     setNodeModel(manifest.id, r.model?.id)
+    if (next.surface === 'canvas' && next.editorMode) {
+      openEditor(manifest.id, next.editorMode)
+    }
   }
 
   function run(): void {
@@ -292,6 +297,12 @@ export function NodePanel(props: {
             ))}
           </div>
           <span className="np-fade" />
+        </div>
+      )}
+
+      {editorMask && tool.editorMode === 'mask' && (
+        <div className="np-local">
+          mask ready — not yet handed to the generation call (build-plan Phase 19)
         </div>
       )}
 

@@ -3,6 +3,7 @@ import { AsidePanel } from './components/AsidePanel'
 import { CanvasArea } from './components/CanvasArea'
 import { CombineDialog } from './components/CombineDialog'
 import { CutRoom } from './components/CutRoom'
+import { ImageEditor } from './components/ImageEditor'
 import { PanelResizeHandle } from './components/PanelResizeHandle'
 import { PlayView } from './components/PlayView'
 import { Settings } from './components/settings/Settings'
@@ -16,6 +17,7 @@ export default function App(): React.JSX.Element {
   const combine = useStudio((s) => s.combine)
   const settingsOpen = useStudio((s) => s.settingsOpen)
   const playNodeId = useStudio((s) => s.playNodeId)
+  const editor = useStudio((s) => s.editor)
   const railCollapsed = useStudio((s) => s.railCollapsed)
   const asideCollapsed = useStudio((s) => s.asideCollapsed)
   const timelineCollapsed = useStudio((s) => s.timelineCollapsed)
@@ -37,8 +39,8 @@ export default function App(): React.JSX.Element {
       <div className="body">
         {loaded && (
           <>
-            {!playNodeId && <SessionsRail />}
-            {!playNodeId && !railCollapsed && (
+            {!playNodeId && !editor && <SessionsRail />}
+            {!playNodeId && !editor && !railCollapsed && (
               <PanelResizeHandle
                 grow="right"
                 value={railWidth}
@@ -53,7 +55,7 @@ export default function App(): React.JSX.Element {
                 <PlayView />
               ) : (
                 <div className="row">
-                  <CanvasArea />
+                  {editor ? <ImageEditor /> : <CanvasArea />}
                   {!asideCollapsed && (
                     <PanelResizeHandle
                       grow="left"

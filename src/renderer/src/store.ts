@@ -309,6 +309,15 @@ interface StudioStore {
      *  screens can track the node's rendering → ready/error lifecycle. */
   }): string
 
+  /** The canvas editor takeover (docs/build-plan.md Phase 19) — same shape as Play
+   *  view: while set, the middle pane hosts the artifact at working size and the
+   *  Sessions rail hides. A 300px panel is the wrong place to brush a mask. */
+  editor: { manifestId: string; mode: 'mask' | 'expand' | 'crop'; mask?: string } | null
+  openEditor(manifestId: string, mode: 'mask' | 'expand' | 'crop'): void
+  closeEditor(): void
+  /** Data-URL PNG of the brushed mask, handed to the generation call. */
+  setEditorMask(mask: string | undefined): void
+
   /** Staged, uncommitted work per creative node (docs/build-plan.md Phase 16).
    *  Generating fills the node's preview; only commitStage reaches the canvas. */
   nodeStage(manifestId: string): NodeStage
@@ -563,6 +572,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     settingsTab: 'connectors',
     theme: 'lime-cut',
     playNodeId: null,
+    editor: null,
     playFrom: 'canvas',
     combine: null,
     agent: {
@@ -1123,6 +1133,20 @@ export const useStudio = create<StudioStore>((set, get) => {
 
     closePlay() {
       set({ playNodeId: null })
+    },
+
+    openEditor(manifestId, mode) {
+      set({ editor: { manifestId, mode } })
+    },
+
+    closeEditor() {
+      set({ editor: null })
+    },
+
+    setEditorMask(mask) {
+      const editor = get().editor
+      if (!editor) return
+      set({ editor: { ...editor, mask } })
     },
 
     setTrim(nodeId, trimIn, trimOut) {
