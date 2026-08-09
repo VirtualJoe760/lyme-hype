@@ -9,6 +9,7 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  AudioToolResult,
   ConversationStreamEvent,
   ConversationTurnRequest,
   ConversationTurnResult,
@@ -16,6 +17,9 @@ import type {
   GenerationParams,
   GenerationResult,
   ImprovePromptResult,
+  LocalToolResult,
+  TrainedStyle,
+  TrainStyleResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
@@ -69,6 +73,8 @@ const api = {
   media: {
     pickFile: (kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null> =>
       ipcRenderer.invoke(IPC.mediaPickFile, kind),
+    pickFiles: (kind: 'image' | 'video' | 'audio'): Promise<string[] | null> =>
+      ipcRenderer.invoke(IPC.mediaPickFiles, kind),
     import: (
       kind: 'image' | 'video' | 'audio'
     ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null> =>
@@ -76,7 +82,41 @@ const api = {
     importUrl: (
       url: string
     ): Promise<{ name: string; src: string | null; error: string | null } | null> =>
-      ipcRenderer.invoke(IPC.mediaImportUrl, url)
+      ipcRenderer.invoke(IPC.mediaImportUrl, url),
+    saveDataUrl: (dataUrl: string): Promise<{ ok: boolean; src?: string; error?: string } | null> =>
+      ipcRenderer.invoke(IPC.mediaSaveDataUrl, dataUrl),
+    isolateAudio: (source: {
+      assetUrl?: string
+      filePath?: string
+      url?: string
+    }): Promise<LocalToolResult | null> => ipcRenderer.invoke(IPC.mediaIsolateAudio, source),
+    keyAlpha: (input: {
+      assetUrl: string
+      color?: string
+      similarity?: number
+      blend?: number
+    }): Promise<LocalToolResult | null> => ipcRenderer.invoke(IPC.mediaKeyAlpha, input)
+  },
+  audioTools: {
+    voices: (query: string): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioVoices, query),
+    tts: (input: { text: string; voiceName?: string }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioTts, input),
+    music: (input: { prompt: string }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioMusic, input),
+    sfx: (input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioSfx, input),
+    clone: (input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioClone, input)
+  },
+  lora: {
+    train: (input: {
+      name: string
+      imagePaths: string[]
+      steps?: number
+    }): Promise<TrainStyleResult | null> => ipcRenderer.invoke(IPC.loraTrain, input),
+    list: (): Promise<TrainedStyle[]> => ipcRenderer.invoke(IPC.loraList),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.loraDelete, id)
   },
   generate: {
     run: (params: GenerationParams): Promise<GenerationResult | null> =>

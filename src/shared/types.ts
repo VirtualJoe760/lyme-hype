@@ -109,9 +109,41 @@ export interface GenerationParams {
   /** Nudge toward a specific model within a connector (e.g. "Midjourney" on
    *  muapi for production-tier image) — advisory, included in the prompt. */
   modelHint?: string
-  /** Absolute local paths of reference images to condition the generation on
-   *  (owned wrappers accept them via reference_image_paths). */
+  /** Reference images to condition the generation on — lyme-asset:// URLs or
+   *  absolute paths; resolved to paths main-side (owned wrappers accept them
+   *  via reference_image_paths). */
   referenceImagePaths?: string[]
+  /** Frame conditioning for video (Veo via the Gemini wrapper): first frame. */
+  startFramePath?: string
+  /** Frame conditioning for video: last frame (same as start = seamless loop). */
+  endFramePath?: string
+}
+
+export interface LocalToolResult {
+  ok: boolean
+  src?: string
+  error?: string
+}
+
+export interface AudioToolResult {
+  ok: boolean
+  src?: string
+  text?: string
+  error?: string
+}
+
+export interface TrainedStyle {
+  id: string
+  name: string
+  connectorId: 'krea'
+  trainedAt: string
+  referenceImageCount: number
+}
+
+export interface TrainStyleResult {
+  ok: boolean
+  style?: TrainedStyle
+  error?: string
 }
 
 export interface GenerationResult {

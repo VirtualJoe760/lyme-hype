@@ -18,9 +18,9 @@
 'use strict'
 
 const { randomUUID } = require('node:crypto')
-const { writeFileSync, mkdirSync } = require('node:fs')
+const { writeFileSync, mkdirSync, readFileSync } = require('node:fs')
 const { tmpdir } = require('node:os')
-const { join } = require('node:path')
+const { join, extname } = require('node:path')
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
@@ -67,11 +67,30 @@ const EXT_FOR_MIME = {
   'video/mp4': '.mp4'
 }
 
+const MIME_FOR_EXT = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }
+
+function inlineImagePart(path) {
+  const mimeType = MIME_FOR_EXT[extname(path).toLowerCase()]
+  if (!mimeType) throw new Error(`Unsupported reference image type: ${path}`)
+  return { inlineData: { mimeType, data: readFileSync(path).toString('base64') } }
+}
+
+function frameImage(path) {
+  const mimeType = MIME_FOR_EXT[extname(path).toLowerCase()]
+  if (!mimeType) throw new Error(`Unsupported frame image type: ${path}`)
+  return { bytesBase64Encoded: readFileSync(path).toString('base64'), mimeType }
+}
+
 async function generateImage(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
+  // Reference-conditioned generation: image parts ride alongside the text
+  // (Nano Banana composes/edits from input images natively).
+  const refs = Array.isArray(args.reference_image_paths) ? args.reference_image_paths.filter(Boolean) : []
+  const requestParts = refs.map(inlineImagePart)
+  requestParts.push({ text: prompt })
   const resp = await api(`models/${IMAGE_MODEL}:generateContent`, {
-    contents: [{ parts: [{ text: prompt }] }]
+    contents: [{ parts: requestParts }]
   })
   const parts =
     (resp.candidates && resp.candidates[0] && resp.candidates[0].content && resp.candidates[0].content.parts) || []
@@ -89,7 +108,13 @@ async function generateImage(args) {
 async function generateVideo(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
-  const body = { instances: [{ prompt }] }
+  const instance = { prompt }
+  // Frame conditioning (Veo supports it natively): start frame drives
+  // image-to-video; adding a last frame yields a start→end interpolation —
+  // the Motion graphics reveal/loop mechanism.
+  if (args.start_frame_path) instance.image = frameImage(String(args.start_frame_path))
+  if (args.end_frame_path) instance.lastFrame = frameImage(String(args.end_frame_path))
+  const body = { instances: [instance] }
   if (args.aspectRatio) body.parameters = { aspectRatio: String(args.aspectRatio) }
   const op = await api(`models/${VIDEO_MODEL}:predictLongRunning`, body)
   if (!op.name) throw new Error('No operation returned for video generation')
@@ -121,22 +146,31 @@ const TOOLS = [
   {
     name: 'gemini_generate_image',
     description:
-      'Generate an image from a text prompt (Gemini image model, aka Nano Banana). Returns a RESULT_FILE: line with the absolute path of the saved image.',
+      'Generate an image from a text prompt (Gemini image model, aka Nano Banana). Optionally pass reference_image_paths (absolute local paths) to mix reference images into the result. Returns a RESULT_FILE: line with the absolute path of the saved image.',
     inputSchema: {
       type: 'object',
-      properties: { prompt: { type: 'string', description: 'What to draw' } },
+      properties: {
+        prompt: { type: 'string', description: 'What to draw' },
+        reference_image_paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Absolute paths of reference images to condition on (optional)'
+        }
+      },
       required: ['prompt']
     }
   },
   {
     name: 'gemini_generate_video',
     description:
-      'Generate a short video from a text prompt (Veo). Takes minutes; polls until done. Returns a RESULT_FILE: line with the absolute path of the saved mp4.',
+      'Generate a short video from a text prompt (Veo). Optionally pass start_frame_path and/or end_frame_path (absolute local image paths) for frame-conditioned generation — e.g. a reveal that ends on a given image, or a seamless loop when both are the same image. Takes minutes; polls until done. Returns a RESULT_FILE: line with the absolute path of the saved mp4.',
     inputSchema: {
       type: 'object',
       properties: {
-        prompt: { type: 'string', description: 'What happens in the shot' },
-        aspectRatio: { type: 'string', description: 'e.g. 9:16 or 16:9 (optional)' }
+        prompt: { type: 'string', description: 'What happens in the shot (time-segmented beats work well)' },
+        aspectRatio: { type: 'string', description: 'e.g. 9:16 or 16:9 (optional)' },
+        start_frame_path: { type: 'string', description: 'Absolute path of the first-frame image (optional)' },
+        end_frame_path: { type: 'string', description: 'Absolute path of the last-frame image (optional)' }
       },
       required: ['prompt']
     }

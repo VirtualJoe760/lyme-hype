@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import type { GenerationParams, GenerationResult } from '@shared/types'
-import { importFileAsset, importUrlAsset } from './asset-store'
+import { assetPathForUrl, importFileAsset, importUrlAsset } from './asset-store'
 import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
@@ -118,6 +118,16 @@ function buildPrompt(params: GenerationParams): string {
       'If the chosen tool accepts a reference_image_paths parameter, pass these absolute paths to it.'
     )
   }
+  if (params.startFramePath) {
+    lines.push(
+      `First-frame image on disk: ${params.startFramePath} — pass it as the tool's start_frame_path parameter.`
+    )
+  }
+  if (params.endFramePath) {
+    lines.push(
+      `Last-frame image on disk: ${params.endFramePath} — pass it as the tool's end_frame_path parameter.`
+    )
+  }
   lines.push(
     'Use exactly one connected generation tool that produces this media type. Wait for it to finish.',
     'Then reply with a single line and nothing else: `RESULT_URL: <direct https URL>` for a URL result, `RESULT_FILE: <absolute local path>` if the tool returned a local file path, or `RESULT_ERROR: <short reason>`.'
@@ -130,10 +140,26 @@ const RESULT_FILE_RE = /RESULT_FILE:\s*(.+)/i
 const RESULT_ERROR_RE = /RESULT_ERROR:\s*(.+)/i
 const ANY_URL_RE = /(https?:\/\/[^\s"'<>)]+)/i
 
+/** lyme-asset:// URLs from the renderer become on-disk paths the wrappers can
+ *  read; already-absolute paths pass through. Unresolvable entries drop. */
+function toDiskPath(ref: string): string | null {
+  if (ref.startsWith('lyme-asset://')) return assetPathForUrl(ref)
+  return ref
+}
+
 export async function runGeneration(params: GenerationParams): Promise<GenerationResult> {
   const fail = (error: string): GenerationResult => ({ ok: false, mediaType: params.mediaType, error })
 
   if (!params.prompt.trim()) return fail('Enter a prompt to generate.')
+
+  params = {
+    ...params,
+    referenceImagePaths: params.referenceImagePaths
+      ?.map(toDiskPath)
+      .filter((p): p is string => p !== null),
+    startFramePath: params.startFramePath ? (toDiskPath(params.startFramePath) ?? undefined) : undefined,
+    endFramePath: params.endFramePath ? (toDiskPath(params.endFramePath) ?? undefined) : undefined
+  }
 
   const { servers, allowedTools, attached, skipped } = await buildMcpServers(params.connectorId)
   if (attached.length === 0) {

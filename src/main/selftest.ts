@@ -20,6 +20,8 @@ import {
 } from './model-providers'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
 import { buildMultitrackArgs, resolveFfmpeg } from './ffmpeg'
+import { buildAlphaKeyArgs, buildIsolateAudioArgs } from './media-tools'
+import { extractFilePath } from './elevenlabs-tools'
 import { runGeneration } from './generation'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -451,6 +453,31 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`ffmpeg export: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 12. Local media tools (Phase 13) — pure arg builders for the two
+  //     Create-panel ffmpeg jobs, plus the ElevenLabs reply-path parser. The
+  //     exact commands were executed for real against the machine's ffmpeg
+  //     during the build (audio extracted; VP9 webm with alpha_mode=1).
+  try {
+    const iso = buildIsolateAudioArgs('in.mp4', 'out.mp3').join(' ')
+    const key = buildAlphaKeyArgs('in.mp4', 'out.webm').join(' ')
+    const isoOk = iso.includes('-vn') && iso.includes('libmp3lame') && iso.endsWith('out.mp3')
+    const keyOk =
+      key.includes('colorkey=black:0.15:0.08') &&
+      key.includes('format=yuva420p') &&
+      key.includes('libvpx-vp9') &&
+      key.endsWith('out.webm')
+    const winPath = extractFilePath('Success. File saved as: C:\\tmp\\lyme\\voice.mp3. Voice used: Rachel')
+    const nixPath = extractFilePath('Audio written to /tmp/lyme/sfx.wav today')
+    const parseOk = winPath === 'C:\\tmp\\lyme\\voice.mp3' && nixPath === '/tmp/lyme/sfx.wav'
+    if (isoOk && keyOk && parseOk) {
+      log('media tools: PASS (isolate + alpha-key args well-formed; ElevenLabs path parser handles win/nix)')
+    } else {
+      fail(`media tools: iso=${isoOk} key=${keyOk} parse=${parseOk} (win="${winPath}" nix="${nixPath}")`)
+    }
+  } catch (error) {
+    fail(`media tools: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)

@@ -7,6 +7,7 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  AudioToolResult,
   ConversationStreamEvent,
   ConversationTurnRequest,
   ConversationTurnResult,
@@ -14,6 +15,9 @@ import type {
   GenerationParams,
   GenerationResult,
   ImprovePromptResult,
+  LocalToolResult,
+  TrainedStyle,
+  TrainStyleResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
@@ -48,10 +52,35 @@ export interface Bridge {
   }
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
+    pickFiles(kind: 'image' | 'video' | 'audio'): Promise<string[] | null>
     import(
       kind: 'image' | 'video' | 'audio'
     ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null>
     importUrl(url: string): Promise<{ name: string; src: string | null; error: string | null } | null>
+    saveDataUrl(dataUrl: string): Promise<{ ok: boolean; src?: string; error?: string } | null>
+    isolateAudio(source: {
+      assetUrl?: string
+      filePath?: string
+      url?: string
+    }): Promise<LocalToolResult | null>
+    keyAlpha(input: {
+      assetUrl: string
+      color?: string
+      similarity?: number
+      blend?: number
+    }): Promise<LocalToolResult | null>
+  }
+  audioTools: {
+    voices(query: string): Promise<AudioToolResult | null>
+    tts(input: { text: string; voiceName?: string }): Promise<AudioToolResult | null>
+    music(input: { prompt: string }): Promise<AudioToolResult | null>
+    sfx(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null>
+    clone(input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null>
+  }
+  lora: {
+    train(input: { name: string; imagePaths: string[]; steps?: number }): Promise<TrainStyleResult | null>
+    list(): Promise<TrainedStyle[]>
+    delete(id: string): Promise<void>
   }
   generate: {
     run(params: GenerationParams): Promise<GenerationResult | null>
@@ -146,12 +175,55 @@ function createBrowserMock(): Bridge {
     },
     media: {
       pickFile: async () => null,
+      pickFiles: async () => null,
       import: async () => null,
       importUrl: async () => ({
         name: '',
         src: null,
         error: 'Media import runs in the Electron main process — unavailable in browser preview.'
+      }),
+      saveDataUrl: async () => ({
+        ok: false,
+        error: 'Asset store runs in the Electron main process — unavailable in browser preview.'
+      }),
+      isolateAudio: async () => ({
+        ok: false,
+        error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
+      }),
+      keyAlpha: async () => ({
+        ok: false,
+        error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
       })
+    },
+    audioTools: {
+      voices: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      tts: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      music: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      sfx: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      clone: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      })
+    },
+    lora: {
+      train: async () => ({
+        ok: false,
+        error: 'Krea training runs in the Electron main process — unavailable in browser preview.'
+      }),
+      list: async () => [],
+      delete: async () => {}
     },
     generate: {
       run: async (params) => ({
@@ -217,6 +289,8 @@ function createElectronBridge(): Bridge {
     agent: lyme.agent,
     scripting: lyme.scripting,
     media: lyme.media,
+    audioTools: lyme.audioTools,
+    lora: lyme.lora,
     generate: lyme.generate,
     cutRoom: lyme.cutRoom,
     chatRealty: lyme.chatRealty,

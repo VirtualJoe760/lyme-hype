@@ -17,8 +17,22 @@ export const IPC = {
   scriptingImprove: 'scripting:improve',
 
   mediaPickFile: 'media:pick-file',
+  mediaPickFiles: 'media:pick-files',
   mediaImport: 'media:import',
   mediaImportUrl: 'media:import-url',
+  mediaSaveDataUrl: 'media:save-data-url',
+  mediaIsolateAudio: 'media:isolate-audio',
+  mediaKeyAlpha: 'media:key-alpha',
+
+  audioVoices: 'audio:voices',
+  audioTts: 'audio:tts',
+  audioMusic: 'audio:music',
+  audioSfx: 'audio:sfx',
+  audioClone: 'audio:clone',
+
+  loraTrain: 'lora:train',
+  loraList: 'lora:list',
+  loraDelete: 'lora:delete',
 
   generateRun: 'generate:run',
 

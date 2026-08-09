@@ -9,10 +9,13 @@ import type {
   SecretRequest,
   TimelineExportSpec
 } from '@shared/types'
-import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
+import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, saveImageAsset } from './asset-store'
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
+import { cloneVoice, composeMusic, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
 import { exportTimeline } from './ffmpeg'
+import { deleteTrainedStyle, listTrainedStyles, trainStyle } from './krea-training'
+import { isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
@@ -93,9 +96,15 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.scriptingTurn, (e, request: ConversationTurnRequest) => {
     if (!isMainSender(e)) return null
     const target = mainWindow
-    // Vision input arrives as asset URLs from the renderer in later phases;
-    // scripting turns are text-only, so imagePaths pass through untouched.
-    return runConversationTurn(request, (text) => {
+    // Vision input arrives as lyme-asset:// URLs from the renderer (Motion
+    // graphics references) — resolve to disk paths here.
+    const resolved: ConversationTurnRequest = {
+      ...request,
+      imagePaths: request.imagePaths
+        ?.map((p) => (p.startsWith('lyme-asset://') ? assetPathForUrl(p) : p))
+        .filter((p): p is string => p !== null)
+    }
+    return runConversationTurn(resolved, (text) => {
       if (target && !target.isDestroyed()) {
         target.webContents.send(IPC.scriptingStream, { conversationId: request.conversationId, text })
       }
@@ -149,6 +158,73 @@ export function registerIpc(window: BrowserWindow): void {
     } catch (err) {
       return { name: '', src: null, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  // Multi-file picker (voice-clone samples, LoRA training images). Returns
+  // plain paths; nothing is imported until the flow actually uses them.
+  ipcMain.handle(IPC.mediaPickFiles, async (e, kind: string) => {
+    if (!isMainSender(e) || !mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      filters: FILE_FILTERS[kind] ?? []
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths
+  })
+
+  ipcMain.handle(IPC.mediaSaveDataUrl, (e, dataUrl: string) => {
+    if (!isMainSender(e)) return null
+    const match = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(dataUrl)
+    if (!match) return { ok: false, error: 'Not a base64 image data URL.' }
+    const saved = saveImageAsset(match[2], match[1])
+    return { ok: true, src: saved.url }
+  })
+
+  ipcMain.handle(
+    IPC.mediaIsolateAudio,
+    (e, source: { assetUrl?: string; filePath?: string; url?: string }) => {
+      if (!isMainSender(e)) return null
+      return isolateAudio(source)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.mediaKeyAlpha,
+    (e, input: { assetUrl: string; color?: string; similarity?: number; blend?: number }) => {
+      if (!isMainSender(e)) return null
+      return keyAlpha(input)
+    }
+  )
+
+  ipcMain.handle(IPC.audioVoices, (e, query: string) => {
+    if (!isMainSender(e)) return null
+    return searchVoices(typeof query === 'string' ? query : '')
+  })
+  ipcMain.handle(IPC.audioTts, (e, input: { text: string; voiceName?: string }) => {
+    if (!isMainSender(e)) return null
+    return textToSpeech(input)
+  })
+  ipcMain.handle(IPC.audioMusic, (e, input: { prompt: string }) => {
+    if (!isMainSender(e)) return null
+    return composeMusic(input)
+  })
+  ipcMain.handle(IPC.audioSfx, (e, input: { prompt: string; durationSec?: number }) => {
+    if (!isMainSender(e)) return null
+    return soundEffects(input)
+  })
+  ipcMain.handle(IPC.audioClone, (e, input: { name: string; filePaths: string[] }) => {
+    if (!isMainSender(e)) return null
+    return cloneVoice(input)
+  })
+
+  ipcMain.handle(IPC.loraTrain, (e, input: { name: string; imagePaths: string[]; steps?: number }) => {
+    if (!isMainSender(e)) return null
+    return trainStyle(input)
+  })
+  ipcMain.handle(IPC.loraList, (e) => (isMainSender(e) ? listTrainedStyles() : []))
+  ipcMain.handle(IPC.loraDelete, (e, id: string) => {
+    if (!isMainSender(e)) return
+    deleteTrainedStyle(id)
   })
 
   ipcMain.handle(IPC.generateRun, (e, params: GenerationParams) => {

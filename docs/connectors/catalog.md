@@ -72,22 +72,21 @@ Lyme Hype doesn't have one "generation connector" — it has several, each earni
 
 - Not generation — a data connector. Full detail already lives in [model.md](model.md)'s history and the original Phase 3 build notes in `build-plan.md`; kept out of the routing table's "why this tool" framing above since it isn't competing with anything else in the catalog for a job. Stdio, bearer token (`CHATREALTY_API_TOKEN`, must be `crt_live_…`), hosted base `https://jpsrealtor.com`.
 
-## Wiring the tiers (not yet built)
+## Wiring the tiers — BUILT (2026-08-08)
 
-The routing intent above (video → muapi; production image → Midjourney/muapi; storyboard image → Gemini or OpenAI; LoRA → Krea; deepfake → Yapper) is currently **enforced by nothing** — `src/main/generation.ts`'s `GenerationParams` already has an optional `connectorId` field to restrict a call to exactly one connector, but no caller in the UI passes it today. The aside's Generate button and Storyboard's promote-with-a-note both call `generateMedia` with no `connectorId`, so the agent freely picks among *every* installed connector for the requested media type — including picking a storyboard-tier model when the user meant to spend on Midjourney, or vice versa.
+The routing intent above (video → muapi; production image → Midjourney/muapi; storyboard image → Gemini or OpenAI; LoRA → Krea; deepfake → Yapper) is now enforced from the UI via `GenerationParams.connectorId` (+ a new advisory `modelHint` the prompt carries into the agent turn):
 
-**To build:** wire `connectorId` through from the UI —
-- Storyboard panels: a per-panel model choice (Gemini vs. OpenAI) for image panels, defaulting to whichever is installed if only one is.
-- Canvas Generate (the "real spend" tier): either leave unrestricted so the agent picks the best available, or explicitly bias toward Midjourney-via-muapi for image and muapi for video by default, with an escape hatch to pick a specific connector.
-
-This is UI + a small amount of store/IPC wiring, not a new architectural idea — the restriction mechanism already exists in `generation.ts`.
+- **Storyboard panels:** image panels have a per-panel model select (Gemini/OpenAI, whichever are installed); a panel promoted with no explicit choice defaults to the single installed storyboard connector when there's exactly one.
+- **Create › Generate video:** defaults to muapi when installed (the explicit-bias option this doc offered), with a connector select as the escape hatch (including "agent picks").
+- **Create › Generate image:** the tier toggle — Storyboard (Gemini/OpenAI select) vs. Production (`connectorId: muapi` + `modelHint: "Midjourney"`). A trained Krea style, when selected, routes via `connectorId: 'krea'` instead (whether Krea's generation surface can reference the style by name needs a live-token check — joint session).
+- **Create › Deepfake:** hard-restricted to Yapper.
 
 ## Known gaps, summarized
 
 - ~~OpenAI image connector~~ — built 2026-08-08 (see above).
-- Krea LoRA training — REST-only, not reachable through the current agent-driven MCP-only generation path (see above).
-- Connector-tier routing — the mechanism exists (`connectorId`), the UI doesn't wire it yet (see above).
+- Krea LoRA training — REST-only; now reached via a dedicated `src/main/krea-training.ts` client (the deliberate one-off REST exception this doc anticipated as option b). The exact request/response schema still needs live-token verification — joint session.
+- ~~Connector-tier routing~~ — built 2026-08-08 (see "Wiring the tiers" above).
 - Agent tool-selection with multiple similar connections generally (not just image tiers) — still unconfirmed by an actual multi-connector generation test; see the open question carried in `../architecture/platform-decisions.md`.
-- **Generation is text-prompt-only — no reference-image input, no frame conditioning.** Confirmed while designing the Motion graphics workflow (`../ui/create-panel.md`): `GenerationParams` has no field for passing images into a generation call, so techniques like "mix these reference images' style into the output" (image generation) or "animate from this start frame to this end frame" (Veo video, which supports it natively — `resources/gemini-mcp.cjs` just doesn't expose it) aren't reachable today. A real gap, not a hypothetical one — surfaced by a concrete reference workflow, not speculation.
-- **No batch-generate-and-compare UI.** Every generate flow today produces exactly one node per call. Techniques that generate several variations and let the user pick a favorite (also from the Motion graphics workflow) have no UI surface to land in yet.
-- **Export has no alpha-channel path.** `ffmpeg.ts`'s `buildConcatArgs` targets opaque 1080×1920 `libx264` reels only; a transparent watermark/overlay output (also from Motion graphics) needs a different, alpha-capable codec this pipeline doesn't build yet.
+- ~~Generation is text-prompt-only~~ — closed 2026-08-08: `GenerationParams` carries `referenceImagePaths` + `startFramePath`/`endFramePath`, both owned wrappers accept reference images, and the Gemini/Veo wrapper accepts start/end frames. Live frame-conditioned renders still unexercised (billed) — joint session.
+- ~~No batch-generate-and-compare UI~~ — closed 2026-08-08: `BatchResultsGrid` (generic) + the Motion graphics wizard's batch stage.
+- ~~Export has no alpha-channel path~~ — closed 2026-08-08: `media-tools.ts`'s colorkey → VP9/WebM `yuva420p` path, verified against the real binary (`alpha_mode=1`).

@@ -18,7 +18,7 @@ import type {
 } from '@shared/types'
 import { bridge } from './bridge'
 
-export type SettingsTab = 'connectors' | 'models' | 'appearance'
+export type SettingsTab = 'connectors' | 'models' | 'styles' | 'appearance'
 
 export type MediaFlowNode = Node<MediaNodeData, 'media'>
 
@@ -253,6 +253,9 @@ interface StudioStore {
     /** Restrict to one connector (tier routing); omit = agent picks freely. */
     connectorId?: string
     modelHint?: string
+    referenceImagePaths?: string[]
+    startFramePath?: string
+    endFramePath?: string
   }): Promise<void>
 
   /** Scripting panel (docs/ui/scripting-panel.md). */
@@ -1027,7 +1030,10 @@ export const useStudio = create<StudioStore>((set, get) => {
           durationSec: input.durationSec,
           resolution: input.resolution,
           connectorId: input.connectorId,
-          modelHint: input.modelHint
+          modelHint: input.modelHint,
+          referenceImagePaths: input.referenceImagePaths,
+          startFramePath: input.startFramePath,
+          endFramePath: input.endFramePath
         })
       } catch (error) {
         result = {

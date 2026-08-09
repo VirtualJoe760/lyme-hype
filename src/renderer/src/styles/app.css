@@ -996,6 +996,228 @@
   font-size: 10.5px;
 }
 
+/* ---------- Create panel (aside) ---------- */
+
+.create-back {
+  color: var(--text-soft);
+  font-size: 12px;
+  margin-right: 6px;
+}
+
+.create-back:hover {
+  color: var(--accent);
+}
+
+.create-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 4px 4px 10px;
+}
+
+.create-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--panel-raised);
+  text-align: left;
+}
+
+.create-tile:hover {
+  border-color: var(--accent-dim);
+}
+
+.create-tile-thumb {
+  height: 44px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.create-tile-label {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.create-select {
+  width: calc(100% - 8px);
+  margin: 0 4px 8px;
+  font-size: 11.5px;
+}
+
+.create-voice-list {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--text-soft);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0 4px 8px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+/* ---------- Motion graphics wizard ---------- */
+
+.mgfx {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 4px;
+}
+
+.mgfx-stage-indicator {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  margin: 2px 2px 0;
+}
+
+.mgfx-error {
+  font-size: 11px;
+  color: var(--danger);
+  margin: 0 2px;
+  word-break: break-word;
+}
+
+.mgfx-ref-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.mgfx-ref {
+  aspect-ratio: 1;
+  border: 2px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.mgfx-ref img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mgfx-ref.selected {
+  border-color: var(--accent);
+}
+
+.mgfx-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mgfx-row .cr-input {
+  flex: 1;
+  margin: 0;
+}
+
+.mgfx-select {
+  width: 100%;
+  margin: 0;
+  font-size: 11.5px;
+}
+
+.mgfx-variation {
+  min-height: 56px;
+  width: 100%;
+  margin: 0;
+  font-size: 11px;
+}
+
+.mgfx-motion {
+  min-height: 76px;
+  width: 100%;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.mgfx-final {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.mgfx-loop {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.mgfx .generate-btn,
+.mgfx .prompt-area {
+  width: 100%;
+  margin: 0;
+}
+
+/* ---------- batch results grid (generic) ---------- */
+
+.batch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.batch-cell {
+  position: relative;
+  aspect-ratio: 1;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--panel-raised);
+}
+
+.batch-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.batch-cell.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.batch-cell.running {
+  color: var(--accent);
+  font-size: 10px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.batch-cell.error {
+  color: var(--danger);
+  font-size: 10px;
+}
+
+.batch-caption {
+  position: absolute;
+  bottom: 3px;
+  left: 5px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 /* ---------- aside / add to canvas ---------- */
 
 .conn-strip {
