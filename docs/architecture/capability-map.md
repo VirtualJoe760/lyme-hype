@@ -103,6 +103,9 @@ $0.03 vs. $0.06/image).
 | Storyboard promote (image) | `image-gen` | per-panel choice | agent-pick |
 | Listing photos | `data-mls` | chatrealty | — |
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
+| Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |
+| Combine · audio+image | `lipsync` or `video-gen-i2v` | agent-pick (unrestricted) | prompt tells the agent to branch on whether the image shows a face |
+| Combine · other pairs | *(local, unbuilt)* | placeholder node | real ffmpeg compositing not yet designed |
 
 The Create tiles' readiness (`TILE_NEEDS` in `AsidePanel.tsx`) is this table's "requires"
 column flattened to connector ids — when the matrix changes, change the table here, then the
@@ -112,8 +115,11 @@ several connectors can satisfy one node.
 ## 4. Known unwired paths worth planning around (the ○ cells)
 
 - **muapi image-edit / video-from-image / upscale / bg-remove tools** — the installed connector
-  already exposes them; no creative node drives them yet (Combine's real design should start
-  here). `muapi_edit_lipsync` / `muapi_enhance_face_swap` are now wired into the Deepfake tile's
+  already exposes them; no creative node drives them by name yet, though Combine's image+image
+  and audio+image pairs (2026-08-09 enrichment run, row 7) now leave the connector unrestricted,
+  so muapi's image-edit tool is reachable there if the agent picks it — just not steered toward
+  it specifically the way Deepfake's chain note steers muapi/Yapper. `muapi_edit_lipsync` /
+  `muapi_enhance_face_swap` are now wired into the Deepfake tile's
   Stage 2 prompt (2026-08-09 enrichment run) — `GenerationParams.connectorIds` restricts the
   agent to exactly the connected `yapper`/`muapi` pair so it can chain muapi's own upload tool
   into either tool, or fall back to Yapper's `video-lipsync` process when only Yapper is

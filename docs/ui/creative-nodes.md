@@ -148,9 +148,22 @@ preview-only and structurally absent from the export payload.
 
 ## Combine (drag node onto node)
 
-Still the stub lifecycle from Phase 2 — the combine dialog spawns a placeholder "combined"
-node. Real combine semantics (image+audio → video? style transfer?) should be designed against
-the capability map (`image-ref-conditioning`, `video-gen-i2v`) rather than ad hoc. Open item.
+Two pairs now run a real generation instead of the Phase 2 placeholder timer (2026-08-09
+enrichment run, row 7): **image+image** prompts a merge and passes both nodes' `src` as
+`referenceImagePaths` (`image-ref-conditioning`, the same field Motion graphics' References
+stage uses); **audio+image** (either drag order) passes the image as `sourceMediaPath` and the
+audio as `referenceAudioPaths`, with the dialog's prompt telling the agent to lip-sync if the
+image shows a face and otherwise animate-and-score it — the same `sourceMediaPath` +
+`referenceAudioPaths` chain Deepfake's Stage 2 established, reused rather than restricted to a
+connector pair since Combine has no upload-chain complexity to steer around. Both require the
+dragged nodes to already be `ready` (the Combine button disables otherwise) since the paths need
+real files on disk, not an in-flight render. The dialog gained a prompt textarea for these two
+pairs to carry the "how should these combine" instruction the stub never had anywhere to put.
+
+The other four pairs (video+video, image+video, audio+video, audio+audio) still spawn the
+placeholder "combined" node — those are ffmpeg-level compositing (stitch/score/mix), not agent
+generations, and belong with the Cut Room's export pipeline rather than this dialog. Real
+semantics for those remain an open item.
 
 ---
 

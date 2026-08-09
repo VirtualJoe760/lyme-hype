@@ -17,7 +17,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 4 | Generate image | done | Fixed a real bug (picked style always forced `connectorId: 'fal'`, ignoring `style.connectorId`); resurrected `krea-training.ts` (git-history revival) as a second, opt-in "Krea 2 direct" trainer producing `connectorId: 'krea'` styles, applied via `styles:[{id,strength}]` and honoring the tier toggle (K2 medium/large) — the first genuine production-tier LoRA path. Both named items closed in one fix. |
 | 5 | Generate audio | done | Yapper free-tier TTS fallback (Voice job) shipped first pass; Suno-via-muapi music fallback (agent-routed `generateMedia`/`ResultRow`, `connectorId: 'muapi'`, `modelHint: 'suno'`, instrumental-only toggle) shipped second pass. Both named items closed. |
 | 6 | Create a LoRA | done | "Train from this deepfake's reference photos" shortcut shipped: Deepfake's face-node picker gains a "Train a LoRA from this photo" button when the picked node is a still image, prefilling the Create a LoRA screen's first training image + name + kind (subject). Also fixed a real plumbing gap this depended on: `lora:train`'s IPC handler never resolved `lyme-asset://` canvas-node URLs to disk paths (only `scriptingTurn` had that resolution before), so passing a canvas image straight through would have failed `readFileSync` in both trainers. |
-| 7 | Combine (canvas) | pending | Give the stub real semantics: image+image → ref-conditioning mix; image+audio(face) → i2v + lipsync. |
+| 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
 | 8 | Storyboard / Scripting | pending | Let script tone default a shot panel's voice/LoRA pick. |
 | 9 | Timeline / export | pending | Lower priority — pipeline already deep; look for gaps only. |
 | 10 | Listing photos (ChatRealty) | pending | Staging/cover/carousel tools are paid-for and unused — candidate new tiles. |
@@ -29,6 +29,14 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (thirteenth autonomous run) — Row 7 (Combine) closed: `CombineDialog` gained a
+  prompt textarea and `confirmCombine` now dispatches image+image (`referenceImagePaths`) and
+  audio+image (`sourceMediaPath` + `referenceAudioPaths`, lipsync-if-face else animate+score,
+  agent-judged via prompt text) through real `generateMedia` calls instead of the Phase 2 stub
+  timer — no new main-process plumbing needed, both fields already existed and were already
+  `lyme-asset://`-resolved from rows 1 and 2. The other four combine pairs intentionally keep the
+  placeholder node (ffmpeg compositing, row 9's territory). `npm run typecheck` clean. Next:
+  row 8 (Storyboard / Scripting).
 - 2026-08-09 (twelfth autonomous run) — collided with the eleventh run on row 6, independently;
   found the identical `lora:train`/`lyme-asset://` bug but built a broader canvas-image-picker
   feature where they built the more literally-named "train from this photo" shortcut on the

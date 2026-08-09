@@ -229,7 +229,7 @@ interface StudioStore {
 
   openCombine(sourceId: string, targetId: string): void
   closeCombine(): void
-  confirmCombine(): void
+  confirmCombine(note?: string): void
 
   openPlay(nodeId: string): void
   closePlay(): void
@@ -852,13 +852,61 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({ combine: null })
     },
 
-    confirmCombine() {
+    confirmCombine(note) {
       const { combine, nodes } = get()
       if (!combine) return
       const source = nodes.find((n) => n.id === combine.sourceId)
       const target = nodes.find((n) => n.id === combine.targetId)
       set({ combine: null })
       if (!source || !target) return
+
+      const label = `combine_${source.data.label.slice(0, 8)}+${target.data.label.slice(0, 8)}`
+      const position = {
+        x: (source.position.x + target.position.x) / 2 + 40,
+        y: (source.position.y + target.position.y) / 2 + 60
+      }
+      const pair = [source.data.mediaType, target.data.mediaType].sort().join('+')
+      const trimmedNote = note?.trim()
+
+      // image+image and audio+image are real generation chains — reference-
+      // conditioning and lipsync/animate-with-audio respectively — reusing
+      // the same GenerationParams fields Deepfake's Stage 2 and Motion
+      // graphics' References stage already established. Every other pair
+      // (video+video, image+video, audio+video, audio+audio) still needs
+      // ffmpeg-level compositing this node doesn't have yet, so those keep
+      // the placeholder "combined" node lifecycle.
+      if (pair === 'image+image' && source.data.src && target.data.src) {
+        get().generateMedia({
+          label,
+          mediaType: 'image',
+          position,
+          prompt:
+            trimmedNote ||
+            'Merge these two reference images into one new image, blending their content and style together.',
+          referenceImagePaths: [source.data.src, target.data.src]
+        })
+        return
+      }
+
+      if (pair === 'audio+image') {
+        const imageNode = source.data.mediaType === 'image' ? source : target
+        const audioNode = source.data.mediaType === 'audio' ? source : target
+        if (imageNode.data.src && audioNode.data.src) {
+          get().generateMedia({
+            label,
+            mediaType: 'video',
+            position,
+            prompt: [
+              trimmedNote ||
+                'Animate this still image driven by the accompanying audio.',
+              'If the image shows a face, lip-sync its mouth to the audio like a talking avatar. Otherwise animate the still to the mood and pacing of the audio and use the audio as its soundtrack.'
+            ].join(' '),
+            sourceMediaPath: imageNode.data.src,
+            referenceAudioPaths: [audioNode.data.src]
+          })
+          return
+        }
+      }
 
       const types = new Set<MediaType>([source.data.mediaType, target.data.mediaType])
       const mediaType: MediaType = types.has('video')
@@ -867,15 +915,11 @@ export const useStudio = create<StudioStore>((set, get) => {
           ? 'video'
           : source.data.mediaType
 
-      const midpoint = {
-        x: (source.position.x + target.position.x) / 2 + 40,
-        y: (source.position.y + target.position.y) / 2 + 60
-      }
       get().addNode({
-        label: `combine_${source.data.label.slice(0, 8)}+${target.data.label.slice(0, 8)}`,
+        label,
         mediaType,
         source: 'generate',
-        position: midpoint,
+        position,
         startRendering: true
       })
     },

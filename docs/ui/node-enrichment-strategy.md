@@ -305,6 +305,47 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
 7. **Combine (canvas drag-onto-node)** — still a stub. Real semantics belong here:
    image+image → `image-ref-conditioning` mix; image+audio → `video-gen-i2v` with lip-sync if
    the image is a face. This is where several matrix ○ cells become real UI.
+
+   **Status (2026-08-09 enrichment run — the two named pairs shipped):** on inspection, no new
+   main-process plumbing was needed at all — `GenerationParams.referenceImagePaths` (image+image)
+   and `sourceMediaPath`/`referenceAudioPaths` (audio+image) already exist and are already
+   resolved from `lyme-asset://` URLs to disk paths by `generation.ts`'s `toDiskPath`, because
+   rows 1 and 2 built and proved that exact plumbing for Deepfake's Stage 2 and Motion graphics'
+   References stage. The actual gap was narrower than it looked: `CombineDialog.tsx` never called
+   `generateMedia` at all — `confirmCombine` in `store.ts` always spawned a placeholder node on a
+   stub timer, for every pair, with no way for the user to even type what the combination should
+   produce (the dialog's blurb said "prompt how they should mix" but there was no textarea).
+   Fixed both gaps together: the dialog gained a prompt textarea (shown only for the two
+   generative pairs), and `confirmCombine` now dispatches image+image through `generateMedia`
+   with `referenceImagePaths: [source.src, target.src]` and mediaType `'image'`, and audio+image
+   (either drag order) through `generateMedia` with mediaType `'video'`,
+   `sourceMediaPath: <image src>`, `referenceAudioPaths: [<audio src>]` — the identical chain
+   Deepfake's Stage 2 uses, minus the `connectorIds` restriction: Deepfake restricts to
+   muapi+Yapper because its chain note steers a specific upload-then-lipsync sequence across
+   exactly those two; Combine has no such sequence to steer, so it leaves the connector
+   unrestricted and lets the agent pick from whatever's installed, same posture as Generate
+   video/image's default routing. Since nothing can detect whether the image is actually a face,
+   the prompt embeds the branch as an instruction for the agent to judge itself: "If the image
+   shows a face, lip-sync its mouth to the audio like a talking avatar. Otherwise animate the
+   still to the mood and pacing of the audio and use the audio as its soundtrack." — the same
+   prompt-embedded-directive pattern row 5's instrumental-only checkbox and row 1's chain note
+   already established for steering agent judgment through plain text rather than a new typed
+   field. The Combine button now disables until both dragged nodes are `status: 'ready'` (real
+   file paths are required; a stub-rendering node has none yet), a guard the placeholder path
+   never needed since it didn't touch a real file. The other four pairs (video+video,
+   image+video, audio+video, audio+audio) deliberately keep the placeholder-node stub — those are
+   ffmpeg-level compositing jobs (stitch/score/mix), not agent generations, and belong with the
+   Cut Room's export pipeline (row 9) rather than this dialog; scoping them into this pass would
+   have meant inventing a new local-compositing mechanism blind, not wiring an existing one.
+   `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install` in
+   this sandbox — no `node_modules` present at run start). **Not run live** — no connector keys
+   configured in this sandbox; the wiring reuses `generateMedia`/`buildMcpServers`/`toDiskPath`
+   exactly as rows 1 and 2 already exercised it, so the only genuinely new-and-unverified part is
+   whether the agent reliably follows the face-vs-not branch instruction, which needs a joint
+   session to actually watch. `creative-nodes.md`'s Combine section and `capability-map.md` (§3's
+   node table gained three Combine rows, §4's muapi image-edit bullet corrected) updated in this
+   commit. Row 7's two named items are both closed; the four ffmpeg-compositing pairs are a
+   distinct, larger piece of scope better left for whoever tackles row 9 (Timeline / export).
 8. **Storyboard / Scripting** — agent-plumbing enrichment: let a script's tone inform which
    voice/LoRA a Deepfake-shot panel should default to.
 9. **Timeline overlay / export** — lower priority; the ffmpeg pipeline is already deep.

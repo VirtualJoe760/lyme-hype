@@ -7,6 +7,84 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Thirteenth autonomous run: Combine (row 7), image+image and audio+image go real — row closed
+
+Row 6 was fully done as of the eleventh run (confirmed again by the twelfth run's collision
+review), so this pass moved to row 7 per the queue's priority order: Combine has been a stub
+since Phase 2 — dragging one node onto another spawned a placeholder "combined" node on a fake
+rendering timer, with no real generation behind it at all.
+
+**What I found before writing anything:** less missing plumbing than the queue's phrasing
+suggested. `GenerationParams.referenceImagePaths` (for image-ref-conditioning) and
+`sourceMediaPath`/`referenceAudioPaths` (for driving a face/still with audio) already exist as
+typed fields, already flow end-to-end through `store.ts` → `bridge.generate.run` →
+`generation.ts`, and `generation.ts`'s `toDiskPath` already resolves a canvas node's
+`lyme-asset://` `src` to a real filesystem path — because rows 1 (Deepfake) and 2 (Motion
+graphics) built and proved exactly this plumbing already. The actual gap was narrower and more
+literal: `CombineDialog.tsx` never called `generateMedia` at all, for any pair, ever — `confirmCombine`
+in `store.ts` unconditionally spawned a placeholder node on a stub timer. The dialog's own blurb
+for the image+image case even said "prompt how they should mix," but there was no textarea
+anywhere in the dialog for a user to type that prompt into. The real work here was mostly wiring
+an existing mechanism through a dialog that had never been connected to it, not inventing a new
+capability.
+
+**What I built:** `CombineDialog` gained a prompt textarea, shown only for the two pairs getting
+real semantics this pass (image+image, audio+image — either drag order), with a per-pair
+placeholder string as a sensible default if the user leaves it blank. `confirmCombine` in
+`store.ts` now dispatches on the sorted media-type pair: **image+image** calls `generateMedia`
+with `mediaType: 'image'` and `referenceImagePaths: [source.src, target.src]` — the same field
+Motion graphics' References stage uses for reference-conditioning. **audio+image** calls
+`generateMedia` with `mediaType: 'video'`, `sourceMediaPath: <the image's src>`,
+`referenceAudioPaths: [<the audio's src>]` — the identical chain Deepfake's Stage 2 uses to drive
+a face with already-generated speech, reused as-is rather than restricted to a specific connector
+pair: Deepfake restricts to muapi+Yapper because its chain note steers a specific
+upload-then-lipsync sequence across exactly those two connectors, and Combine has no such
+sequence to steer around, so it leaves the connector unrestricted and lets the agent pick from
+whatever's installed — the same default posture Generate video and Generate image already use.
+Since there's no way to actually detect whether the dragged image shows a face, I pushed that
+judgment into the prompt itself rather than adding a UI toggle nobody would remember to set: "If
+the image shows a face, lip-sync its mouth to the audio like a talking avatar. Otherwise animate
+the still to the mood and pacing of the audio and use the audio as its soundtrack." This is the
+same prompt-embedded-directive pattern the Suno instrumental-only checkbox (row 5) and Deepfake's
+chain note (row 1) already established for steering agent tool choice through plain text instead
+of a new typed field — consistent with how this codebase has been handling exactly this kind of
+ambiguity across every prior row. The Combine button now disables until both dragged nodes are
+`status: 'ready'`, since the real paths need finished files on disk, not an in-flight render — the
+placeholder path never needed that guard because it never touched a real file. While in the file,
+also converted the dialog's two raw `<button className="btn">`/`"btn primary">` elements to the
+shared `Button` component (`variant="dialog"` / `"dialog-primary"`) per `AGENTS.md`'s
+component-not-class-name-recipe rule — a same-file drive-by, not separate scope, since both
+classes already map 1:1 onto `Button`'s existing `dialog`/`dialog-primary` variants.
+
+**Deliberately left as the stub:** the other four combine pairs — video+video, image+video,
+audio+video, audio+audio — still spawn the placeholder node. Those are ffmpeg-level compositing
+jobs (stitch, score, mix), not agent generations; giving them real semantics means designing a
+local-compositing mechanism this codebase doesn't have yet, which is meaningfully more scope than
+one run and, per the strategy doc's own priority ordering, belongs with row 9 (Timeline / export)
+where the ffmpeg pipeline already lives, not bolted onto this dialog ad hoc.
+
+**Verified:** fresh `npm install` (no `node_modules` present at run start), then `npm run
+typecheck` (`tsconfig.node.json` + `tsconfig.web.json`) — clean, zero errors. **Not run live** —
+no connector keys configured in this sandbox, and live generation spend stays out of scope for
+this routine regardless (`AGENTS.md` §0). Risk here is lower than most prior rows, not higher:
+both `GenerationParams` fields this pass uses were already built and already exercised end-to-end
+by rows 1 and 2, so nothing about *how* a local path reaches a generation tool is new — the only
+genuinely unverified piece is whether the agent reliably follows the face-vs-not branch
+instruction in the audio+image prompt, which needs a joint session with real keys to actually
+watch play out.
+
+**Docs updated in this commit** (doc-drift-is-a-bug, `AGENTS.md` §1.3): `creative-nodes.md`'s
+Combine section rewritten from "still the stub" to describe the two real pairs and the four that
+intentionally remain stubs; `capability-map.md` gained three Combine rows in §3's node table and
+a correction to §4's muapi image-edit bullet (Combine's design has now started, per that bullet's
+own prior wording, even though it doesn't specifically steer the agent toward muapi's image-edit
+tool the way Deepfake steers toward muapi/Yapper); the strategy doc's row 7 status block.
+
+Row 7's two named items are both closed. Next run should move to row 8 (Storyboard / Scripting)
+per the queue's priority order — letting a script's tone default a shot panel's voice/LoRA pick.
+
+---
+
 ## 2026-08-09 — Twelfth autonomous run: collided with the eleventh on row 6, deferred after review
 
 Reached row 6 (Create a LoRA) independently at the same time as the run logged directly below —
