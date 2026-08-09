@@ -149,6 +149,8 @@ export interface AudioToolResult {
   text?: string
   /** Structured voice rows when the listing parsed; raw `text` is the fallback. */
   voices?: VoiceEntry[]
+  /** Yapper's `/audio/speech` free daily-character tier remaining count. */
+  freeCharactersRemainingToday?: number
   error?: string
 }
 

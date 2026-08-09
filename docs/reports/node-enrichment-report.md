@@ -7,6 +7,71 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Ninth autonomous run: Generate audio (row 5), Yapper free-tier TTS fallback
+
+Checked rows 1–4 first: rows 1–3 are `done` or joint-session-only per their own notes, and row 4's
+Krea-direct trainer work (the eighth run's entry directly below) is settled — `git fetch` showed
+nothing new to reconcile, so no repeat work there. Moved to row 5, Generate audio, next `pending`.
+
+**What the tile was missing:** `AudioScreen`'s Voice job (`AsidePanel.tsx`) is entirely built on
+direct ElevenLabs tool calls (`elevenlabs-tools.ts`, the ChatRealtyPull-style "no agent turn"
+pattern) — browse, preview, and generate all go through `withElevenLabs()`. Without an ElevenLabs
+connection, the whole job silently fails; there was no fallback despite one existing on paper.
+`docs/connectors/reference/yapper.md` documents `POST /audio/speech` — a **synchronous**, free
+daily-character-tier script→voice endpoint on the same REST base the Deepfake row (row 1) already
+built a client for (`yapper-rest.ts`, `yap_live_…` key, separate from the OAuth MCP login). That
+endpoint was never called from anywhere in the app.
+
+**What I built:**
+- `yapper-rest.ts` gained `synthesizeYapperSpeech(input: {text, voiceId?})`: validates the
+  2500-char cap the endpoint documents, `POST /audio/speech` with `{script, voiceId?}`, then
+  downloads the returned `url` through `asset-store.ts`'s `importUrlAsset()` into `userData/assets`
+  — same shape every other generation result lands in (`lyme-asset://`). Returns the response's
+  `freeCharactersRemainingToday` count too, so the UI can surface it.
+- New `audio:yapper-tts` IPC channel, wired end-to-end: `ipc-channels.ts` → a thin `ipc.ts` handler
+  (same sender-validation pattern as every other `audio:*` channel) → `preload/index.ts`'s
+  `audioTools.yapperTts` → `bridge.ts`'s `Bridge` interface, browser-mock stub, and pass-through.
+  `AudioToolResult` (`shared/types.ts`) gained an optional `freeCharactersRemainingToday` field
+  rather than inventing a parallel result type for one extra number.
+- `AudioScreen`: added a `yapperTtsReady` check (`bridge.secrets.list()` for the `yapper-rest`
+  synthetic vault id — same duplicated-string pattern `ConnectorsTab.tsx` already uses for the same
+  id, since main-process constants can't cross into renderer code). When ElevenLabs isn't connected
+  and that key is set, the Voice job auto-routes `run('voice')` through `yapperTts` instead of
+  `tts`, hides the ElevenLabs-only browse/preview/voice-name UI (Yapper's free tier is one default
+  voice, no browsing built this pass), and shows a status line with the free-characters-remaining
+  count on success. The run-line reflects three states now: ElevenLabs connected, Yapper-fallback-only,
+  or neither (unchanged "Connect →" prompt).
+
+**What I did not build:** Suno-via-muapi as a music alternative, the row's second named item.
+`muapi_audio_create` is an agent-driven MCP tool (the model has to call it, same as every other
+muapi generation tool), not a synchronous REST endpoint like Yapper's speech call — wiring it means
+routing the Music job through `generation.ts`'s agent path with `connectorIds: ['muapi']`, a
+materially different shape than today's direct-call `AudioScreen` pattern. That's real design scope
+(does Music job get a provider toggle? does the whole tile change shape when only muapi is
+connected?) better left for its own pass than rushed alongside the TTS fix.
+
+**Verified:** fresh `npm install` (no `node_modules` in this sandbox — 168 packages, clean), then
+`npm run typecheck` (`tsconfig.node.json` + `tsconfig.web.json`): clean, zero errors. **Not run
+live** — no Yapper REST key configured in this sandbox, and live spend is out of scope for the
+autonomous routine regardless. The one soft spot, same category as the row 1 upload flow it sits
+beside: `POST /audio/speech`'s request/response field names (`script`, `voiceId`, `url`,
+`freeCharactersRemainingToday`) come from the reference doc's live OpenAPI enumeration, not a
+hand-verified real response — reasonably trustworthy (it's a documented, simpler endpoint than the
+upload flow's undocumented-field-name upload response), but still unfired.
+
+**Docs updated in this commit** (doc-drift-is-a-bug, `AGENTS.md` §1.3): `creative-nodes.md`'s
+Generate audio · Voice row, `capability-map.md` (the `audio-tts` matrix cell, the Audio · voice
+routing row, and §4's unwired-paths bullet — split into "Suno still open" / "Yapper TTS now wired"
+instead of listing both as open), and the strategy doc's row 5 status block.
+
+**Left in-progress** — row 5's resume note is now down to one item: Suno-via-muapi, real scope
+needing its own design pass (agent-path routing, not a parameter wire-up), not a joint-session-only
+item like several other rows' remainders. Next run should either finish that or move to row 6
+(Create a LoRA) if it judges the design scope too large for one pass — same call the fifth run made
+on Motion graphics's third item.
+
+---
+
 ## 2026-08-09 — Eighth autonomous run: collided with the seventh on row 4, deferred after review
 
 Reached row 4 (Generate image) independently, at the same time as the run logged directly below

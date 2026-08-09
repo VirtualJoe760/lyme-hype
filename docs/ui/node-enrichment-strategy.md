@@ -220,6 +220,23 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    commit to stop describing this as a removed/unrouted path.
 5. **Generate audio** — voice library is solid; add Yapper's free daily-tier TTS as a zero-cost
    fallback route, and Suno-via-muapi as a music alternative when ElevenLabs isn't connected.
+
+   **Status (2026-08-09 enrichment run — first item shipped):** the Voice job now auto-routes to
+   Yapper's synchronous `POST /audio/speech` (free daily-character tier, `yapper-rest.ts`'s new
+   `synthesizeYapperSpeech()`) when ElevenLabs isn't connected and the `yapper-rest` REST key
+   (already built for Deepfake's upload path) is set — no agent turn, a direct fetch call exactly
+   like `elevenlabs-tools.ts`'s pattern. New `audio:yapper-tts` IPC channel end-to-end
+   (`ipc-channels.ts` → `ipc.ts` → `preload/index.ts` → `bridge.ts`). The Voice tab's ElevenLabs-only
+   browse/preview/voice-picker UI is hidden in fallback mode (one default voice, no browsing wired
+   this pass) with a status line surfacing `freeCharactersRemainingToday` from the response.
+   `npm run typecheck` clean. **Not run live** — no Yapper REST key configured in this sandbox; the
+   request/response shape (`script`/`voiceId` in, `{url, freeCharactersRemainingToday}` out) is
+   read directly from `docs/connectors/reference/yapper.md`'s verified OpenAPI enumeration, same
+   confidence level as the upload flow it sits beside. **Left undone:** Suno-via-muapi as a music
+   alternative — a materially different build than the TTS fallback, since `muapi_audio_create` is
+   an agent-driven MCP tool (needs `generation.ts`'s agent path, restricted via `connectorIds`),
+   not a synchronous REST call like Yapper's speech endpoint. Real scope for a future pass, not
+   rushed into this one.
 6. **Create a LoRA** — already dual-trainer (Krea 2 / FLUX Krea); enrich with a "train from
    this deepfake's reference photos" shortcut once step 1's Reference-person concept exists.
 7. **Combine (canvas drag-onto-node)** — still a stub. Real semantics belong here:

@@ -109,7 +109,9 @@ const api = {
     sfx: (input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioSfx, input),
     clone: (input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null> =>
-      ipcRenderer.invoke(IPC.audioClone, input)
+      ipcRenderer.invoke(IPC.audioClone, input),
+    yapperTts: (input: { text: string; voiceId?: string }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioYapperTts, input)
   },
   lora: {
     train: (input: {

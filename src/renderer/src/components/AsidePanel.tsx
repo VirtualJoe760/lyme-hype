@@ -436,6 +436,26 @@ function AudioScreen(props: {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const ready = connectorReady(props.connectors, 'elevenlabs')
+  // Yapper's REST TTS key is a synthetic vault id, not a ConnectorDef
+  // (docs/connectors/reference/yapper.md "Two credentials, easy to
+  // conflate"), so it can't be read off props.connectors like `ready` above —
+  // same duplicated id/string as ConnectorsTab.tsx's YAPPER_REST_ID, since
+  // that file lives in a different process and can't share the main-side
+  // constant in yapper-rest.ts.
+  const [yapperTtsReady, setYapperTtsReady] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void bridge.secrets.list().then((secrets) => {
+      if (alive) setYapperTtsReady(secrets.some((s) => s.connectorId === 'yapper-rest'))
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+  // Voice-only fallback: Yapper's `/audio/speech` has a free daily-character
+  // tier and needs no ElevenLabs connection, but it's a single default voice
+  // with no browsing/preview yet — a smaller feature than the ElevenLabs path.
+  const useYapperVoiceFallback = !ready && yapperTtsReady
 
   const [voiceQuery, setVoiceQuery] = useState('')
   const [voices, setVoices] = useState<VoiceEntry[] | null>(null)
@@ -490,7 +510,9 @@ function AudioScreen(props: {
     try {
       const result =
         kind === 'voice'
-          ? await bridge.audioTools.tts({ text, voiceName: voiceName || undefined })
+          ? useYapperVoiceFallback
+            ? await bridge.audioTools.yapperTts({ text })
+            : await bridge.audioTools.tts({ text, voiceName: voiceName || undefined })
           : kind === 'music'
             ? await bridge.audioTools.music({ prompt: text, lengthMs: (parseInt(musicLength, 10) || 60) * 1000 })
             : kind === 'sfx'
@@ -504,7 +526,17 @@ function AudioScreen(props: {
           src: result.src,
           startRendering: false
         })
-        setStatus({ kind: 'ok', text: 'Audio node added to the canvas.' })
+        setStatus({
+          kind: 'ok',
+          text:
+            kind === 'voice' && useYapperVoiceFallback
+              ? `Audio node added to the canvas — Yapper free tier${
+                  typeof result.freeCharactersRemainingToday === 'number'
+                    ? ` (${result.freeCharactersRemainingToday} free characters left today)`
+                    : ''
+                }.`
+              : 'Audio node added to the canvas.'
+        })
       } else if (result?.ok && kind === 'clone' && cloneAttachId) {
         // voice_clone has no file output — cloneName IS the new voice's name,
         // so attaching to a Reference person needs no parsing of the reply.
@@ -532,9 +564,15 @@ function AudioScreen(props: {
   return (
     <>
       <RunLine
-        ok={ready}
-        label={ready ? 'elevenlabs · direct tool calls' : 'ElevenLabs not connected'}
-        cost="$ per generation"
+        ok={ready || yapperTtsReady}
+        label={
+          ready
+            ? 'elevenlabs · direct tool calls'
+            : yapperTtsReady
+              ? 'yapper free tier · voice only, no ElevenLabs connected'
+              : 'ElevenLabs not connected'
+        }
+        cost={ready ? '$ per generation' : yapperTtsReady ? 'free daily tier (voice) · $ once connected' : '$ per generation'}
       />
       <div className="tab-row">
         {(['voice', 'music', 'sfx', 'clone'] as AudioJob[]).map((j) => (
@@ -546,55 +584,69 @@ function AudioScreen(props: {
 
       {job === 'voice' && (
         <>
-          <div className="mgfx-row">
-            <input
-              className="cr-input"
-              placeholder="Search your voice library…"
-              value={voiceQuery}
-              onChange={(e) => setVoiceQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void browse()
-              }}
-            />
-            <button className="conn-mini" disabled={busy} onClick={() => void browse()}>
-              Browse
-            </button>
-          </div>
-          {voices && voices.length > 0 && (
-            <div className="voice-list">
-              {voices.map((v) => (
-                <div key={v.name} className={`voice-row${voiceName === v.name ? ' sel' : ''}`}>
-                  <button
-                    className="voice-play"
-                    title="Preview (tiny TTS call, cached)"
-                    disabled={previewing !== null}
-                    onClick={() => void preview(v.name)}
-                  >
-                    {previewing === v.name ? '…' : '▶'}
-                  </button>
-                  <button className="voice-name" onClick={() => setVoiceName(v.name)}>
-                    {v.name}
-                  </button>
-                  <span className="voice-tags">{v.tags}</span>
-                </div>
-              ))}
-            </div>
+          {useYapperVoiceFallback && (
+            <p className="aside-help">
+              ElevenLabs isn't connected — using Yapper's free daily-character TTS tier instead. One
+              default voice, no browsing yet; connect ElevenLabs in Settings for the full voice library.
+            </p>
           )}
-          {voicesRaw && <pre className="create-voice-list">{voicesRaw}</pre>}
-          <input
-            className="cr-input create-select"
-            placeholder="Voice name (pick above; empty = default)"
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-          />
+          {!useYapperVoiceFallback && (
+            <>
+              <div className="mgfx-row">
+                <input
+                  className="cr-input"
+                  placeholder="Search your voice library…"
+                  value={voiceQuery}
+                  onChange={(e) => setVoiceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void browse()
+                  }}
+                />
+                <button className="conn-mini" disabled={busy} onClick={() => void browse()}>
+                  Browse
+                </button>
+              </div>
+              {voices && voices.length > 0 && (
+                <div className="voice-list">
+                  {voices.map((v) => (
+                    <div key={v.name} className={`voice-row${voiceName === v.name ? ' sel' : ''}`}>
+                      <button
+                        className="voice-play"
+                        title="Preview (tiny TTS call, cached)"
+                        disabled={previewing !== null}
+                        onClick={() => void preview(v.name)}
+                      >
+                        {previewing === v.name ? '…' : '▶'}
+                      </button>
+                      <button className="voice-name" onClick={() => setVoiceName(v.name)}>
+                        {v.name}
+                      </button>
+                      <span className="voice-tags">{v.tags}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {voicesRaw && <pre className="create-voice-list">{voicesRaw}</pre>}
+              <input
+                className="cr-input create-select"
+                placeholder="Voice name (pick above; empty = default)"
+                value={voiceName}
+                onChange={(e) => setVoiceName(e.target.value)}
+              />
+            </>
+          )}
           <textarea
             className="prompt-area"
             placeholder="The line to speak…"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run('voice')}>
-            {busy ? 'Generating…' : '♪ Generate voiceover'}
+          <button
+            className="generate-btn"
+            disabled={busy || !text.trim() || (!ready && !yapperTtsReady)}
+            onClick={() => void run('voice')}
+          >
+            {busy ? 'Generating…' : useYapperVoiceFallback ? '♪ Generate voiceover (Yapper free tier)' : '♪ Generate voiceover'}
           </button>
         </>
       )}

@@ -13,6 +13,7 @@ import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, sav
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
+import { synthesizeYapperSpeech } from './yapper-rest'
 import { exportTimeline } from './ffmpeg'
 import { deleteTrainedStyle, listTrainedStyles, setTrainedStyleVoice, trainStyle } from './fal-training'
 import { isolateAudio, keyAlpha } from './media-tools'
@@ -219,6 +220,10 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.audioClone, (e, input: { name: string; filePaths: string[] }) => {
     if (!isMainSender(e)) return null
     return cloneVoice(input)
+  })
+  ipcMain.handle(IPC.audioYapperTts, (e, input: { text: string; voiceId?: string }) => {
+    if (!isMainSender(e)) return null
+    return synthesizeYapperSpeech(input)
   })
 
   ipcMain.handle(

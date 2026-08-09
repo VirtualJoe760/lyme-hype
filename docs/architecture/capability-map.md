@@ -48,7 +48,7 @@ way around.
 | `image-gen` | ✓ flux/nano-banana/imagen4 | — | ✓ K2 family (1K only) | ○ (nano-banana here = resold Gemini — prefer direct) | ✓ Nano Banana 2 | ✓ gpt-image-2 (quality = price lever) | ○ 11 models | ○ covers/carousel/staging (templated, Cloudinary URLs) |
 | `image-production` | ✓ Midjourney V7/V8/Niji (muapi-exclusive: MJ/Suno/Sora have ZERO fal endpoints) | — | ○ K2 Large | — | — | — | — | — |
 | `image-ref-conditioning` | ○ image-edit tool | — | ○ | ○ | ✓ ≤10 obj +4 char +3 style refs (NB2) | ✓ edits ≤16 refs | — | ○ staging composites agent headshots |
-| `audio-tts` | — | ✓ text_to_speech | — | ○ | — | — | ○ /audio/speech — **sync + free daily tier** (ElevenLabs/Cartesia under the hood) | — |
+| `audio-tts` | — | ✓ text_to_speech | — | ○ | — | — | ✓ /audio/speech — **sync + free daily tier** (ElevenLabs/Cartesia under the hood), direct REST call from the Generate audio · Voice job when ElevenLabs isn't connected | — |
 | `audio-music` | ✓ Suno | ✓ compose_music | — | ○ | — | — | — | — |
 | `audio-sfx` | ○ MMAudio (from video) | ✓ text_to_sound_effects | — | — | — | — | — | — |
 | `voice-clone` | ○ Suno singing clone ($0 + liveness check) | ✓ voice_clone | — | — | — | — | ○ | — |
@@ -91,7 +91,7 @@ $0.03 vs. $0.06/image).
 | Generate image · storyboard | `image-gen` | gemini/openai pick | — |
 | Generate image · production | `image-production` | muapi + hint "Midjourney" | tier toggle |
 | Generate image · with style | `lora-use` | routes by the style's own `connectorId` — fal (weights-URL hint) or krea (`styles:[{id}]` hint, tier picks K2 medium/large) | — |
-| Audio · voice | `audio-tts` (+`voice-library`) | ElevenLabs direct call | — |
+| Audio · voice | `audio-tts` (+`voice-library`) | ElevenLabs direct call | Yapper `/audio/speech` direct REST call (free daily tier, one default voice, no browsing) when ElevenLabs isn't connected and a Yapper REST key is set |
 | Audio · music | `audio-music` | ElevenLabs | muapi/Suno unwired ○ |
 | Audio · SFX | `audio-sfx` | ElevenLabs | — |
 | Audio · clone | `voice-clone` | ElevenLabs | — |
@@ -136,8 +136,15 @@ several connectors can satisfy one node.
   its `model` arg now offers veo-3.1-lite at ~8× cheaper for reveals — the Motion graphics
   wizard's Animate stage surfaces this as a quality-tier picker, 2026-08-09 enrichment run;
   previously the wrapper supported it but nothing in the UI ever set the `model` arg.)
-- **Suno via muapi** as a music alternative when ElevenLabs isn't connected; **Yapper's free
-  daily-tier TTS** as a zero-cost voice fallback (REST, separate key).
+- **Suno via muapi** as a music alternative when ElevenLabs isn't connected — still open; unlike
+  the TTS fallback below, `muapi_audio_create` is an agent-driven MCP tool, not a direct REST call,
+  so wiring it means routing the Generate audio · Music job through `generation.ts`'s agent path
+  rather than a synchronous fetch. **Yapper's free daily-tier TTS** is now wired (2026-08-09
+  enrichment run, row 5): `yapper-rest.ts`'s `synthesizeYapperSpeech()` calls the same
+  `POST /audio/speech` endpoint documented above directly (no agent turn, no polling — the endpoint
+  is synchronous), and the Generate audio · Voice job auto-routes to it when ElevenLabs isn't
+  connected and the `yapper-rest` REST key is set. One default voice, no browsing (that's Yapper's
+  `GET /audio/voices`, left for later if it turns out to matter).
 - **Veo video-extension** (+7s chained, 720p) — a natural "extend this clip" action on video
   nodes; extending also resets the 2-day server retention clock.
 - **ChatRealty staging/covers/carousels** — creative tools already paid for; natural tiles,
