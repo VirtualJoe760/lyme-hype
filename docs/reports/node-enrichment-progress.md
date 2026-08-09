@@ -29,6 +29,20 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-fifth autonomous run) — queue confirmed fully `done`/blocked, same as prior
+  runs. Per the empty-queue guardrail, took Recommendations item 1 (`asset-upload` cross-cutting
+  helper) — flagged since the first run as the biggest unblocked gap. Found the gap was narrower
+  than described: muapi already self-uploads via its own stdio tool, so the real hole was fal
+  specifically (its hosted MCP `upload_file` only takes a remote URL, no way to hand it a local
+  path at all). Shipped `uploadLocalFileToFal()` in `fal-training.ts` (generalized from the
+  existing training-image zip-upload REST flow) and a fal-only pre-upload block in `generation.ts`
+  mirroring the existing Yapper-only block, so any tile that manually selects the fal connector can
+  now actually get local reference/source media to it. `npm run typecheck` clean (fresh `npm
+  install`, no `node_modules` at run start). Not run live — no fal key in this sandbox. No canvas
+  UI change (no tile forces `connectorId: 'fal'` yet — that's the next slice). `capability-map.md`
+  updated in this commit; `creative-nodes.md` left untouched (nothing user-visible changed).
+  Recommendations item 1 partially struck in the report; item 5 and a new fal-forcing-picker item
+  are the next similarly-scoped candidates.
 - 2026-08-09 (twenty-fourth autonomous run) — queue confirmed fully `done`/blocked, same as prior
   runs. Per the empty-queue guardrail, closed the twenty-third run's own resume item: shipped the
   canvas "Extend +7s" picker in `VideoScreen` (`AsidePanel.tsx`, forces `connectorId: 'gemini'`,

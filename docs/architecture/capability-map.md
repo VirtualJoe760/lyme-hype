@@ -42,7 +42,7 @@ way around.
 | Capability | muapi | ElevenLabs | Krea | fal | Gemini | OpenAI | Yapper | ChatRealty |
 |---|---|---|---|---|---|---|---|---|
 | `video-gen-t2v` | ✓ Seedance/Kling/Veo/Sora (591 models) | — | ○ video models | ○ Seedance/WAN etc. | ✓ Veo 3.1 (lite = $0.05/s) | — | ○ ~20 models (sora-2, kling-3, seedance-2.x…) | — |
-| `video-gen-i2v` | ○ video-from-image (single image_url) | — | ○ | ○ (needs `asset-upload`) | ✓ start frame | — | ○ | — |
+| `video-gen-i2v` | ○ video-from-image (single image_url) | — | ○ | ○ (`asset-upload` now wired fal-side — REST pre-upload when fal is the sole connector; no fal-forcing picker on any tile yet) | ✓ start frame | — | ○ | — |
 | `video-frame-conditioning` | ○ **REST-only** (MCP tool can't express it) | — | ○ | ○ (5 different param spellings — check per model) | ✓ image+lastFrame (dur must be 8) | — | ○ | — |
 | `video-extension` | — | — | ○ Seedance 1.0 Pro `start_video` | — | ✓ Veo 3.1 wrapper tool + canvas "Extend +7s" picker (720p; client-probed `videoDurationSec` enforces the 148s cap client-side, wire shape unverified) | — | — | — |
 | `image-gen` | ✓ flux/nano-banana/imagen4 | — | ✓ K2 family (1K only) | ○ (nano-banana here = resold Gemini — prefer direct) | ✓ Nano Banana 2 | ✓ gpt-image-2 (quality = price lever) | ○ 11 models | ○ covers/carousel/staging (templated, Cloudinary URLs) |
@@ -129,14 +129,38 @@ several connectors can satisfy one node.
   (`yap_live_…` key, second run 2026-08-09) and hands the agent the resulting Yapper asset ids
   directly, rather than asking the agent to find an upload tool that doesn't exist on the
   hosted MCP connector. **Unverified live** — no keys configured to fire it yet.
-- **i2v everywhere except Gemini** needs `asset-upload` first (muapi has it stdio-side; fal has
-  it; Yapper imports by URL, or now the Deepfake-scoped REST signed-upload above for local
-  files) — a general-purpose `asset-upload` helper spanning all three connectors and every
-  node (not just Deepfake's local-media case) is still the open plumbing item. Gemini's i2v path
-  itself is now reachable from the Generate video tile (2026-08-09 enrichment run, row 3): picking
-  a ready canvas image node as a starting frame sets `GenerationParams.startFramePath` and forces
-  `connectorId: 'gemini'`, reusing the same `startFramePath` plumbing the Motion graphics wizard's
-  Animate stage already exercised — muapi/fal/Yapper i2v are still blocked on `asset-upload`.
+- **i2v everywhere except Gemini** needs `asset-upload` first (muapi has it stdio-side; fal now
+  has it wired too, see below; Yapper imports by URL, or now the Deepfake-scoped REST signed-upload
+  above for local files) — a general-purpose helper spanning all three connectors and every node
+  (not just Deepfake's local-media case) is still the open plumbing item, though fal's slice of it
+  closed 2026-08-09 (see below). Gemini's i2v path itself is now reachable from the Generate video
+  tile (2026-08-09 enrichment run, row 3): picking a ready canvas image node as a starting frame
+  sets `GenerationParams.startFramePath` and forces `connectorId: 'gemini'`, reusing the same
+  `startFramePath` plumbing the Motion graphics wizard's Animate stage already exercised — muapi/
+  Yapper i2v are still blocked on their own slice of `asset-upload`.
+- **fal's `asset-upload` gap closed** (2026-08-09 enrichment run, off the report's own
+  Recommendations #1 — "the single biggest unblocked gap"): fal's hosted MCP `upload_file` tool
+  only accepts a remote URL (the server is stateless and can't read a local disk path), unlike
+  muapi's stdio `muapi_upload_file`, so a generation agent had no way to get a local reference
+  image/source video/audio file onto fal at all — any tile that ended up routed to fal with local
+  media would have failed or hallucinated a path. `fal-training.ts`'s existing zip-upload REST flow
+  (already used for LoRA training images) is now generalized into an exported single-file
+  `uploadLocalFileToFal(path)` (same `POST /storage/upload/initiate` → PUT bytes flow, extension→
+  content-type map for images/video/audio). `generation.ts` calls it before the agent turn — same
+  shape as the existing Yapper-only pre-upload block just above it — whenever fal is the *sole*
+  attached connector (i.e. `GenerationParams.connectorId: 'fal'` via any tile's manual connector
+  picker, or `connectorIds: ['fal']`), pre-uploading every local `referenceImagePaths`/
+  `startFramePath`/`endFramePath`/`sourceMediaPath`/`referenceAudioPaths` entry and handing the
+  agent the resulting fal.media URLs directly with an explicit "already uploaded, don't try
+  yourself" instruction, mirroring the Yapper block's own wording. **No tile forces
+  `connectorId: 'fal'` specifically yet** (unlike Gemini's starting-frame picker or Yapper's model
+  picker) — this closes the backend half so any tile's existing manual connector `<select>` can
+  pick fal and have local media actually reach it; a `connectorId: 'fal'`-forcing picker (mirroring
+  row 3's Gemini/Yapper pattern) is real, separately-scoped UI work for a future pass. **Not run
+  live** — no fal key configured in the sandbox that built this, and the `POST /storage/upload/
+  initiate` request/response shape is read from the same verified reference-doc entry
+  `fal-training.ts`'s zip upload already used (not newly re-verified), so risk is limited to the
+  single-file case (arbitrary extension/content-type) never having been exercised before.
 - **muapi frame conditioning is REST-only** — the MCP tool takes a single image_url even
   though the model enum lists first-last-frame models; if muapi-side interpolation ever
   matters, it's a REST call, not a tool call. (Gemini's wrapper covers this need today, and

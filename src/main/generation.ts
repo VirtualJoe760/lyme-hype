@@ -4,6 +4,7 @@ import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath } fr
 import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
+import { uploadLocalFileToFal } from './fal-training'
 import { resolveActiveProvider } from './model-providers'
 import { hasYapperRestKey, uploadLocalMediaToYapper } from './yapper-rest'
 
@@ -251,6 +252,33 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     }
   }
 
+  // fal's hosted MCP `upload_file` tool only accepts a remote URL (stateless
+  // server) — it has no way to read a local disk path the way muapi's stdio
+  // muapi_upload_file or Lyme Hype's own bundled Gemini wrapper can. When fal
+  // is the only attached connector, pre-upload local reference/source files
+  // through the REST storage flow (same pattern as the Yapper block above)
+  // instead of asking the agent to find an upload tool that doesn't exist for
+  // fal — this is the cross-cutting asset-upload gap flagged since the first
+  // enrichment run (node-enrichment-report.md Recommendations #1).
+  const falOnlyPromptLines: string[] = []
+  if (attached.length === 1 && attached[0] === 'fal') {
+    const localPaths = [
+      ...(params.referenceImagePaths ?? []),
+      params.startFramePath,
+      params.endFramePath,
+      params.sourceMediaPath,
+      ...(params.referenceAudioPaths ?? [])
+    ].filter((p): p is string => !!p)
+    for (const path of localPaths) {
+      const uploaded = await uploadLocalFileToFal(path)
+      if (uploaded.ok && uploaded.url) {
+        falOnlyPromptLines.push(
+          `${path} is already uploaded to fal as ${uploaded.url} — pass this URL directly wherever the tool wants that file. Do not try to upload ${path} yourself.`
+        )
+      }
+    }
+  }
+
   const abort = new AbortController()
   const timeout = setTimeout(() => abort.abort(), GENERATION_TIMEOUT_MS)
   const { env: authEnv, model } = llmAuthEnv()
@@ -283,8 +311,9 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
 
   try {
     const { query } = await loadSdk()
-    const prompt = yapperOnlyPromptLines.length
-      ? `${buildPrompt(params)}\n${yapperOnlyPromptLines.join('\n')}`
+    const preUploadLines = [...yapperOnlyPromptLines, ...falOnlyPromptLines]
+    const prompt = preUploadLines.length
+      ? `${buildPrompt(params)}\n${preUploadLines.join('\n')}`
       : buildPrompt(params)
     const stream = query({
       prompt,

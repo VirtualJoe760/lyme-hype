@@ -7,6 +7,74 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-fifth autonomous run: fal's `asset-upload` gap closed (Recommendations item 1, fal's slice)
+
+Queue state going in: all ten rows `done` (rows 1/2 unchanged — both still flagged nothing-safely-
+buildable-blind: row 1 needs a joint session, row 2's remaining item needs its own design pass).
+Recommendations items 3 and 4 already shipped, item 5 (muapi image-edit for Motion graphics) is a
+"needs its own design pass" item, not a quick slice — so this run picked item 1 instead, the
+cross-cutting `asset-upload` helper, flagged in the very first run's own writeup as "the single
+biggest unblocked gap."
+
+**What I found on inspection.** The gap wasn't uniform across the three connectors the
+Recommendation named. muapi already has a real answer: `muapi_upload_file` is a stdio-side MCP
+tool the agent can call directly with a local path — Deepfake's Stage 2 chain (row 1) already
+relies on exactly that, nothing missing there. fal was the genuine hole: its hosted MCP
+`upload_file` tool takes only a remote URL (per `docs/connectors/reference/fal.md`'s own gotcha —
+"the server is stateless and can't see local disks"), so an agent routed to fal with a local
+reference image, start/end frame, or source media file had no tool of its own to get it there —
+it would either fail outright or hallucinate a path. That's the concrete thing worth building:
+not a single "upload helper" abstraction spanning three different connector shapes (which would
+have been over-engineered for connectors that don't actually share a wire protocol), but fal's own
+missing half.
+
+**What I built.** `fal-training.ts` already had exactly this REST flow, just single-purpose: its
+`uploadZip()` (used for LoRA training-image bundles) posts to fal's `storage/upload/initiate` then
+PUTs the bytes. Generalized the initiate→PUT round trip into a private `uploadBufferToFal()` and
+added a new exported `uploadLocalFileToFal(path)` on top of it — reads the file, maps its extension
+to a content-type (images/video/audio), uploads, returns the resulting `file_url`. `uploadZip()`
+itself now calls the same shared helper rather than duplicating the fetch calls. In `generation.ts`,
+added a fal-only pre-upload block that mirrors the existing Yapper-only block right above it in the
+same file (same "when this is the sole attached connector, pre-upload local paths before the agent
+turn and hand it ready-made URLs with a 'don't try uploading yourself' instruction" shape): when
+`attached` is exactly `['fal']`, every local `referenceImagePaths`/`startFramePath`/`endFramePath`/
+`sourceMediaPath`/`referenceAudioPaths` entry gets uploaded first, and the resulting fal.media URLs
+are threaded into the prompt alongside the existing Yapper-only lines (both arrays now merge into
+one `preUploadLines` block instead of just the Yapper one).
+
+**What I deliberately left out.** No canvas UI change — no tile forces `connectorId: 'fal'`
+specifically the way row 3 built Gemini's starting-frame picker and Yapper's model picker. Today
+fal is only reachable via each tile's existing manual connector `<select>`; picking it there with a
+local reference file previously would have silently failed (or the agent would have improvised),
+now it actually works. A `connectorId: 'fal'`-forcing picker is real, separately-scoped UI work,
+flagged in the report's own updated Recommendations item 1 for a future pass — it's a smaller lift
+now that the backend half exists, similar in shape to the pattern item 3 (Veo extension) followed:
+backend one pass, UI a later pass. Didn't touch Yapper's slice of this Recommendation at all — its
+own REST signed-upload path (built rows 1/3/5 ago) already covers its own case and wasn't broken;
+the Recommendation's "three separate one-off wire-ups" framing turned out to overstate the
+remaining scope once muapi's already-solved case is set aside.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json`
+(fresh `npm install`, no `node_modules` at run start). **Not run live** — no fal API key configured
+in this sandbox; the `POST /storage/upload/initiate` request/response shape is the same one
+`fal-training.ts`'s zip upload already used (verified against fal's docs when that code was first
+written, not newly re-verified this pass), so the only genuinely new-and-unverified surface is the
+single-file case itself (arbitrary extension → content-type mapping, a fresh code path that never
+ran before even in the zip-upload form). `capability-map.md`'s `video-gen-i2v` matrix cell and §4's
+open-items note updated in this commit; `creative-nodes.md` left untouched since nothing
+user-visible changed yet — no node's inputs/outputs differ from what a user sees until a
+fal-forcing picker exists, same reasoning the twenty-third run used for the Veo-extension backend
+pass.
+
+**Where this leaves things.** Not a queue row, so nothing to mark in the progress table.
+Recommendations item 1 in this report is now partially struck (fal's slice done, muapi's slice was
+never really open, a fal-forcing UI picker and a Yapper re-check are what's left). Item 5 (muapi
+image-edit for Motion graphics) remains the next design-pass-scoped candidate; a fal-forcing picker
+on Generate video/image (mirroring row 3's Gemini/Yapper pattern) is now a similarly well-scoped
+quick-slice candidate too.
+
+---
+
 ## 2026-08-09 — Twenty-fourth autonomous run: Veo video-extension canvas UI + real duration tracking (Recommendations item 3, closing it)
 
 Queue state going in: all ten rows `done` (rows 1/2 unchanged — both flagged nothing-safely-
@@ -1538,15 +1606,24 @@ empty-looking queue isn't a reason to invent busywork rows — instead, here's w
 considering next, in roughly the order I'd tackle them. None of this is scoped or built; it's a
 starting point for whoever plans the next phase of enrichment (human or routine).
 
-1. **The `asset-upload` cross-cutting helper is still the single biggest unblocked gap.** It's been
-   flagged since the first run (see "Cross-cutting plumbing" above) and still blocks real muapi/fal
-   i2v paths on rows 1, 3, and 7 — those tiles fall back to Gemini for image-conditioned generation
-   today, not because Gemini is the best fit, but because it's the only connector whose reference
-   image handling doesn't require a hosted URL first. A local-file/`lyme-asset://` → provider-hosted
-   URL helper, shared by muapi's `upload_file`, fal's storage REST, and Yapper's signed-upload REST
-   (already half-built for Deepfake's own path — see `yapper-rest.ts`), would unlock i2v choice
-   across three tiles at once instead of three separate one-off wire-ups. Worth being the first
-   thing a future pass tackles precisely because it's cross-cutting, not node-specific.
+1. **The `asset-upload` cross-cutting helper — fal's slice shipped** (2026-08-09, twenty-fifth
+   autonomous run), muapi's and a general re-check of Yapper's still open. It's been flagged since
+   the first run (see "Cross-cutting plumbing" above) as blocking real muapi/fal i2v paths on rows
+   1, 3, and 7 — those tiles fall back to Gemini for image-conditioned generation today, not because
+   Gemini is the best fit, but because it's the only connector whose reference image handling
+   doesn't require a hosted URL first. fal specifically had no path at all: its hosted MCP
+   `upload_file` tool only accepts a remote URL (stateless server), so an agent routed to fal with a
+   local reference image/source file couldn't get it there by any means. `uploadLocalFileToFal()`
+   (`src/main/fal-training.ts`, generalized from the existing training-image zip-upload REST flow)
+   plus a fal-only pre-upload block in `generation.ts` (same shape as the existing Yapper-only
+   block) closes that: any tile whose manual connector picker selects fal now actually gets local
+   media through to it. **Still open:** no tile has a `connectorId: 'fal'`-forcing picker the way
+   Gemini/Yapper have (row 3's starting-frame/model pickers) — that's real, separately-scoped UI
+   work for a future pass. muapi's slice is arguably not a gap in the same sense (its stdio
+   `muapi_upload_file` tool is agent-callable directly, no helper needed — Deepfake's Stage 2 chain
+   already relies on exactly that), so the actual remaining scope here is narrower than "three
+   one-off wire-ups": mostly the fal-forcing UI, plus double-checking Yapper's own REST upload path
+   still covers what it needs to now that fal's is proven out.
 
 2. **ChatRealty's CMS tools are completely untouched and low-risk.** `create_article` /
    `create_landing_page` (both DRAFT-only — `update_article`/`update_landing_page`'s `status:
