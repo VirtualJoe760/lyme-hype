@@ -8,7 +8,6 @@ import { PlayView } from './components/PlayView'
 import { Settings } from './components/settings/Settings'
 import { SessionsRail } from './components/SessionsRail'
 import { TitleBar } from './components/TitleBar'
-import { Toolbar } from './components/Toolbar'
 import { PANEL_SIZES, useStudio } from './store'
 
 export default function App(): React.JSX.Element {
@@ -35,7 +34,6 @@ export default function App(): React.JSX.Element {
   return (
     <div className="app">
       <TitleBar />
-      <Toolbar />
       <div className="body">
         {loaded && (
           <>
