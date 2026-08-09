@@ -11,11 +11,12 @@ type ExportState =
   | { status: 'error'; message: string }
 
 const TRACK_HEAD_W = 118
-const TRACK_ROW_H = 46
 const RULER_H = 22
+const HEAD_H = 38
 const SNAP_TOLERANCE_PX = 8
 const MIN_PPS = 4
 const MAX_PPS = 400
+const FRAME_SEC = 1 / 30
 
 function fmtTime(t: number): string {
   if (!Number.isFinite(t) || t < 0) return '0:00.0'
@@ -75,6 +76,9 @@ export function CutRoom(): React.JSX.Element {
   const tracks = useMemo(() => displayTracks(timeline?.tracks ?? []), [timeline?.tracks])
   const clips = timeline?.clips ?? []
 
+  const trackRowH = useStudio((s) => s.timelineTrackHeight)
+  const setTrackRowH = useStudio((s) => s.setTimelineTrackHeight)
+
   const [exp, setExp] = useState<ExportState>({ status: 'idle' })
   const [pps, setPps] = useState(40)
   const [playhead, setPlayhead] = useState(0)
@@ -82,9 +86,12 @@ export function CutRoom(): React.JSX.Element {
   const [magnet, setMagnet] = useState(true)
   const [razor, setRazor] = useState(false)
   const [dragClipId, setDragClipId] = useState<string | null>(null)
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const [monitorAspect, setMonitorAspect] = useState<'9:16' | '16:9'>('9:16')
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const rulerRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const mediaRefs = useRef(new Map<string, HTMLVideoElement | HTMLAudioElement>())
   const probing = useRef(new Set<string>())
 
@@ -202,7 +209,67 @@ export function CutRoom(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pps, collapsed])
 
+  // Alt+scroll anywhere over the track area = horizontal zoom (the Adobe
+  // convention the user asked for); plain scroll keeps scrolling. Non-passive
+  // for the same React-passive-wheel reason as the ruler.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.altKey) return
+      e.preventDefault()
+      const anchor = timeAtClientX(e.clientX)
+      const factor = e.deltaY < 0 ? 1.25 : 1 / 1.25
+      const next = Math.min(MAX_PPS, Math.max(MIN_PPS, pps * factor))
+      setPps(next)
+      requestAnimationFrame(() => {
+        const scroll = scrollRef.current
+        if (!scroll) return
+        const rect = scroll.getBoundingClientRect()
+        scroll.scrollLeft = anchor * next - (e.clientX - rect.left - TRACK_HEAD_W)
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pps, collapsed])
+
   if (!session || !timeline) return <div className="cutroom collapsed" />
+
+  /** Premiere-convention shortcuts, active while the timeline has focus
+   *  (clicking anywhere in it focuses the container): V select, C razor,
+   *  S snap, Space transport, +/- zoom, \ fit, Ctrl+K add edit at playhead,
+   *  Delete removes the selected clip, Home/End jump, ←/→ frame-nudge
+   *  (Shift = ×5 frames). */
+  function onTimelineKeyDown(e: React.KeyboardEvent): void {
+    const target = e.target as HTMLElement
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
+    const key = e.key
+    if (key === 'v' || key === 'V') setRazor(false)
+    else if (key === 'c' || key === 'C') setRazor(true)
+    else if (key === 's' || key === 'S') setMagnet((m) => !m)
+    else if (key === ' ') {
+      e.preventDefault()
+      setPlaying((p) => !p)
+    } else if (key === '+' || key === '=') setPps((p) => Math.min(MAX_PPS, p * 1.25))
+    else if (key === '-') setPps((p) => Math.max(MIN_PPS, p / 1.25))
+    else if (key === '\\') fitToWindow()
+    else if ((key === 'k' || key === 'K') && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      splitAtPlayhead()
+    } else if (key === 'Delete' || key === 'Backspace') {
+      if (selectedClipId) {
+        removeTimelineClip(selectedClipId)
+        setSelectedClipId(null)
+      }
+    } else if (key === 'Home') setPlayhead(0)
+    else if (key === 'End') setPlayhead(totalEnd)
+    else if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      e.preventDefault()
+      const step = FRAME_SEC * (e.shiftKey ? 5 : 1) * (key === 'ArrowLeft' ? -1 : 1)
+      setPlayhead((t) => Math.max(0, t + step))
+    }
+  }
 
   function timeAtClientX(clientX: number): number {
     const scroll = scrollRef.current
@@ -266,6 +333,7 @@ export function CutRoom(): React.JSX.Element {
   }
 
   function startClipDrag(e: React.PointerEvent, clip: TimelineClip, track: TimelineTrack): void {
+    setSelectedClipId(clip.id)
     if (track.locked) return
     if (razor) {
       splitTimelineClip(clip.id, snapTime(timeAtClientX(e.clientX)))
@@ -369,10 +437,30 @@ export function CutRoom(): React.JSX.Element {
   const tickCount = Math.ceil(contentSeconds / step) + 1
   const playheadX = TRACK_HEAD_W + playhead * pps
 
+  // No dead space below the tracks: leftover panel height fills with ghost
+  // rows, split evenly video/audio, that become real tracks on click or drop.
+  const videoTracks = tracks.filter((t) => t.type === 'video')
+  const audioTracks = tracks.filter((t) => t.type === 'audio')
+  const rowsThatFit = Math.max(0, Math.floor((height - HEAD_H - RULER_H - 14) / trackRowH))
+  const ghostDeficit = Math.max(0, rowsThatFit - tracks.length)
+  const videoGhosts = Math.ceil(ghostDeficit / 2)
+  const audioGhosts = Math.floor(ghostDeficit / 2)
+  type RowItem = { kind: 'track'; track: TimelineTrack } | { kind: 'ghost'; type: 'video' | 'audio' }
+  const rowItems: RowItem[] = [
+    ...videoTracks.map((t): RowItem => ({ kind: 'track', track: t })),
+    ...Array.from({ length: videoGhosts }, (): RowItem => ({ kind: 'ghost', type: 'video' })),
+    ...audioTracks.map((t): RowItem => ({ kind: 'track', track: t })),
+    ...Array.from({ length: audioGhosts }, (): RowItem => ({ kind: 'ghost', type: 'audio' }))
+  ]
+
   return (
     <div
       className={`cutroom${collapsed ? ' collapsed' : ''}`}
       style={collapsed ? undefined : { height }}
+      ref={containerRef}
+      tabIndex={-1}
+      onKeyDown={onTimelineKeyDown}
+      onPointerDown={() => containerRef.current?.focus()}
     >
       <div className="head">
         <button
@@ -416,9 +504,25 @@ export function CutRoom(): React.JSX.Element {
             <button className="conn-mini" title="Add audio track" onClick={() => addTrack('audio')}>
               +A
             </button>
-            <button className="conn-mini" title="Fit timeline to window" onClick={fitToWindow}>
+            <button className="conn-mini" title="Fit timeline to window (\)" onClick={fitToWindow}>
               ⤢
             </button>
+            <button
+              className="conn-mini"
+              title="Monitor aspect — toggle 9:16 / 16:9"
+              onClick={() => setMonitorAspect(monitorAspect === '9:16' ? '16:9' : '9:16')}
+            >
+              {monitorAspect}
+            </button>
+            <input
+              className="tl-height-slider"
+              type="range"
+              min={28}
+              max={96}
+              value={trackRowH}
+              title="Track height"
+              onChange={(e) => setTrackRowH(parseInt(e.target.value, 10))}
+            />
           </>
         )}
         <span className="cut-spacer" />
@@ -439,7 +543,14 @@ export function CutRoom(): React.JSX.Element {
 
       {!collapsed && (
         <div className="tl-body">
-          <div className="tl-monitor">
+          <div
+            className="tl-monitor"
+            style={
+              monitorAspect === '9:16'
+                ? { aspectRatio: '9 / 16', maxWidth: 220 }
+                : { aspectRatio: '16 / 9', maxWidth: 420 }
+            }
+          >
             {monitorVideo.length === 0 && <span className="tl-monitor-idle">▶</span>}
             {monitorVideo.map(({ clip }) => {
               const node = nodeFor(clip)
@@ -497,13 +608,49 @@ export function CutRoom(): React.JSX.Element {
                 </div>
               </div>
 
-              {tracks.map((track) => {
+              {rowItems.map((item, rowIdx) => {
+                if (item.kind === 'ghost') {
+                  return (
+                    <div key={`ghost-${rowIdx}`} className="tl-track-row ghost" style={{ height: trackRowH }}>
+                      <button
+                        className="tl-track-head tl-ghost-head"
+                        style={{ width: TRACK_HEAD_W }}
+                        title={`Add a ${item.type} track`}
+                        onClick={() => addTrack(item.type)}
+                      >
+                        + {item.type === 'video' ? 'Video' : 'Audio'}
+                      </button>
+                      <div
+                        className="tl-lane tl-ghost-lane"
+                        onDragOver={(e) => {
+                          if (e.dataTransfer.types.includes('application/lyme-node')) {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'copy'
+                          }
+                        }}
+                        onDrop={(e) => {
+                          const nodeId = e.dataTransfer.getData('application/lyme-node')
+                          if (!nodeId) return
+                          e.preventDefault()
+                          // A drop materializes the ghost — but only when the
+                          // node's media type matches the track type (audio ↔
+                          // audio; video/image ↔ video).
+                          const nodeType = e.dataTransfer.getData('application/lyme-node-type')
+                          if ((nodeType === 'audio') !== (item.type === 'audio')) return
+                          const trackId = addTrack(item.type)
+                          if (trackId) void addClipToTimelineAt(nodeId, trackId, snapTime(timeAtClientX(e.clientX)))
+                        }}
+                      />
+                    </div>
+                  )
+                }
+                const track = item.track
                 const live = trackLive(track, timeline.tracks)
                 return (
                   <div
                     key={track.id}
                     className={`tl-track-row${selectedTrackId === track.id ? ' selected' : ''}`}
-                    style={{ height: TRACK_ROW_H }}
+                    style={{ height: trackRowH }}
                     data-track-id={track.id}
                     data-track-type={track.type}
                   >
@@ -593,7 +740,7 @@ export function CutRoom(): React.JSX.Element {
                           return (
                             <div
                               key={clip.id}
-                              className={`tl-clip sw${clip.swatch}${dragClipId === clip.id ? ' dragging' : ''}${track.locked ? ' locked' : ''}`}
+                              className={`tl-clip sw${clip.swatch}${dragClipId === clip.id ? ' dragging' : ''}${selectedClipId === clip.id ? ' selected' : ''}${track.locked ? ' locked' : ''}`}
                               style={{ left: clip.startTime * pps, width }}
                               onPointerDown={(e) => startClipDrag(e, clip, track)}
                             >

@@ -301,6 +301,8 @@ export interface PersistedState {
   railWidth?: number
   asideWidth?: number
   timelineHeight?: number
+  /** Timeline track-row height (vertical zoom) — same workspace-pref class. */
+  timelineTrackHeight?: number
 }
 
 export interface AgentStreamEvent {

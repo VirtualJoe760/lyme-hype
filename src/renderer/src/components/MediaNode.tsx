@@ -108,6 +108,7 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
           title="Drag onto a timeline track"
           onDragStart={(e) => {
             e.dataTransfer.setData('application/lyme-node', id)
+            e.dataTransfer.setData('application/lyme-node-type', data.mediaType)
             e.dataTransfer.effectAllowed = 'copy'
           }}
         >

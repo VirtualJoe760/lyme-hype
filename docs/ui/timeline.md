@@ -16,6 +16,13 @@
 
 **Requirement checklist (2026-08-08), so this is unambiguous for an autonomous build:** accepts both audio and video ✓ (§Visual model), slicing tools ✓ (§Interactions — a general razor tool, not just split-at-playhead), overlay motion graphics on top of clips ✓ (§Visual model's Video 2+ tracks, §ffmpeg export consequences' `overlay` filter, and directly consumes `../ui/create-panel.md`'s Motion graphics tile output), stack clips using different tracks ✓ (§Visual model — dynamic track count, not capped), mute **and** solo per track ✓ (§Interactions defines both explicitly, including the distinction between them). Every open question from the first draft of this doc that could block an autonomous build has been resolved to a firm default below — remaining open items are genuinely non-blocking (see §Open questions).
 
+**User-directed refinements (2026-08-09, from annotated-screenshot feedback):**
+
+- **No dead space below the tracks** — leftover panel height fills with **ghost rows**, split evenly video/audio, that become real tracks on click or on dropping a matching-type node. +V/+A stay for explicit adds.
+- **Vertical zoom**: a click-drag **track-height slider** (28–96px) in the header, persisted as a workspace pref (`timelineTrackHeight`) like the panel sizes.
+- **Adobe-convention controls** (the user's stated rule of thumb): **Alt+scroll = horizontal zoom** anywhere over the tracks (ruler plain-scroll zoom also remains), and keyboard shortcuts active while the timeline has focus (click it first): **V** selection, **C** razor, **S** snap toggle, **Space** play/pause, **+ / −** zoom, **\\** fit, **Ctrl+K** add-edit at playhead, **Delete** removes the selected clip (clips click-select now), **Home/End** jump, **← / →** one-frame nudge (**Shift** = 5 frames).
+- **Monitor aspect toggle**: 9:16 ⇄ 16:9 button in the header (the pane widens for 16:9).
+
 ## Precedent
 
 Both reference tools this project draws on (`../history.md`) pointed at a real timeline directly: jboogx's Cut Room strip was explicitly a placeholder ("drop clips here" review queue, not a real edit surface), and the stephenlawyer.clothing canvas's drag-to-combine pattern — drop-onto-target for placement, drag-onto-existing for a contextual dialog — is the direct interaction model this timeline reuses: drop a clip onto a track to place it, drag clip-onto-clip for a transition dialog instead of a silent cut.

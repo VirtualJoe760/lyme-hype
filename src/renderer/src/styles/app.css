@@ -969,10 +969,14 @@
   width: auto;
 }
 
-.scripting-send {
+/* Doubled selector so this beats .generate-btn's full-width rule (defined
+ * later in the file) — the textarea is the hero, Send stays compact. */
+.generate-btn.scripting-send {
+  display: inline-block;
   width: auto;
+  flex: none;
   margin: 0;
-  padding: 10px 20px;
+  padding: 10px 22px;
 }
 
 /* Storyboard: script-born panel extras */
@@ -1014,11 +1018,25 @@
 
 /* ---------- Create panel (aside) ---------- */
 
-.create-back-row {
-  display: block;
-  width: calc(100% - 8px);
-  margin: 2px 4px 10px;
-  text-align: left;
+.create-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.create-head-title {
+  flex: 1;
+  text-align: center;
+}
+
+.panel-btn-spacer {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+}
+
+.side-panel.collapsed .create-head .btns:first-child {
+  display: none;
 }
 
 .create-tiles {
@@ -2093,6 +2111,60 @@
 
 .tl-lane.razor {
   cursor: crosshair;
+}
+
+/* Ghost rows: leftover panel height rendered as add-a-track invitations. */
+.tl-track-row.ghost {
+  opacity: 0.55;
+}
+
+.tl-track-row.ghost:hover {
+  opacity: 1;
+}
+
+.tl-ghost-head {
+  flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-soft);
+  text-align: left;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.tl-ghost-head:hover {
+  color: var(--accent);
+}
+
+.tl-ghost-lane {
+  background: transparent;
+  border: none;
+}
+
+.tl-track-row.ghost {
+  border-bottom: 1px dashed var(--border);
+}
+
+.tl-height-slider {
+  width: 72px;
+  accent-color: var(--accent);
+}
+
+.cutroom:focus {
+  outline: none;
+}
+
+.tl-clip.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 /* ---------- timeline clips ---------- */

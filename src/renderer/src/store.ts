@@ -175,6 +175,8 @@ interface StudioStore {
   railWidth: number
   asideWidth: number
   timelineHeight: number
+  timelineTrackHeight: number
+  setTimelineTrackHeight(px: number): void
   settingsOpen: boolean
   settingsTab: SettingsTab
   theme: ThemeId
@@ -218,7 +220,8 @@ interface StudioStore {
   splitTimelineClip(clipId: string, atTime: number): void
   removeTimelineClip(clipId: string): void
   patchTimelineClip(clipId: string, patch: Partial<TimelineClip>): void
-  addTrack(type: TrackType): void
+  /** Returns the new track's id so a drop can target it immediately. */
+  addTrack(type: TrackType): string | null
   removeTrack(trackId: string): void
   toggleTrackFlag(trackId: string, flag: 'muted' | 'soloed' | 'locked'): void
   selectTrack(trackId: string): void
@@ -322,14 +325,15 @@ export const useStudio = create<StudioStore>((set, get) => {
   }
 
   function persistedSnapshot(): PersistedState {
-    const { activeSessionId, theme, railWidth, asideWidth, timelineHeight } = get()
+    const { activeSessionId, theme, railWidth, asideWidth, timelineHeight, timelineTrackHeight } = get()
     return {
       sessions: syncedSessions(),
       activeSessionId,
       theme,
       railWidth,
       asideWidth,
-      timelineHeight
+      timelineHeight,
+      timelineTrackHeight
     }
   }
 
@@ -393,6 +397,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     railWidth: PANEL_SIZES.rail.default,
     asideWidth: PANEL_SIZES.aside.default,
     timelineHeight: PANEL_SIZES.timeline.default,
+    timelineTrackHeight: 46,
     settingsOpen: false,
     settingsTab: 'connectors',
     theme: 'lime-cut',
@@ -439,7 +444,8 @@ export const useStudio = create<StudioStore>((set, get) => {
         theme,
         railWidth: persisted?.railWidth ?? PANEL_SIZES.rail.default,
         asideWidth: persisted?.asideWidth ?? PANEL_SIZES.aside.default,
-        timelineHeight: persisted?.timelineHeight ?? PANEL_SIZES.timeline.default
+        timelineHeight: persisted?.timelineHeight ?? PANEL_SIZES.timeline.default,
+        timelineTrackHeight: persisted?.timelineTrackHeight ?? 46
       })
     },
 
@@ -740,19 +746,21 @@ export const useStudio = create<StudioStore>((set, get) => {
 
     addTrack(type) {
       const session = activeSession()
-      if (!session) return
+      if (!session) return null
       const sameType = session.timeline.tracks.filter((t) => t.type === type)
       const order = sameType.reduce((max, t) => Math.max(max, t.order), -1) + 1
       const name = `${type === 'video' ? 'Video' : 'Audio'} ${sameType.length + 1}`
+      const id = nextId('track')
       updateSession(session.id, {
         timeline: {
           ...session.timeline,
           tracks: [
             ...session.timeline.tracks,
-            { id: nextId('track'), type, name, muted: false, soloed: false, locked: false, order }
+            { id, type, name, muted: false, soloed: false, locked: false, order }
           ]
         }
       })
+      return id
     },
 
     removeTrack(trackId) {
@@ -1290,6 +1298,11 @@ export const useStudio = create<StudioStore>((set, get) => {
       if (panel === 'rail') set({ railWidth: px })
       else if (panel === 'aside') set({ asideWidth: px })
       else set({ timelineHeight: px })
+      persist()
+    },
+
+    setTimelineTrackHeight(px) {
+      set({ timelineTrackHeight: Math.min(96, Math.max(28, Math.round(px))) })
       persist()
     },
 

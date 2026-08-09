@@ -118,6 +118,7 @@ After using v1, the user called for a redesign: "robust functionality, presented
 - **The Motion graphics stepper**: six labeled dots, done stages clickable (state is retained, so "iterate" is just walking back), future stages gated on their prerequisites, everything locked while busy.
 - **More options** discloses the sometimes-controls (resolution, connector override) so the prompt stays the hero.
 - **The agent-link card moved to Settings › Models** — Create's home is tasks only.
+- **Header layout (2026-08-09 markup feedback):** the back button sits top-left (where the collapse chevron used to be), the title is centered, and the collapse chevron is right-aligned; the interim full-width back row was removed.
 - **LoRA routing** is the fal trainers (see the decision above), with the trainer picker, style/subject mode, and trigger word on the tile.
 
 ## Done when

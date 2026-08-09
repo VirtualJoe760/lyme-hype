@@ -893,20 +893,26 @@ export function AsidePanel(): React.JSX.Element {
       className={`side-panel aside${collapsed ? ' collapsed' : ''}`}
       style={collapsed ? undefined : { width }}
     >
-      <div className="panel-head">
+      {/* Back top-left (where collapse used to sit), title centered, collapse
+          right-aligned — per the user's markup of the v2 build. */}
+      <div className="panel-head create-head">
+        <div className="btns">
+          {screen !== 'home' && !collapsed ? (
+            <button className="panel-btn" title="Back to Create" onClick={home}>
+              ←
+            </button>
+          ) : (
+            <span className="panel-btn-spacer" />
+          )}
+        </div>
+        <span className="create-head-title">{SCREEN_TITLES[screen]}</span>
         <div className="btns">
           <button className="panel-btn" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggle}>
             {collapsed ? '‹' : '›'}
           </button>
         </div>
-        <span>{SCREEN_TITLES[screen]}</span>
       </div>
       <div className="panel-body">
-        {screen !== 'home' && (
-          <button className="play-back create-back-row" onClick={home}>
-            ← Back to Create
-          </button>
-        )}
         {screen === 'home' && (
           <div className="create-tiles">
             {TILES.map((tile, index) => {
