@@ -139,6 +139,25 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    frame-conditioned video → alpha); enrichment = deepen reference conditioning (Nano Banana 2's
    10-image cap, not the stale 3), add Veo model choice UI (lite for cheap iterations, full for
    the final render), consider muapi's image-edit tool as an alternative batch source.
+
+   **Status (2026-08-09 enrichment run — first two items shipped):** on inspection, the
+   `resources/gemini-mcp.cjs` wrapper already had both underlying capabilities from the
+   "Connector reality check" pass (`4f93dc3`, predates this routine) — `MAX_REFERENCE_IMAGES = 10`
+   on `gemini_generate_image`, and a `model` param on `gemini_generate_video` accepting the three
+   Veo 3.1 variants. Neither was reachable from the UI: `MotionGraphicsWizard.tsx`'s References
+   stage capped picks at 5 (`ids.length < 5`), and nothing ever set `modelHint` for the Animate
+   stage's `generateMedia` call. Fixed both: raised the picker cap to `MAX_REF_IMAGES = 10`
+   (matches Gemini's harder limit; OpenAI's wrapper takes even more, uncapped), and added a
+   quality-tier `<select>` on the Animate stage (default veo-3.1 / fast / lite) that sets
+   `modelHint` to the literal Veo model id — `generation.ts`'s `buildPrompt` already turns
+   `modelHint` into a prompt line, and the literal id matches `gemini_generate_video`'s own
+   `model` enum exactly, so the agent has an unambiguous string to pass through rather than a
+   label to interpret. Only shown when Gemini is connected, since Animate's `connectorId` already
+   restricts to Gemini in that case. `npm run typecheck` clean. **Not run live** — no Gemini key
+   configured in this sandbox; the wiring is real, the actual Veo call is unverified, same
+   ceiling as every other pass. Third item (muapi image-edit as a second batch source) is real
+   scope — a genuinely different generation path, not a parameter wire-up — and is left for a
+   future pass rather than rushed in the same run as the two smaller fixes above.
 3. **Generate video** — currently single-shot t2v; enrich with i2v (a canvas image node as the
    starting frame — Gemini already supports this structurally, just not surfaced on this tile)
    and per-model routing beyond muapi (Yapper's ~20-model catalog is currently invisible here).

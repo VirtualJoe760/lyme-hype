@@ -112,13 +112,20 @@ opaque call:
 
 ## Motion graphics wizard (stages as nodes)
 
-1. **References** — image nodes in (≤5; wrapper caps at 3 for Gemini).
+1. **References** — image nodes in (≤10, matching Gemini's Nano Banana 2 object-reference cap;
+   the wrapper itself slices to 10 and OpenAI's wrapper accepts even more. Raised from a
+   UI-side cap of 5 in the 2026-08-09 enrichment run — the wrapper had already supported 10 since
+   the "Connector reality check" pass, the UI just never let the user reach it).
 2. **Prompt variations** — agent turn with vision input (no generation spend).
 3. **Batch review** — N×M cheap generations → `BatchResultsGrid` pick. `image-gen`.
 4. **Final pass** — winning prompt + references. `image-ref-conditioning`.
 5. **Animate** — locally-drawn solid start frame (or loop = final frame both ends) + final
    image as end frame → reveal video. `video-frame-conditioning` (8s duration rule rides the
-   wrapper).
+   wrapper). A quality-tier picker (default `veo-3.1-generate-preview` / fast / lite, shown
+   whenever Gemini is connected) sets `GenerationParams.modelHint` to the literal Veo model id,
+   so an iteration pass can render on the ~8× cheaper `lite` tier and only the final render pays
+   for full quality — wired 2026-08-09; the wrapper's `model` arg existed before this, nothing
+   in the UI ever set it.
 6. **Alpha** — colorkey → VP9/WebM with real alpha, local ffmpeg. Lands as a `motionGfx` node
    ready for an overlay track.
 

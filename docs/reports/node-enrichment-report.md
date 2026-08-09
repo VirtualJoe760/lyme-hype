@@ -7,6 +7,62 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Fifth autonomous run: Motion graphics (row 2), two wrapper capabilities surfaced
+
+Row 1 (Deepfake) has nothing left that's safely buildable blind — its sole resume item is live
+verification of the muapi/Yapper chains, which needs real credentials and is explicitly
+joint-session scope. Per the prior run's own note ("Next run should pick up row 2 with a clean
+slate"), moved to row 2: Motion graphics. Confirmed no concurrent run had touched it first
+(`git fetch` showed the branch unchanged since the last push).
+
+**What I found on inspection:** less missing than the strategy doc's queue entry implied for two
+of its three items. `resources/gemini-mcp.cjs` — the thin stdio wrapper around Gemini's REST
+API — already had both underlying capabilities the queue asked for, shipped in an earlier pass
+(`4f93dc3`, "Connector reality check: fix everything the research disproved", predates this
+enrichment routine entirely): `MAX_REFERENCE_IMAGES = 10` on `gemini_generate_image` (Nano
+Banana 2 genuinely accepts up to 10 object refs, the old "3" guidance was from the 2.5-era
+model), and a `model` parameter on `gemini_generate_video` accepting the three Veo 3.1 variants
+(`veo-3.1-generate-preview` / `-fast-` / `-lite-`, the last ~8× cheaper at 720p). Neither was
+reachable from the UI. `MotionGraphicsWizard.tsx`'s References stage capped picks at 5
+(`ids.length < 5`, unrelated to either wrapper's actual limit), and nothing in the Animate stage
+ever set `GenerationParams.modelHint`, so the agent always got the wrapper's implicit default
+(full-quality Veo) with no way for the user to ask for a cheaper iteration pass.
+
+**What I built:** raised the References picker's cap to a named constant,
+`MAX_REF_IMAGES = 10`, matching Gemini's harder limit (checked OpenAI's wrapper too —
+`openai-image-mcp.cjs` takes reference images uncapped, docs cite ~16, so 10 is the binding
+limit either way, not an arbitrary new number). Added a quality-tier `<select>` to the Animate
+stage — default veo-3.1 / fast / lite — that's only shown when Gemini is the connected image
+tool (Animate already restricts `connectorId` to Gemini in that case, so the picker would be
+inert otherwise). Selecting a tier sets `modelHint` to the *literal* Veo model id rather than a
+human label: `generation.ts`'s `buildPrompt` turns `modelHint` into a prompt line ("Model
+preference: use a `<hint>` model if the connected tools offer one"), and the wrapper's own tool
+schema documents that literal id in its `model` enum, so the agent gets an unambiguous string to
+copy through instead of a label it has to map itself. `generateMedia`/`GenerationParams`/
+`bridge.generate.run` already threaded `modelHint` end-to-end from an earlier phase — no new
+plumbing needed there, just a caller that finally sets it for this node.
+
+**What I did not build:** the strategy doc's third Motion graphics item, "consider muapi's
+image-edit tool as an alternative batch source." That's a genuinely different generation path —
+a new batch source with its own params and UI, not a parameter wire-up like the two items above
+— and rushing it in the same pass as two smaller, well-understood fixes felt like the wrong
+trade. Left as row 2's resume note for a future pass to design properly.
+
+**Verified:** fresh `npm install` (this sandbox had no `node_modules` again — 168 packages,
+clean), then `npm run typecheck` (`tsconfig.node.json` + `tsconfig.web.json`): clean, zero
+errors. Same ceiling as every prior pass: no display, no Electron runtime, no Gemini API key in
+this sandbox, so this verifies types and the prompt-construction logic, not that the agent
+actually picks the right Veo variant when it's live. That's a joint-session check, same as row
+1's outstanding item.
+
+**Docs updated in this commit** (doc-drift-is-a-bug, `AGENTS.md` §1.3): `creative-nodes.md`'s
+Motion graphics wizard section (both the stale "≤5, wrapper caps at 3" reference-cap claim and
+the new tier picker), `capability-map.md`'s Motion gfx animate row and its §4 muapi-frame-
+conditioning note, and the strategy doc's row 2 entry with a status block matching the Deepfake
+section's established format.
+
+---
+
 ## 2026-08-09 — Fourth autonomous run: collided with a concurrent run on row 1, no new code
 
 Picked up row 1's remaining resume item (a) — the Yapper REST signed-upload path — independently

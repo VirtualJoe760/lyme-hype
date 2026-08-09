@@ -12,7 +12,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | # | Node | Status | Notes |
 |---|---|---|---|
 | 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. Clone-and-attach (former resume item c) shipped: the Create panel's Clone-voice job can attach its result to a Reference person in one step. Yapper REST signed-upload (former resume item a) shipped: `src/main/yapper-rest.ts` + a synthetic-id credential (`yapper-rest`, riding the existing generic secret vault) + a Settings › Connectors row to set it; `generation.ts` pre-uploads local source media to Yapper and hands the agent asset ids directly when Yapper is the only attached connector. resume: (b) is the only item left — live-verify the whole chain (muapi upload→lipsync, and the new Yapper REST fallback) once real keys exist; needs a joint session, nothing further is safely buildable blind. |
-| 2 | Motion graphics | pending | Deepen reference conditioning (10-image cap, not 3), add Veo model choice (lite vs full), consider muapi image-edit as a second batch source. |
+| 2 | Motion graphics | in-progress | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. resume: muapi image-edit as a second batch source is the only item left — a genuinely different generation path (not a parameter wire-up), needs its own design pass before implementing. |
 | 3 | Generate video | pending | Add i2v from a canvas image node; surface Yapper's ~20-model catalog as a routing option. |
 | 4 | Generate image | pending | Extend lora-use to production tier; add Krea 2 direct styles param as a second LoRA route. |
 | 5 | Generate audio | pending | Yapper free-tier TTS fallback; Suno-via-muapi as a music alternative. |
@@ -29,6 +29,14 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (fifth autonomous run) — Row 1 (Deepfake) has nothing left to build blind (only
+  live verification remains, joint-session scope), so moved to row 2 (Motion graphics) with a
+  clean slate as the prior run's report suggested. Raised the References stage's picker cap
+  5→10 and added an Animate-stage Veo quality-tier picker — both surfaced existing wrapper
+  capability that the UI never exposed. Left in-progress: muapi image-edit as a second batch
+  source is real scope for a future pass.
+- 2026-08-09 (fourth autonomous run) — collided with a concurrent run on row 1's last buildable
+  item, no new code shipped; see the report for the full account.
 - 2026-08-09 (third autonomous run) — Deepfake: built the Yapper REST signed-upload path
   (`yapper-rest.ts`, a synthetic-id vault credential, a Settings row, and `generation.ts` wiring
   so the Yapper-only fallback can actually ingest local source media). Row 1's only remaining

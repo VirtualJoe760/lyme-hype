@@ -85,7 +85,7 @@ deny-list alongside muapi's Stripe/keys tools.
 | Audio · SFX | `audio-sfx` | ElevenLabs | — |
 | Audio · clone | `voice-clone` | ElevenLabs | — |
 | Motion gfx · batch/final | `image-gen`, `image-ref-conditioning` | gemini/openai pick | — |
-| Motion gfx · animate | `video-frame-conditioning` | gemini (Veo 3.1) | — |
+| Motion gfx · animate | `video-frame-conditioning` | gemini (Veo 3.1) | quality-tier picker (default/fast/lite via `modelHint`) |
 | Deepfake · speech | `audio-tts` | ElevenLabs direct call | — |
 | Deepfake · face | `lipsync` / `face-swap` | muapi+yapper chain (both restricted via `connectorIds`) | either alone |
 | Create a LoRA | `lora-train` | fal trainer pick | — |
@@ -118,7 +118,9 @@ several connectors can satisfy one node.
 - **muapi frame conditioning is REST-only** — the MCP tool takes a single image_url even
   though the model enum lists first-last-frame models; if muapi-side interpolation ever
   matters, it's a REST call, not a tool call. (Gemini's wrapper covers this need today, and
-  its `model` arg now offers veo-3.1-lite at ~8× cheaper for reveals.)
+  its `model` arg now offers veo-3.1-lite at ~8× cheaper for reveals — the Motion graphics
+  wizard's Animate stage surfaces this as a quality-tier picker, 2026-08-09 enrichment run;
+  previously the wrapper supported it but nothing in the UI ever set the `model` arg.)
 - **Suno via muapi** as a music alternative when ElevenLabs isn't connected; **Yapper's free
   daily-tier TTS** as a zero-cost voice fallback (REST, separate key).
 - **Veo video-extension** (+7s chained, 720p) — a natural "extend this clip" action on video
