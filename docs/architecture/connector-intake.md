@@ -9,8 +9,10 @@ Companion to [`capability-map.md`](capability-map.md) (connector × capability) 
 registry (model × capability). This doc is the *pipeline* that keeps both current without a
 human hand-transcribing a reference doc every time.
 
-**Status: designed, first slice landed.** Step 1 (retain `inputSchema`) is built. Steps 2–5 are
-not. Nothing in this pipeline auto-applies to routing today.
+**Status: designed, first two slices landed.** Step 1 (retain `inputSchema`) and step 2 (the
+classifier + the default-deny screen, `src/main/connector-intake.ts`) are built. Steps 3–5 are
+not. Nothing in this pipeline auto-applies to routing today, and nothing calls the classifier
+yet — it is a pure function with no caller, deliberately.
 
 ---
 
@@ -42,7 +44,7 @@ model, and only the second can be confidently wrong.
 connect connector
    → tools/list                    (already happens)
    → persist observed tools        step 1 ✅ landed
-   → classify tools → capabilities step 2
+   → classify tools → capabilities step 2 ✅ landed
    → harvest models from docs      step 3
    → residue review                step 4
    → node proposals                step 5
@@ -55,7 +57,7 @@ connect connector
 no model calls, no behavior change — this exists so later steps have a real corpus to be
 designed against rather than a hypothesis.
 
-### Step 2 — Classify tools onto the capability vocabulary
+### Step 2 — Classify tools onto the capability vocabulary ✅
 
 For each observed tool, decide which of the `ModelCapability` keys it satisfies, using the
 schema first: a tool taking `image_url` + `mask` + `prompt` is `image-inpaint`; one taking
@@ -69,6 +71,27 @@ Output is a **proposal record**, never a live edit:
 
 Auto-apply only on a schema-grounded match against the closed vocabulary. Anything resting on
 prose stays a proposal.
+
+Built as `classifyTool` / `classifyObservedTools` / `reportResidue` in
+[`src/main/connector-intake.ts`](../../src/main/connector-intake.ts), with the record shapes in
+`src/shared/intake-types.ts`. Pure and deterministic — no model call, no network, no disk, no
+Electron import. `confidence` is the *weakest* evidence tier a proposal rests on (`schema` >
+`name` > `description`), and only `schema` yields `verdict: 'auto-applicable'`. The medium a
+tool outputs is the usual weak link, since a schema declares inputs and never outputs: some
+parameters still pin it (`duration` + `aspect_ratio` is a video — audio has no aspect ratio;
+`num_images`/`width` with no duration is an image; a voice field is audio), and where they
+don't, the tool's name does the work and the tier drops to `name` to say so out loud.
+
+**The classifier is structurally blind to three of the eight connectors.** fal, Krea and Yapper
+are *generic-dispatch* servers: `run_model{endpoint_id, input}`, `generate{model, params}`,
+`yapper_start_process{type, model, input}`. The capability lives in a `model` string chosen at
+call time, not in the schema — so all 27 of their tools classify to nothing, while
+[`capability-map.md`](capability-map.md) correctly marks all three ✓ for real capabilities.
+
+This is an architecture limit, not a residue-vocabulary gap, and it has a sharp consequence:
+**any later step that reads "no proposal" as "no capability" will silently mark half the catalog
+dead.** Dispatch servers need their capability from `search_models`/`get_model_schema` output or
+from the reference docs (step 3), never from `tools/list` alone.
 
 ### Step 3 — Harvest models from documentation
 
@@ -86,6 +109,15 @@ the app discovering a gap in its own model of the world.
 Residue is never auto-resolved. It accumulates into a report, and a human decides whether it is:
 noise (a tool we will never surface), a **new capability** (extend the vocabulary and the
 matrix), or evidence for a **new node**.
+
+`reportResidue` groups it by connector and marks anything the screen denied, so a side-effect
+tool is never mistaken for a capability gap. Its first pass over the catalog's own eight
+connectors surfaces a drift finding rather than a new-node argument: `voice-library`,
+`asset-upload` and `data-mls` are in [`capability-map.md`](capability-map.md)'s vocabulary but
+have no `ModelCapability` counterpart, so `search_voices`, `muapi_upload_file` and every
+ChatRealty tool land in residue permanently. That is the two-vocabulary split doing its job —
+the model registry only keys things a *model* does — but it means residue has a known floor
+that a reviewer should not keep re-reading as a gap.
 
 ### Step 5 — Node proposals, and why nodes must become manifests
 
@@ -117,10 +149,25 @@ holds a credential vault.
 
 2. **Default-deny side-effecting verbs on discovery.** `DANGEROUS_TOOLS_BY_SERVER` in
    `generation.ts` is a hand-maintained blocklist naming muapi's Stripe/key tools and
-   ElevenLabs's call/agent tools. A blocklist cannot cover connectors nobody has seen yet. Newly
-   observed tools whose name or schema suggests publishing, sending, deleting, purchasing, or
-   key management are **denied until a human allows them**, inverting the default for anything
-   unknown.
+   ElevenLabs's call/agent tools. A blocklist cannot cover connectors nobody has seen yet, so the
+   rule is that anything unrecognised must be denied, not allowed.
+
+   **`screenTool` / `deniedToolNames` does NOT yet satisfy this rule.** It returns `deny` when a
+   keyword matches and `allow` otherwise — a bigger blocklist, not an inversion. An adversarial
+   review (2026-08-09) walked straight past `wire_transfer`, `place_bid`, `create_post`,
+   `sql_query`, `drop_table`, `grant_access`, `set_webhook` and a nested `{input:{command}}`
+   wrapper. It also over-denies read-only `muapi_account_balance` and `muapi_keys_list`, which
+   `generation.ts` allows on purpose.
+
+   This matters more than a normal false-negative list, because `generation.ts` grants
+   `allowedTools = ['mcp__<server>']` server-wide — the deny list is the **only** tool-level gate.
+   **Do not wire `deniedToolNames()` into `generation.ts` in its current form.** The fix is the
+   inversion the rule actually asks for: the classifier already knows which tools *are* generation
+   tools, so emit an allowlist of classified tools and deny everything else. Until then the screen
+   is advisory triage for a human reviewing residue, and nothing more.
+
+   It deliberately does **not** screen `upload` — asset upload is a prerequisite for half the
+   catalog's i2v paths, and denying it by keyword would break generation to prevent nothing.
 
 3. **Connector documentation is untrusted input.** It is fetched content, not instruction. Text
    inside a provider's docs that addresses the agent, claims authority, or asks for a credential
