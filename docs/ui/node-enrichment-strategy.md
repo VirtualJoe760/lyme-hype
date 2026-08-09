@@ -685,6 +685,44 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
     render, Scripting-panel CMA context, the carousel slide builder, and agent-in-photo staging.
     Row 10 is fully closed, and with it the entire ten-row queue.
 
+---
+
+## New cross-cutting gap found post-queue: transcription / subtitles (2026-08-09)
+
+With the ten-row queue and Recommendations items 1–5 all closed (see the report's thirty-first
+run and later), this pass's research step (external best-practice search, per the routine's own
+instructions) turned up a gap the queue itself never named: `AGENTS.md` §4 explicitly flags
+subtitle text as "a separate speech-to-text MCP connection... isn't built yet" — and a grep across
+`src/` confirmed it: no `subtitle`/`srt`/`vtt` anywhere in the codebase. ElevenLabs' own reference
+doc (`../connectors/reference/elevenlabs.md`) already names `speech_to_text` as "candidate for the
+subtitle-text connection," so the tool has been sitting there, unused, the whole time.
+
+**What was built:** the plain-transcription slice only. `transcribeAudio()` in
+`elevenlabs-tools.ts` (direct `speech_to_text` call, `return_transcript_to_client_directly: true`,
+same "cheap deterministic call" shape as Voice/Music/SFX — no agent turn), full IPC/preload/
+bridge/store plumbing (`audio:transcribe`, `transcribeClip` store action), and a "Generate
+captions" button in the Play view that lands the result on a new `MediaNodeData.transcript` field
+and displays it in a scrollable box.
+
+**What was deliberately not built, and why:** full SRT/VTT-backed subtitle burn-in. The
+`speech_to_text` MCP tool's schema (per the reference doc's own tool table) exposes no per-word or
+per-segment timestamps — only whole-transcript text, optionally saved to a file. Without cue
+timing there is nothing to hand ffmpeg's `subtitles`/`drawtext` filters; building a burn-in UI on
+top of an untimed transcript would either fake timing (wrong) or require a second, undocumented
+capability (word-level ASR) this connector doesn't expose. Two honest paths forward, for whoever
+picks this up next:
+1. Re-check whether `scribe_v2_realtime` or a raw (non-MCP) ElevenLabs API call exposes
+   word-level timestamps that the MCP wrapper simply doesn't surface — if so, wire that instead.
+2. Treat the plain transcript as a *reference* a human copies into their own subtitle file, and
+   scope real cue-timed burn-in as a separate, larger feature (segment the transcript, estimate
+   timing from clip duration, or find a different transcription source with a timestamped API).
+
+**Verification:** `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh
+`npm install` in this sandbox). **Not run live** — no ElevenLabs key in this sandbox, so the
+`speech_to_text` call shape itself (and the reference doc's flagged-but-unverified interaction
+between `ELEVENLABS_MCP_BASE_PATH` and caller-supplied input paths) is unverified end to end, same
+ceiling as every other pass in this queue.
+
 ## What "enrichment" means per run (guardrails for the automated routine)
 
 - Real code where safe: new plumbing (asset-upload helper, Reference-person type, stage UI),

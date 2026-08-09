@@ -29,6 +29,31 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (thirty-second autonomous run) — queue confirmed fully `done`/blocked (row 1 still
+  live-verification-only, joint-session scope) and Recommendations items 1–5 all struck, so per the
+  empty-queue guardrail did the research step (WebSearch for 2026 best-practice lipsync/motion-
+  graphics pipelines) before falling back to "just add a Recommendations paragraph." That research
+  confirmed the app's existing lipsync routing (muapi's `sync` model, Runway act-two, infinitetalk)
+  already matches or beats what's externally recommended (Sync Labs/Hedra/Runway) — nothing missing
+  there — but it also surfaced a real, previously-unflagged gap while cross-checking: `AGENTS.md`
+  §4 itself says subtitle text "isn't wired yet," and a grep confirmed zero `subtitle`/`srt`/`vtt`
+  anywhere in `src/`, despite ElevenLabs' own reference doc naming `speech_to_text` as the
+  "candidate" tool for exactly this, sitting completely unused. Built the plain-transcription slice
+  of it: `transcribeAudio()` in `elevenlabs-tools.ts` (direct call, no agent turn, same shape as
+  Voice/Music/SFX), full IPC/preload/bridge/store plumbing (`audio:transcribe` /
+  `transcribeClip`), and a "Generate captions" button + transcript display in the Play view,
+  landing on a new `MediaNodeData.transcript` field. Deliberately did NOT build SRT-timed burn-in —
+  the MCP tool's schema exposes no per-word timestamps, so there's no cue data for ffmpeg yet; full
+  reasoning and two forward paths recorded in `node-enrichment-strategy.md`'s new "New cross-cutting
+  gap" section. `npm run typecheck` clean (fresh `npm install`, no `node_modules` at run start —
+  first attempt hit a transient `ECONNRESET`, succeeded on retry). Not run live — no ElevenLabs key
+  in this sandbox. `play-view.md`, `capability-map.md` (new `transcription` capability row +
+  cross-cutting note), and `AGENTS.md` §4 (stale "isn't built yet" claim corrected) all updated in
+  this commit — `creative-nodes.md` and the 10-row progress table above left untouched, since this
+  is Play-view/cross-cutting scope, not a numbered queue row. Added as a new Recommendations item 7
+  in the report rather than invented as an eleventh queue row, per the guardrail against inventing
+  new rows once the queue is empty — this being a genuinely new, well-scoped, externally-motivated
+  gap (not busywork) is why it got built this same pass instead of just logged for later.
 - 2026-08-09 (thirty-first autonomous run) — queue confirmed fully `done`/blocked (row 1 still
   live-verification-only, joint-session scope; all other rows `done`), and Recommendations items
   1–5 all struck except item 1's own still-open "Yapper-slice re-check" sub-note. Took that: found

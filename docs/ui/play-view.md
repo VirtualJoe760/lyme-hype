@@ -2,7 +2,7 @@
 
 Not a mode of [Canvas/Storyboard/Scripting](canvas-and-storyboard.md). Play is its own full-width destination for reviewing and cutting **one** video or audio node before it goes to the [timeline](timeline.md), and it deliberately takes over the whole body instead of squeezing into the canvas area alongside Sessions and the aside.
 
-**Built (2026-08-08):** `src/renderer/src/components/PlayView.tsx`, wired into `App.tsx` as a full takeover, store actions in `store.ts` (`openPlay`/`closePlay`/`setTrim`/`splitAtPlayhead`/`detachAudio`/`deleteAudio`).
+**Built (2026-08-08):** `src/renderer/src/components/PlayView.tsx`, wired into `App.tsx` as a full takeover, store actions in `store.ts` (`openPlay`/`closePlay`/`setTrim`/`splitAtPlayhead`/`detachAudio`/`deleteAudio`/`transcribeClip`).
 
 ## Design
 
@@ -15,7 +15,8 @@ Not a mode of [Canvas/Storyboard/Scripting](canvas-and-storyboard.md). Play is i
 - **Detach and delete, scoped to audio.** Detach spawns an independent audio node on Canvas referencing the same file (no confirm needed — nothing is lost, it just becomes two nodes). Delete sets `audioMuted: true` behind a `window.confirm` (destructive to the *current* audio track, unlike trimming) — it's a non-destructive flag today, not a file rewrite; the real mute/strip happens at ffmpeg export time.
 - **Entry points:** double-click a video/audio node on Canvas (`onNodeDoubleClick` in `CanvasArea`), or the hover ▶ button on the node thumbnail (`MediaNode`). `openPlay` guards against image nodes.
 - **Send to timeline** reuses the same node → timeline path as anywhere else.
+- **Generate captions (2026-08-09, node enrichment routine):** any clip with an `src` can be transcribed via ElevenLabs' `speech_to_text` (`elevenlabs-tools.ts`'s `transcribeAudio`, a direct MCP call, no agent turn — same "cheap deterministic call" pattern as Voice/Music/SFX). The transcript lands as plain text on `MediaNodeData.transcript` and displays in a scrollable box under the actions row. **Not SRT/VTT** — the MCP tool's schema exposes no per-word timestamps, only whole-text transcription (`docs/connectors/reference/elevenlabs.md`'s tool table), so this is a caption *reference*, not yet a burn-in-ready subtitle track; that's the next step and needs either a timestamped transcription source or a different approach to deriving cue timing. See `node-enrichment-strategy.md`'s Recommendations for the follow-on scope.
 
 ## Status
 
-Done per its original done-criteria: a clip can be opened in Play, trimmed, split, have its audio detached or deleted, sent to the timeline, and the back arrow returns to wherever it was opened from. Verified with uploaded/linked clips; a real generated clip exercises the identical path since generation writes the same `MediaNodeData` shape.
+Done per its original done-criteria: a clip can be opened in Play, trimmed, split, have its audio detached or deleted, sent to the timeline, and the back arrow returns to wherever it was opened from. Verified with uploaded/linked clips; a real generated clip exercises the identical path since generation writes the same `MediaNodeData` shape. Caption generation is new plumbing (2026-08-09) — not run live, no ElevenLabs key in the build sandbox.

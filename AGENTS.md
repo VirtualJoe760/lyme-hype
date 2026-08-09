@@ -200,7 +200,10 @@ lyme-hype/
   engine behind the timeline's export and Play view's non-destructive cutting. Personal use runs
   on the machine's own installed binary (found on PATH); bundling an LGPL build only matters once
   the app is actually distributed (§7). Subtitle *text* comes from a separate speech-to-text MCP
-  connection — ffmpeg only muxes/burns, it doesn't transcribe, and that connection isn't built yet.
+  connection — ffmpeg only muxes/burns, it doesn't transcribe. That connection is now built (Play
+  view's "Generate captions", ElevenLabs `speech_to_text`, 2026-08-09) but only as far as a plain
+  transcript on the node — the MCP tool exposes no per-word timestamps, so there's no cue-timing
+  data yet for ffmpeg to actually burn or mux; that hand-off is still open.
 - **Premiere Pro integration is a UXP plugin**, a genuinely separate codebase and build target from
   the Electron app, bridged over a local server. Phase 2 of the whole project — don't start it
   before the core app works.

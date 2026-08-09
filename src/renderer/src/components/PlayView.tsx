@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStudio } from '../store'
+import { Button } from './ui/Button'
 
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) return '0:00'
@@ -18,12 +19,15 @@ export function PlayView(): React.JSX.Element | null {
   const detachAudio = useStudio((s) => s.detachAudio)
   const deleteAudio = useStudio((s) => s.deleteAudio)
   const sendToTimeline = useStudio((s) => s.sendToTimeline)
+  const transcribeClip = useStudio((s) => s.transcribeClip)
 
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null)
   const [duration, setDuration] = useState(0)
   const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [dragging, setDragging] = useState<'in' | 'out' | null>(null)
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcribeError, setTranscribeError] = useState<string | null>(null)
 
   const trimIn = node?.data.trimIn ?? 0
   const trimOut = node?.data.trimOut ?? duration
@@ -52,6 +56,7 @@ export function PlayView(): React.JSX.Element | null {
     setPlaying(false)
     setCurrent(0)
     setDuration(0)
+    setTranscribeError(null)
   }, [playNodeId])
 
   if (!node || !playNodeId) return null
@@ -71,6 +76,15 @@ export function PlayView(): React.JSX.Element | null {
       el.pause()
       setPlaying(false)
     }
+  }
+
+  async function generateCaptions(): Promise<void> {
+    if (!node) return
+    setTranscribing(true)
+    setTranscribeError(null)
+    const result = await transcribeClip(node.id)
+    setTranscribing(false)
+    if (!result?.ok) setTranscribeError(result?.error ?? 'Transcription failed.')
   }
 
   function seekFromClientX(clientX: number, track: HTMLElement): number {
@@ -188,6 +202,16 @@ export function PlayView(): React.JSX.Element | null {
         >
           ✂ Split at playhead
         </button>
+        {src && (
+          <Button
+            variant="mini"
+            onClick={() => void generateCaptions()}
+            disabled={transcribing}
+            title="Transcribe this clip's audio via ElevenLabs speech-to-text"
+          >
+            {transcribing ? 'Transcribing…' : '✎ Generate captions'}
+          </Button>
+        )}
         {isVideo && src && (
           <>
             <button className="conn-mini" onClick={() => detachAudio(node.id)} title="Detach audio as its own node">
@@ -207,6 +231,14 @@ export function PlayView(): React.JSX.Element | null {
           </>
         )}
       </div>
+
+      {transcribeError && <div className="play-transcript-error">{transcribeError}</div>}
+      {node.data.transcript && (
+        <div className="play-transcript">
+          <span className="play-transcript-label">Transcript</span>
+          <p>{node.data.transcript}</p>
+        </div>
+      )}
     </div>
   )
 }

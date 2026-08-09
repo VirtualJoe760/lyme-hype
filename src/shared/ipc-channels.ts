@@ -33,6 +33,7 @@ export const IPC = {
   audioClone: 'audio:clone',
   audioYapperTts: 'audio:yapper-tts',
   audioYapperVoices: 'audio:yapper-voices',
+  audioTranscribe: 'audio:transcribe',
 
   loraTrain: 'lora:train',
   loraList: 'lora:list',

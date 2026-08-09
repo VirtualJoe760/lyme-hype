@@ -124,7 +124,12 @@ const api = {
     yapperTts: (input: { text: string; voiceId?: string }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioYapperTts, input),
     yapperVoices: (input: { provider: 'cartesia' | 'elevenlabs'; search?: string }): Promise<AudioToolResult | null> =>
-      ipcRenderer.invoke(IPC.audioYapperVoices, input)
+      ipcRenderer.invoke(IPC.audioYapperVoices, input),
+    transcribe: (input: {
+      assetUrl?: string
+      filePath?: string
+      languageCode?: string
+    }): Promise<AudioToolResult | null> => ipcRenderer.invoke(IPC.audioTranscribe, input)
   },
   lora: {
     train: (input: {

@@ -7,6 +7,84 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Thirty-second autonomous run: captions via ElevenLabs speech-to-text — a real gap AGENTS.md itself flagged, found by this run's own research step
+
+Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only, unchanged for
+thirty-one runs). Recommendations items 1–5 all fully struck; item 6 isn't buildable (it's the
+standing Phase 8–9 note). Same "nothing left in the queue" state the last several runs found.
+
+**What I did differently this time.** Rather than stop at "queue's empty, nothing to add," I
+followed the routine's own step 6 (WebSearch current best practices for the node I'd be working)
+before concluding there was truly nothing left. Searched two things: lipsync/deepfake pipelines
+and motion-graphics tools, both 2026-current. The lipsync search named Sync Labs (`sync`), Hedra
+(Character-3), and Runway as the current best-in-class — cross-checking `docs/connectors/reference/
+muapi.md` showed Lyme Hype's Deepfake chain already defaults to muapi's `sync` engine and already
+lists Runway (`runway-act-two`) and an image+script talking-portrait model (`infinitetalk`) in its
+catalog. Nothing missing there; the existing routing is already current. But while re-reading
+`AGENTS.md` §4 during that cross-check, one line stood out: "Subtitle *text* comes from a separate
+speech-to-text MCP connection... and that connection isn't built yet." A grep across `src/` for
+`subtitle`/`srt`/`vtt`/`caption` (excluding unrelated hits like image-training "auto_captioning"
+and a ChatRealty banner's `caption` field) confirmed it — genuinely nothing there. And ElevenLabs'
+own reference doc, written back on 2026-08-09 during the original doc-aggregation pass, already
+names the exact tool for it: `speech_to_text`, annotated "candidate for the subtitle-text
+connection AGENTS.md §4 says isn't wired yet." It had been sitting there, fully documented, for
+every one of the thirty-one prior runs, and none of them looked at it because it isn't part of any
+of the ten queue rows or the five original Recommendations items — it only surfaces if you go
+looking the way the routine's own step 6 asks for.
+
+**What I built.** The honest, well-scoped slice: plain-text transcription, not full subtitles.
+`transcribeAudio()` in `elevenlabs-tools.ts` calls `speech_to_text` directly (`input_file_path`,
+`return_transcript_to_client_directly: true`) — same "cheap, deterministic, no agent turn" shape
+as the existing Voice/Music/SFX direct calls, reusing the same `withElevenLabs` connector-lookup
+helper. Full plumbing end to end: `audio:transcribe` IPC channel, preload + bridge (real and the
+browser-preview mock's honest "unavailable" stub), a new `transcribeClip(nodeId)` store action that
+patches a new `MediaNodeData.transcript` field on success, and a "Generate captions" button in the
+Play view (`src && ...`, works for both audio and video nodes) that shows a loading state, surfaces
+an error inline if the call fails, and displays the transcript in a small scrollable box once it
+lands — the first new UI this queue has added using the `Button` component (`variant="mini"`) per
+`AGENTS.md`'s buttons-are-components convention, rather than hand-picking `conn-mini` like the
+Play view's older buttons around it (those weren't touched — not this run's job to retrofit them).
+
+**What I deliberately did not build, and why.** Cue-timed SRT/VTT for real ffmpeg burn-in or
+muxing — the feature `AGENTS.md` §4 is actually describing when it talks about "subtitle text."
+ElevenLabs' `speech_to_text` MCP tool schema, per the reference doc's own tool table, returns a
+"transcript file and/or inline text" with no per-word or per-segment timestamp fields documented
+anywhere. Without cue timing there's nothing to hand `ffmpeg`'s `subtitles`/`drawtext` filters —
+building a burn-in button on top of an untimed transcript would mean either fabricating timing
+(actively wrong output) or silently assuming a capability this connector doesn't expose. Recorded
+two honest forward paths in `node-enrichment-strategy.md`'s new section instead of guessing: (1)
+check whether a non-MCP ElevenLabs API call (or the `scribe_v2_realtime` model specifically)
+exposes word-level timestamps the MCP wrapper just doesn't surface, or (2) treat the plain
+transcript as a human-copyable reference and scope real cue-timed burn-in as its own, larger
+feature later. Same "build what's documented, flag what isn't" posture the carousel-slide field
+names and `create_landing_page`'s response parsing already established in this queue.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json`
+(fresh `npm install` — first attempt in this sandbox hit a transient `ECONNRESET` mid-install,
+second attempt succeeded cleanly, no code-related cause). **Not run live** — no ElevenLabs key
+configured in this sandbox, so the `speech_to_text` call itself is unverified end to end; worth
+flagging specifically, the reference doc's own Gotchas section already notes that
+`ELEVENLABS_MCP_BASE_PATH` is described as "a security boundary for input files" and this exact
+interaction (`voice_clone`'s sample-file inputs) was already marked unverified before this run —
+`transcribeAudio`'s `input_file_path` inherits the identical open question, worth checking in the
+same live pass rather than assuming it's fine because voice_clone's version compiles today.
+`play-view.md`, `capability-map.md` (a new `transcription` capability row in both the vocabulary
+and the connector matrix, plus a new node-table row and a cross-cutting-corrections paragraph), and
+`AGENTS.md` §4 itself (the stale "isn't wired yet" claim corrected to describe what's actually
+there now) all updated in this commit. `creative-nodes.md` was deliberately left untouched — this
+is a Play-view action, not a change to what any of the ten enumerated creative-node tiles do.
+
+**Where this leaves things.** Added as Recommendations item 7 (not an eleventh queue row — this is
+cross-cutting Play-view scope, not one of the ten enumerated node tiles) with the "still open" cue-
+timing sub-note carried forward for whoever picks it up next. Queue stays `done` on every row
+except row 1 (Deepfake, unchanged, joint-session scope). The lesson worth carrying into future
+passes: an "empty queue" isn't the same as "nothing left to find" — this gap was sitting fully
+documented in a reference file the routine had already written, and it took actually running the
+research step (rather than treating "Recommendations 1–5 are struck" as proof of completeness) to
+surface it. Worth future passes doing the same before defaulting to "nothing to add."
+
+---
+
 ## 2026-08-09 — Thirty-first autonomous run: Yapper's REST client moved onto `net.fetch`, closing Recommendations item 1 for good
 
 Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only, unchanged for
@@ -2030,3 +2108,14 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    live API key — that's explicitly joint-session scope, not something an unattended routine should
    ever attempt, but it's the natural next phase once a human is at the keyboard with real
    credentials to hand.
+
+7. ~~**Subtitle/caption transcription — `AGENTS.md` §4's own named gap**~~ — **plain-transcript
+   slice shipped** (2026-08-09, thirty-second autonomous run): Play view's "Generate captions"
+   button calls ElevenLabs' `speech_to_text` directly (no agent turn) and lands the result on
+   `MediaNodeData.transcript`. Found via this run's external-research step, not the queue — a
+   genuinely new gap, not a re-derivation of anything already tracked. **Still open:** cue-timed
+   SRT/VTT for real ffmpeg burn-in/muxing — the MCP tool exposes no per-word timestamps, so there's
+   no timing data to give ffmpeg yet. See `node-enrichment-strategy.md`'s new section for the two
+   forward paths (re-check for a timestamped ElevenLabs API vs. build cue-timing some other way)
+   and the reasoning for why this run stopped short of guessing at fake timing. Not run live — no
+   ElevenLabs key in this sandbox.

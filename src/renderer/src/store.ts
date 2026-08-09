@@ -2,6 +2,7 @@ import { applyNodeChanges, type Node, type NodeChange } from '@xyflow/react'
 import { create } from 'zustand'
 import type {
   AgentStreamEvent,
+  AudioToolResult,
   CanvasNodeState,
   ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
@@ -272,6 +273,7 @@ interface StudioStore {
   splitAtPlayhead(nodeId: string, at: number): void
   detachAudio(nodeId: string): void
   deleteAudio(nodeId: string): void
+  transcribeClip(nodeId: string): Promise<AudioToolResult | null>
 
   addPanel(input?: { mediaType?: MediaType; label?: string; shotDescription?: string }): void
   updatePanel(nodeId: string, patch: Partial<MediaNodeData>): void
@@ -1085,6 +1087,14 @@ export const useStudio = create<StudioStore>((set, get) => {
 
     deleteAudio(nodeId) {
       patchNodeData(nodeId, { audioMuted: true })
+    },
+
+    async transcribeClip(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node?.data.src) return null
+      const result = await bridge.audioTools.transcribe({ assetUrl: node.data.src })
+      if (result?.ok && result.text) patchNodeData(nodeId, { transcript: result.text })
+      return result
     },
 
     addPanel(input) {

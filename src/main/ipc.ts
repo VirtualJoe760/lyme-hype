@@ -16,7 +16,15 @@ import type {
 import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, saveImageAsset } from './asset-store'
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
-import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
+import {
+  cloneVoice,
+  composeMusic,
+  previewVoice,
+  searchVoices,
+  soundEffects,
+  textToSpeech,
+  transcribeAudio
+} from './elevenlabs-tools'
 import { listYapperVoices, synthesizeYapperSpeech } from './yapper-rest'
 import { exportTimeline } from './ffmpeg'
 import {
@@ -256,6 +264,16 @@ export function registerIpc(window: BrowserWindow): void {
     if (!isMainSender(e)) return null
     return listYapperVoices(input)
   })
+  ipcMain.handle(
+    IPC.audioTranscribe,
+    (e, input: { assetUrl?: string; filePath?: string; languageCode?: string }) => {
+      if (!isMainSender(e)) return null
+      const filePath =
+        input.filePath ?? (input.assetUrl?.startsWith('lyme-asset://') ? assetPathForUrl(input.assetUrl) : null)
+      if (!filePath) return { ok: false, error: 'No source file to transcribe.' }
+      return transcribeAudio({ filePath, languageCode: input.languageCode })
+    }
+  )
 
   ipcMain.handle(
     IPC.loraTrain,

@@ -283,6 +283,10 @@ export interface MediaNodeData {
    *  what Veo's 148s chained-extension cap actually needs, since the requested
    *  duration and the delivered one aren't guaranteed to match. */
   videoDurationSec?: number
+  /** Best-effort transcript from ElevenLabs' speech_to_text, plain text (no
+   *  per-word timestamps — the MCP tool's schema doesn't expose them, so this
+   *  isn't SRT-ready yet). Set via the Play view's "Generate captions". */
+  transcript?: string
   [key: string]: unknown
 }
 

@@ -3195,3 +3195,36 @@
   font-size: 11px;
   color: var(--text-soft);
 }
+
+.play-transcript-error {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--danger, #e05252);
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.play-transcript {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.play-transcript-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin-bottom: 4px;
+}
+
+.play-transcript p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+}

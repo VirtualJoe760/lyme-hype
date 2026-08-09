@@ -171,6 +171,31 @@ export function soundEffects(input: { prompt: string; durationSec?: number }): P
   return fileProducingCall('text_to_sound_effects', args, 180_000)
 }
 
+/** Transcribe a clip via `speech_to_text` — the subtitle-text connection
+ *  AGENTS.md §4 flags as not wired yet. Asks for the transcript inline
+ *  (`return_transcript_to_client_directly`) rather than a saved file, since
+ *  the only consumer today is the plain-text caption box, not a file import.
+ *  Plain text only: the tool's schema exposes no per-word timestamps, so this
+ *  isn't SRT/VTT-ready — burning captions into the export is the next step,
+ *  blocked on that gap (see node-enrichment-strategy.md). */
+export function transcribeAudio(input: { filePath: string; languageCode?: string }): Promise<AudioToolResult> {
+  return withElevenLabs(async (client) => {
+    const args: Record<string, unknown> = {
+      input_file_path: input.filePath,
+      return_transcript_to_client_directly: true,
+      save_transcript_to_file: false
+    }
+    if (input.languageCode?.trim()) args['language_code'] = input.languageCode.trim()
+    // Longer clips take a while; same timeout class as the other long-running
+    // file-producing calls above.
+    const result = await client.callTool('speech_to_text', args, 300_000)
+    const text = resultText(result)
+    if (result.isError) return { ok: false as const, error: text || 'Transcription failed.' }
+    if (!text) return { ok: false as const, error: 'No transcript in the reply.' }
+    return { ok: true as const, text }
+  }) as Promise<AudioToolResult>
+}
+
 /** Voice cloning — "their own audio LoRA": sample files in, a reusable named
  *  voice out (usable from the Voice job's name field afterward). */
 export function cloneVoice(input: { name: string; filePaths: string[] }): Promise<AudioToolResult> {

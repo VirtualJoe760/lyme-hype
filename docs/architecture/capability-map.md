@@ -27,6 +27,7 @@ way around.
 | `audio-sfx` | prompt → sound effect |
 | `voice-clone` | samples → reusable named voice |
 | `voice-library` | browse/search selectable voices |
+| `transcription` | audio/video → text (whole-transcript only — no per-word timestamps on the MCP tool, not SRT/VTT-ready) |
 | `lipsync` | drive a face with audio (talking avatar) |
 | `lora-train` | images → reusable style/subject weights |
 | `lora-use` | apply trained weights at generation |
@@ -53,6 +54,7 @@ way around.
 | `audio-sfx` | ○ MMAudio (from video) | ✓ text_to_sound_effects | — | — | — | — | — | — |
 | `voice-clone` | ○ Suno singing clone ($0 + liveness check) | ✓ voice_clone | — | — | — | — | ○ | — |
 | `voice-library` | — | ✓ search_voices (+▶ preview) | — | — | — | — | ✓ /audio/voices — wired as the Yapper-fallback Voice job's provider (Cartesia/ElevenLabs) picker | — |
+| `transcription` | — | ✓ speech_to_text — Play view's "Generate captions" (direct call, plain text only) | — | — | — | — | — | — |
 | `lipsync` | ○ edit-lipsync tool | — | — | ○ | — | — | ✓ Max (auto-trains, returns reusable trainingId) | — |
 | `face-swap` | ○ **muapi_enhance_face_swap (image + video)** | — | — | — | — | — | — (absent from OpenAPI, re-verified) | — |
 | `lora-train` | — | — | ✓ `/styles/train` REST (unpublished price) | ✓ krea-2 + flux-krea trainers (flux-krea delisted from catalog but endpoint live — route by exact id) | — | — | — | — |
@@ -82,6 +84,12 @@ trained it instead of always forcing `fal` — the fix closes a real bug where a
 also the first genuine production-tier LoRA path: fal's weights-URL route ignores the
 storyboard/production tier entirely, but a Krea-trained style honors it (K2 medium vs. K2 large,
 $0.03 vs. $0.06/image).
+**`transcription` is new** (2026-08-09 enrichment run) — closes the gap AGENTS.md §4 named
+explicitly ("subtitle text comes from a separate speech-to-text MCP connection... isn't wired
+yet"): ElevenLabs' `speech_to_text` is now called from the Play view as a plain direct call (no
+agent turn), landing on `MediaNodeData.transcript`. It is **not** the full subtitle pipeline —
+the MCP tool exposes no per-word/segment timestamps, so there's no cue-timing data to hand ffmpeg
+for burn-in or muxing yet; that's real remaining scope, not a wiring gap.
 
 ## 3. Creative node → capabilities (drives readiness + routing)
 
@@ -104,6 +112,7 @@ $0.03 vs. $0.06/image).
 | Storyboard → Deepfake handoff | *(none — local)* | word-overlap match of panel `feeling` against Reference people's `personaTone` | no match found (screen just prefills the script, picker stays "none") |
 | Listing photos | `data-mls` | chatrealty | top-matched listing also offers a branded Instagram cover render (`create_listing_cover`, hook+body required), a carousel slide render (`create_carousel_slide`, kind picker: cma/text/cta/banner), an interior-photo picker for agent staging (`stage_listing_with_agent`, real ~$0.04/photo generation, checkboxes feed exact `photoIndexes` from each pulled photo's `ChatRealtyPulledImage.photoIndex`), a CMS article draft (`create_article`, DRAFT-only, category/title/excerpt/content form, optional prefill from `plan_listing_carousel`'s facts via the same `listingContext` call the Scripting panel uses — no canvas node, a CMS slug), and a CMS landing-page draft (`create_landing_page`, DRAFT-only, title/content/hero-type/YouTube/theme form, same prefill button — no canvas node, an editUrl+previewUrl) — same connector, renders downloaded via `importUrlAsset` |
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
+| Play view · captions | `transcription` | ElevenLabs direct call | — (no fallback connector offers transcription today) |
 | Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |
 | Combine · audio+image | `lipsync` or `video-gen-i2v` | agent-pick (unrestricted) | prompt tells the agent to branch on whether the image shows a face |
 | Combine · video+video / image+video / audio+video / audio+audio | *(local)* | ffmpeg (`combineLocal` in `media-tools.ts`) | never a connector — deterministic per pair, no agent turn |
