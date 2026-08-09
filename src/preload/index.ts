@@ -3,8 +3,17 @@ import { IPC } from '../shared/ipc-channels'
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyArticleDraftInput,
+  ChatRealtyArticleDraftResult,
+  ChatRealtyCarouselSlideInput,
+  ChatRealtyCoverResult,
+  ChatRealtyLandingPageDraftInput,
+  ChatRealtyLandingPageDraftResult,
+  ChatRealtyListingContextResult,
   ChatRealtyPullResult,
+  ChatRealtyStageResult,
   ClaudeAuthStatus,
+  CombineLocalRequest,
   ConnectorDef,
   ConnectorSuggestion,
   ConnectorTestResult,
@@ -95,7 +104,9 @@ const api = {
       color?: string
       similarity?: number
       blend?: number
-    }): Promise<LocalToolResult | null> => ipcRenderer.invoke(IPC.mediaKeyAlpha, input)
+    }): Promise<LocalToolResult | null> => ipcRenderer.invoke(IPC.mediaKeyAlpha, input),
+    combineLocal: (input: CombineLocalRequest): Promise<LocalToolResult | null> =>
+      ipcRenderer.invoke(IPC.mediaCombineLocal, input)
   },
   audioTools: {
     voices: (query: string): Promise<AudioToolResult | null> =>
@@ -109,7 +120,11 @@ const api = {
     sfx: (input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioSfx, input),
     clone: (input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null> =>
-      ipcRenderer.invoke(IPC.audioClone, input)
+      ipcRenderer.invoke(IPC.audioClone, input),
+    yapperTts: (input: { text: string; voiceId?: string }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioYapperTts, input),
+    yapperVoices: (input: { provider: 'cartesia' | 'elevenlabs'; search?: string }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioYapperVoices, input)
   },
   lora: {
     train: (input: {
@@ -121,7 +136,11 @@ const api = {
       kind?: 'style' | 'subject'
     }): Promise<TrainStyleResult | null> => ipcRenderer.invoke(IPC.loraTrain, input),
     list: (): Promise<TrainedStyle[]> => ipcRenderer.invoke(IPC.loraList),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.loraDelete, id)
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.loraDelete, id),
+    setVoice: (id: string, voiceName: string): Promise<TrainedStyle | null> =>
+      ipcRenderer.invoke(IPC.loraSetVoice, id, voiceName),
+    setTone: (id: string, personaTone: string): Promise<TrainedStyle | null> =>
+      ipcRenderer.invoke(IPC.loraSetTone, id, personaTone)
   },
   generate: {
     run: (params: GenerationParams): Promise<GenerationResult | null> =>
@@ -134,7 +153,26 @@ const api = {
   chatRealty: {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),
     pull: (query: string): Promise<ChatRealtyPullResult | null> =>
-      ipcRenderer.invoke(IPC.chatRealtyPull, query)
+      ipcRenderer.invoke(IPC.chatRealtyPull, query),
+    createCover: (
+      listingKey: string,
+      opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+    ): Promise<ChatRealtyCoverResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyCover, listingKey, opts),
+    listingContext: (listingKey: string): Promise<ChatRealtyListingContextResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyListingContext, listingKey),
+    createCarouselSlide: (input: ChatRealtyCarouselSlideInput): Promise<ChatRealtyCoverResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyCarouselSlide, input),
+    stageListing: (listingKey: string, photoIndexes: number[]): Promise<ChatRealtyStageResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyStage, listingKey, photoIndexes),
+    createArticleDraft: (
+      input: ChatRealtyArticleDraftInput
+    ): Promise<ChatRealtyArticleDraftResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyArticleDraft, input),
+    createLandingPageDraft: (
+      input: ChatRealtyLandingPageDraftInput
+    ): Promise<ChatRealtyLandingPageDraftResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyLandingPageDraft, input)
   },
   connectors: {
     list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),

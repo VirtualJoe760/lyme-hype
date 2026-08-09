@@ -1,10 +1,12 @@
 import { app } from 'electron'
 import type { GenerationParams, GenerationResult } from '@shared/types'
-import { assetPathForUrl, importFileAsset, importUrlAsset } from './asset-store'
+import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
+import { uploadLocalFileToFal } from './fal-training'
 import { resolveActiveProvider } from './model-providers'
+import { hasYapperRestKey, uploadLocalMediaToYapper } from './yapper-rest'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
 type McpServerConfig = {
@@ -53,7 +55,7 @@ const DANGEROUS_TOOLS_BY_SERVER: Record<string, string[]> = {
   elevenlabs: ['make_outbound_call', 'create_agent', 'add_knowledge_base_to_agent']
 }
 
-async function buildMcpServers(restrictId?: string): Promise<{
+async function buildMcpServers(restrictIds?: string[]): Promise<{
   servers: Record<string, McpServerConfig>
   allowedTools: string[]
   disallowedTools: string[]
@@ -67,7 +69,7 @@ async function buildMcpServers(restrictId?: string): Promise<{
   const skipped: string[] = []
 
   for (const def of listConnectors()) {
-    if (restrictId && def.id !== restrictId) continue
+    if (restrictIds && restrictIds.length > 0 && !restrictIds.includes(def.id)) continue
     const needsKey = def.authType !== 'none'
     const token = needsKey ? readSecretValue(def.id) : null
     if (needsKey && !token) {
@@ -137,12 +139,40 @@ function buildPrompt(params: GenerationParams): string {
   }
   if (params.startFramePath) {
     lines.push(
-      `First-frame image on disk: ${params.startFramePath} — pass it as the tool's start_frame_path parameter.`
+      `First-frame image on disk: ${params.startFramePath} — for a tool with a literal start_frame_path parameter (e.g. gemini_generate_video), pass it there directly. Otherwise (e.g. fal's run_model/submit_job), call get_model_schema first and use whatever field name that model's schema expects for a starting image (commonly image_url, start_image_url, or first_frame_image) — do not assume start_frame_path is a real parameter on every tool.`
     )
   }
   if (params.endFramePath) {
     lines.push(
       `Last-frame image on disk: ${params.endFramePath} — pass it as the tool's end_frame_path parameter.`
+    )
+  }
+  if (params.sourceMediaPath) {
+    lines.push(
+      `Source face/performance media on disk: ${params.sourceMediaPath} — the video or photo to drive/transform.`
+    )
+  }
+  if (params.referenceAudioPaths?.length) {
+    lines.push(
+      `Audio file(s) on disk to use as-is (do not regenerate speech, it already exists): ${params.referenceAudioPaths.join(' | ')}.`
+    )
+  }
+  if (params.extendVideoPath) {
+    lines.push(
+      `This is a video-extension request, not a fresh generation: extend the existing video at ${params.extendVideoPath} by ~7 seconds using the tool's source_video_path parameter (e.g. gemini_extend_video).`
+    )
+    if (params.extendVideoDurationSec) {
+      lines.push(`Pass its current length, ${params.extendVideoDurationSec} seconds, as previous_duration_seconds.`)
+    }
+  }
+  if (params.sourceMediaPath || params.referenceAudioPaths?.length || params.referenceImagePaths?.length) {
+    lines.push(
+      "If the target generation tool needs a hosted URL rather than a local path, and one of your attached connectors exposes its own file-upload tool (e.g. a *_upload_file tool), call that first to get a URL, then pass the returned URL to the generation tool."
+    )
+  }
+  if (params.referenceImagePaths?.length) {
+    lines.push(
+      "Some reference-driven tools (e.g. muapi's muapi_image_edit) accept only a single input image via image_url, not a list — if the tool you pick has that shape, upload and use just the first reference path and treat the description as the edit instruction; do not try to pass multiple images to a single-image parameter."
     )
   }
   lines.push(
@@ -176,20 +206,82 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       ?.map(toDiskPath)
       .filter((p): p is string => p !== null),
     startFramePath: params.startFramePath ? (toDiskPath(params.startFramePath) ?? undefined) : undefined,
-    endFramePath: params.endFramePath ? (toDiskPath(params.endFramePath) ?? undefined) : undefined
+    endFramePath: params.endFramePath ? (toDiskPath(params.endFramePath) ?? undefined) : undefined,
+    referenceAudioPaths: params.referenceAudioPaths
+      ?.map(toDiskPath)
+      .filter((p): p is string => p !== null),
+    sourceMediaPath: params.sourceMediaPath ? (toDiskPath(params.sourceMediaPath) ?? undefined) : undefined,
+    extendVideoPath: params.extendVideoPath ? (toDiskPath(params.extendVideoPath) ?? undefined) : undefined
   }
 
-  const { servers, allowedTools, disallowedTools, attached, skipped } = await buildMcpServers(
-    params.connectorId
-  )
+  const restrictIds =
+    params.connectorIds && params.connectorIds.length > 0
+      ? params.connectorIds
+      : params.connectorId
+        ? [params.connectorId]
+        : undefined
+  const { servers, allowedTools, disallowedTools, attached, skipped } = await buildMcpServers(restrictIds)
   if (attached.length === 0) {
     return fail(
-      params.connectorId
-        ? 'That connector is not a ready stdio generation connector (missing command or credential).'
+      restrictIds
+        ? `None of the requested connector(s) (${restrictIds.join(', ')}) are ready stdio/http generation connectors (missing command, credential, or transport support).`
         : skipped.length > 0
           ? 'No usable generation connector. Installed connectors are http-only or missing a credential — add a stdio generation connector (e.g. muapi) with a key in Settings › Connectors.'
           : 'No generation connector installed. Add one in Settings › Connectors.'
     )
+  }
+
+  // Yapper's hosted MCP connector has no upload tool of its own (yapper.md
+  // "Getting local media INTO Yapper") — when it's the only attached
+  // connector, the agent has no way to turn a local sourceMediaPath/
+  // referenceAudioPaths into something yapper_start_process can take. Do
+  // the REST signed-upload here instead of asking the agent to, and hand it
+  // the resulting Yapper asset ids directly.
+  const yapperOnlyPromptLines: string[] = []
+  if (attached.includes('yapper') && !attached.includes('muapi') && hasYapperRestKey()) {
+    if (params.sourceMediaPath && mediaTypeForPath(params.sourceMediaPath) === 'video') {
+      const uploaded = await uploadLocalMediaToYapper(params.sourceMediaPath)
+      if (uploaded.ok && uploaded.assetId) {
+        yapperOnlyPromptLines.push(
+          `The source video is already uploaded to Yapper as assetId "${uploaded.assetId}" — pass it directly as sourceVideoAssetId (yapper_start_process, type video-lipsync). Do not try to upload ${params.sourceMediaPath} yourself.`
+        )
+      }
+    }
+    if (params.referenceAudioPaths?.length === 1) {
+      const uploaded = await uploadLocalMediaToYapper(params.referenceAudioPaths[0])
+      if (uploaded.ok && uploaded.assetId) {
+        yapperOnlyPromptLines.push(
+          `The audio is already uploaded to Yapper as assetId "${uploaded.assetId}" — pass it directly as audioAssetId. Do not try to upload ${params.referenceAudioPaths[0]} yourself.`
+        )
+      }
+    }
+  }
+
+  // fal's hosted MCP `upload_file` tool only accepts a remote URL (stateless
+  // server) — it has no way to read a local disk path the way muapi's stdio
+  // muapi_upload_file or Lyme Hype's own bundled Gemini wrapper can. When fal
+  // is the only attached connector, pre-upload local reference/source files
+  // through the REST storage flow (same pattern as the Yapper block above)
+  // instead of asking the agent to find an upload tool that doesn't exist for
+  // fal — this is the cross-cutting asset-upload gap flagged since the first
+  // enrichment run (node-enrichment-report.md Recommendations #1).
+  const falOnlyPromptLines: string[] = []
+  if (attached.length === 1 && attached[0] === 'fal') {
+    const localPaths = [
+      ...(params.referenceImagePaths ?? []),
+      params.startFramePath,
+      params.endFramePath,
+      params.sourceMediaPath,
+      ...(params.referenceAudioPaths ?? [])
+    ].filter((p): p is string => !!p)
+    for (const path of localPaths) {
+      const uploaded = await uploadLocalFileToFal(path)
+      if (uploaded.ok && uploaded.url) {
+        falOnlyPromptLines.push(
+          `${path} is already uploaded to fal as ${uploaded.url} — pass this URL directly wherever the tool wants that file. Do not try to upload ${path} yourself.`
+        )
+      }
+    }
   }
 
   const abort = new AbortController()
@@ -224,8 +316,12 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
 
   try {
     const { query } = await loadSdk()
+    const preUploadLines = [...yapperOnlyPromptLines, ...falOnlyPromptLines]
+    const prompt = preUploadLines.length
+      ? `${buildPrompt(params)}\n${preUploadLines.join('\n')}`
+      : buildPrompt(params)
     const stream = query({
-      prompt: buildPrompt(params),
+      prompt,
       options: {
         abortController: abort,
         maxTurns: 12,

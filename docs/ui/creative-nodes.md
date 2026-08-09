@@ -46,6 +46,14 @@ promote (same object, never a copy). Carries `label`, `note` (the generation pro
 `shotDescription`/`feeling` when born from a script breakdown, and `connectorId` (the
 storyboard-tier image model choice).
 
+A script-born panel (has `shotDescription`) can also be sent to the **Deepfake** tile (☺ button
+next to ✨) instead of promoted normally — for a shot that's really a talking-avatar line, not a
+generic video/image/audio render. This sets `deepfakeHandoff` (`{script, toneHint}`, script =
+`shotDescription`, toneHint = `feeling`) in the store; the Create panel's aside watches it, jumps
+to the Deepfake screen, prefills the script, and auto-suggests a Reference person by matching
+`toneHint` against each Reference person's `personaTone` tag (word-overlap scoring — see
+"Reference person" below). 2026-08-09 enrichment run, row 8.
+
 - **Capabilities consumed on promote:** `image-gen` (storyboard tier) / `video-gen-t2v` /
   `audio-*` per panel type, restricted by the per-panel model choice when set.
 
@@ -57,6 +65,15 @@ The chat surface (per-session, persisted). Produces: the script itself, the shot
 
 - **Capabilities consumed:** agent LLM only (no generation connectors). Its multi-turn plumbing
   (`conversations.ts`) is shared with the Motion graphics wizard.
+- **Real listing numbers, when a listing is in play.** If the session has a ChatRealty-sourced
+  canvas node (a Listing photos pull), the conversation's very first turn calls
+  `plan_listing_carousel` once (`bridge.chatRealty.listingContext`, same deterministic
+  no-agent-turn shape as the pull/cover calls) and folds the returned facts/CMA text into that
+  turn's prompt — ahead of the user's own message, not shown in the transcript — so a script
+  drafted about that listing cites real numbers ("6 homes sold, median $2.36M") instead of the
+  agent inventing them. Fetched once per conversation (gated on `history.length === 0`, the same
+  point the transcript-replay preamble is conditional on); every later turn already has it in the
+  agent's own context. 2026-08-09 enrichment run, row 10 step 2.
 
 ## Create tasks (the tiles)
 
@@ -65,28 +82,95 @@ what does it cost. Readiness derives from the capability map's node→capability
 
 | Tile | In | Out | Capabilities consumed |
 |---|---|---|---|
-| **Generate video** | prompt + aspect/duration/res (+ connector override) | video node | `video-gen-t2v` (any provider of it — muapi default when present) |
-| **Generate image** | prompt + aspect + tier toggle (+ trained style) | image node | `image-gen` (storyboard tier) or `image-production` (Midjourney-class); `lora-use` when a trained style is picked |
-| **Generate audio · Voice** | voice pick (browse/preview) + line | audio node | `audio-tts` (+ `voice-library`) |
-| **Generate audio · Music** | prompt + length | audio node | `audio-music` |
+| **Generate video** | prompt + aspect/duration/res (+ connector override, optional canvas-image starting frame with a gemini/fal "i2v via" pick once fal is connected, optional Yapper model pick); separately, pick an existing ready video node + a short "what happens next" prompt | video node | `video-gen-t2v` (any provider of it — muapi default when present); `video-gen-i2v` via a starting-frame image node — defaults to Gemini/Veo (forces that connector), or fal once connected (forces fal, agent picks a catalog i2v model — Kling/Seedance/WAN — and matches its schema's own image-field name via `get_model_schema`, since fal has no fixed `start_frame_path` param); video-extension (`gemini_extend_video`, forces Gemini, fixed +7s per call) via the "Extend an existing clip" picker — the node's `videoDurationSec` (probed client-side off the actual media element after every generation/extension, not the requested duration) drives the run-line's remaining-budget display and client-side-blocks a call that would exceed Veo's 148s chained-extension cap; the wrapper itself also enforces the cap server-side when it's told the running total |
+| **Generate image** | prompt + aspect + tier toggle (+ trained style) | image node | `image-gen` (storyboard tier) or `image-production` (Midjourney-class); `lora-use` when a trained style is picked — routes through whichever backend trained it (fal weights-URL, or Krea `styles:[{id}]`; tier only changes which Krea 2 quality tier is hinted for a Krea-trained style, since fal's route is tier-agnostic) |
+| **Generate audio · Voice** | voice pick (browse/preview) + line, or a plain line if ElevenLabs isn't connected | audio node | `audio-tts` (+ `voice-library`) via direct ElevenLabs call; zero-cost fallback to Yapper's free daily-character `/audio/speech` REST call when ElevenLabs isn't connected and a Yapper REST key is set — a Cartesia/ElevenLabs-via-Yapper provider toggle browses `GET /audio/voices` and picks a `voiceId`, defaulting to Yapper's own default voice when none is picked |
+| **Generate audio · Music** | prompt + length | audio node | `audio-music` via direct ElevenLabs `compose_music` call; agent-routed fallback to muapi's Suno wrapper (`muapi_audio_create`, full songs incl. an instrumental-only toggle, credits not a fixed price) when ElevenLabs isn't connected and muapi is |
 | **Generate audio · SFX** | prompt + duration (0.5–5s) | audio node | `audio-sfx` |
-| **Generate audio · Clone** | name + sample files | a reusable voice (not a node) | `voice-clone` |
+| **Generate audio · Clone** | name + sample files (+ optional Reference person to attach to) | a reusable voice (not a node) | `voice-clone` |
 | **Motion graphics** | references + instruction (wizard below) | image nodes + video node + alpha webm node | `image-gen`, `image-ref-conditioning`, `video-frame-conditioning`, local ffmpeg alpha |
 | **Isolate audio** | video node / file / direct URL | audio node | none — local ffmpeg (standing principle: local beats paid) |
-| **Create a LoRA** | trainer pick + style/subject + images + steps + trigger | trained style (Settings › Trained styles; `loraUrl`) | `lora-train` |
-| **Deepfake** | who talks + script | video node | `lipsync` (+ `audio-tts` chained by the agent) |
+| **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images (local files, or a canvas node's `lyme-asset://` URL — e.g. Deepfake's "train a LoRA from this photo" shortcut) + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
+| **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
-| **Listing photos** | listing query | image nodes (with MLS provenance) | `data-mls` |
+| **Listing photos** | listing query (+ optional hook/body for the cover; a carousel-slide kind + per-kind form; interior-photo checkboxes for agent staging; a title/category/excerpt/content form for an article draft; a title/content/hero-type/YouTube/theme form for a landing-page draft) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render, a carousel slide render (cma/text/cta/banner), an agent-staged interior-photo render, a CMS article draft, and a CMS landing-page draft (neither draft creates a canvas node — a CMS slug / editUrl+previewUrl) | `data-mls`; cover + slide renders via `create_listing_cover`/`create_carousel_slide` (templated server-side layout, not a generation model — still a real API call, only fires on button press); staging via `stage_listing_with_agent` (real Nano Banana compositing, ~$0.04/photo — the one billed generation call in this tile); article drafting via `create_article`, landing-page drafting via `create_landing_page` (both CMS DRAFT only, never published) |
+
+## Reference person (Deepfake's identity + voice pairing)
+
+A `TrainedStyle` (Settings › Trained styles) can carry an optional `voiceName` — an ElevenLabs
+voice paired with the trained likeness, turning a plain LoRA record into a reusable "who talks"
+identity. Deepfake picks one; the pairing itself is account-level state, edited from two places:
+inline in Settings › Trained styles (type an *existing* voice's name), or — the faster path when
+the voice doesn't exist yet — the Create panel's **Generate audio · Clone** job, which can attach
+its freshly-cloned voice to a chosen Reference person in the same action instead of requiring a
+trip to Settings afterward to paste the name in by hand.
+
+A Reference person can also carry an optional `personaTone` — a free-text tag ("calm authoritative
+newsreader", "energetic upbeat vlogger"), set the same inline way as the voice field in Settings ›
+Trained styles. It exists solely to be matched against a Storyboard shot's `feeling` annotation
+(see "Storyboard panel" above): when a script-born panel is sent to Deepfake, `personaTone` and
+`feeling` are lowercased and split on word boundaries, and the Reference person (that also has a
+voice — a bare LoRA can't drive Stage 1's speech) whose tone words overlap the feeling words most
+wins the auto-pick. No overlap on any Reference person, or no `feeling` set, means no suggestion —
+the screen says so and leaves the picker on "none" rather than guessing. Pure client-side string
+matching, no agent call and no live spend (`suggestReferencePerson` in `AsidePanel.tsx`).
+
+## Deepfake (stages as nodes)
+
+Same "each stage its own visible node" pattern as the Motion graphics wizard below, not one
+opaque call:
+
+1. **Reference person + script** — pick a trained identity (optional) and its paired voice
+   (or type a voice name), write the script.
+2. **Speech** — direct ElevenLabs `text_to_speech` call (no agent turn, same plumbing as the
+   Generate audio · Voice job) → an audio node lands on the canvas.
+3. **Face** — an agent turn restricted to exactly the connected `yapper`/`muapi` pair
+   (`GenerationParams.connectorIds`), given the local speech-audio path and the chosen
+   source-video/photo canvas node's path (`referenceAudioPaths`/`sourceMediaPath`). The prompt
+   tells it to prefer muapi's self-contained chain (its own upload tool → `muapi_edit_lipsync`,
+   or `muapi_enhance_face_swap` when only a still photo exists) since that needs no extra
+   credentials; Yapper is the fallback path when only Yapper is connected. In the Yapper-only
+   case, `generation.ts` no longer leans on the agent to find an upload tool that doesn't exist
+   on the hosted connector — it pre-uploads the local source video/audio itself via
+   `yapper-rest.ts`'s REST signed-upload (a second, non-OAuth `yap_live_…` key set from
+   Settings › Connectors, independent of Yapper's OAuth MCP login) and hands the agent the
+   resulting `sourceVideoAssetId`/`audioAssetId` directly. **Unverified live** — no API keys are
+   configured to fire this chain yet; the wiring is real, the call itself isn't.
+
+When the picked face/performance node is a still image, a **"Train a LoRA from this photo"**
+button next to the picker jumps to the Create a LoRA screen with that image already loaded as the
+first training image (kind defaults to "Subject / character," name defaults to the Reference
+person's name when one is picked) — the LoRA screen's file picker adds to that starting image
+rather than replacing it, so the shortcut is a head start, not the whole training set. This closes
+the loop the other way too: identity built with **Create a LoRA** and voice attached (§ above)
+can start from a photo Deepfake already had on the canvas, instead of a separate file-picker round
+trip through the OS dialog.
 
 ## Motion graphics wizard (stages as nodes)
 
-1. **References** — image nodes in (≤5; wrapper caps at 3 for Gemini).
+1. **References** — image nodes in (≤10, matching Gemini's Nano Banana 2 object-reference cap;
+   the wrapper itself slices to 10 and OpenAI's wrapper accepts even more. Raised from a
+   UI-side cap of 5 in the 2026-08-09 enrichment run — the wrapper had already supported 10 since
+   the "Connector reality check" pass, the UI just never let the user reach it).
 2. **Prompt variations** — agent turn with vision input (no generation spend).
-3. **Batch review** — N×M cheap generations → `BatchResultsGrid` pick. `image-gen`.
-4. **Final pass** — winning prompt + references. `image-ref-conditioning`.
+3. **Batch review** — N×M cheap generations → `BatchResultsGrid` pick. `image-gen`. A "Batch via
+   muapi image-edit" checkbox (shown when muapi is installed and ≥1 reference picked, 2026-08-09
+   enrichment run) swaps this to `image-ref-conditioning` against a single source photo instead:
+   `muapi_image_edit` takes exactly one `image_url`, not a reference list, so each variation
+   prompt becomes an edit instruction applied to the first picked reference rather than a fresh
+   text-to-image generation — genuinely different output (iterations ON a photo, not designs
+   inspired by several), which is why it's its own toggle rather than a third entry in the
+   gemini/openai connector picker.
+4. **Final pass** — winning prompt + references. `image-ref-conditioning`. When the muapi edit
+   toggle is on, this reinforces against that same single reference photo instead of the full
+   `refSrcs` list, since muapi's tool still can't take more than one.
 5. **Animate** — locally-drawn solid start frame (or loop = final frame both ends) + final
    image as end frame → reveal video. `video-frame-conditioning` (8s duration rule rides the
-   wrapper).
+   wrapper). A quality-tier picker (default `veo-3.1-generate-preview` / fast / lite, shown
+   whenever Gemini is connected) sets `GenerationParams.modelHint` to the literal Veo model id,
+   so an iteration pass can render on the ~8× cheaper `lite` tier and only the final render pays
+   for full quality — wired 2026-08-09; the wrapper's `model` arg existed before this, nothing
+   in the UI ever set it.
 6. **Alpha** — colorkey → VP9/WebM with real alpha, local ffmpeg. Lands as a `motionGfx` node
    ready for an overlay track.
 
@@ -100,11 +184,114 @@ preview-only and structurally absent from the export payload.
 
 ## Combine (drag node onto node)
 
-Still the stub lifecycle from Phase 2 — the combine dialog spawns a placeholder "combined"
-node. Real combine semantics (image+audio → video? style transfer?) should be designed against
-the capability map (`image-ref-conditioning`, `video-gen-i2v`) rather than ad hoc. Open item.
+Two pairs now run a real generation instead of the Phase 2 placeholder timer (2026-08-09
+enrichment run, row 7): **image+image** prompts a merge and passes both nodes' `src` as
+`referenceImagePaths` (`image-ref-conditioning`, the same field Motion graphics' References
+stage uses); **audio+image** (either drag order) passes the image as `sourceMediaPath` and the
+audio as `referenceAudioPaths`, with the dialog's prompt telling the agent to lip-sync if the
+image shows a face and otherwise animate-and-score it — the same `sourceMediaPath` +
+`referenceAudioPaths` chain Deepfake's Stage 2 established, reused rather than restricted to a
+connector pair since Combine has no upload-chain complexity to steer around. Both require the
+dragged nodes to already be `ready` (the Combine button disables otherwise) since the paths need
+real files on disk, not an in-flight render. The dialog gained a prompt textarea for these two
+pairs to carry the "how should these combine" instruction the stub never had anywhere to put.
+
+The other four pairs (video+video, image+video, audio+video, audio+audio) closed the placeholder
+gap too (2026-08-09 enrichment run, row 9): each is a deterministic local ffmpeg composite, not an
+agent generation, so none of them show the prompt textarea or route through `generateMedia` — no
+agent judgment is needed since which filter graph applies follows directly from the two media
+types (`localCombineFor` in `store.ts`). **video+video** ("Stitch clips") concats both clips after
+normalizing to the shared 1080×1920/30fps export canvas, keeping audio only when both sides have a
+stream (no ffprobe here to pad a missing track to the right length, so the honest v1 behavior is
+video-only output rather than a guessed-length dub). **image+video** ("Composite overlay") draws
+the still centered and scaled-to-fit over the clip's full duration, passing the clip's own audio
+through untouched. **audio+video** ("Score the clip") lays the new audio under the clip, mixed
+with the clip's own audio when it has one; output runs to the shorter of the two (`-shortest`) as
+the deliberate v1 default. **audio+audio** ("Mix tracks") blends both into one stream
+(`amix`/`normalize=0`, matching the Cut Room export's own mix). All four go through one new IPC
+round trip, `media:combine-local` (`combineLocal()` in `media-tools.ts`), and produce a real node
+exactly like `IsolateScreen`'s ffmpeg output does — `source: 'upload'`, not `'generate'`, since no
+connector or agent turn is spent. Every pair now requires both dragged nodes to be `ready` with a
+real `src` (the Combine button disables otherwise), the same guard the two generative pairs
+already had.
 
 ---
+
+## Listing photos → Instagram cover
+
+A pulled listing's real photos have always been the whole tile (`pullListingPhotos()` in
+`chatrealty.ts` — deterministic `search_listings` → `get_listing_photos`, no agent turn). ChatRealty
+exposes a second, paid-for tool the tile never touched: `create_listing_cover`, a templated 4:5
+Instagram cover render (hook/price/address/specs/body/agent headshot) that returns a Cloudinary
+URL, not base64 — a second ingestion path alongside the base64 photo pipeline. As of the 2026-08-09
+enrichment run (row 10), a successful pull surfaces a small "Create Instagram cover" form for the
+top-matched listing: hook (2–3 words) + body copy (≤260 chars, both required, user-authored — this
+is creative copy, not something to invent), city defaulted from the listing. Submitting calls
+`createListingCover()` in `chatrealty.ts` (one MCP tool call, same shape as the pull path), extracts
+the Cloudinary URL from the response, and downloads it via `importUrlAsset()` (the same URL-import
+path `docs/architecture/capability-map.md` already flagged as the right mechanism for ChatRealty's
+Cloudinary-returning tools) into a new image node. Same guardrail as every generation button in the
+app: nothing fires until the user presses it — this is wiring, not an autonomous call.
+`plan_listing_carousel` also now feeds the Scripting panel's agent context (see "Scripting
+conversation" above) — its own deterministic call, no UI of its own.
+
+`create_carousel_slide` is wired too: a kind picker (CMA stats / Text / Call to action / Banner)
+beneath the cover form, each kind rendering its own per-kind form (`cma` needs exactly 4
+label/value stat pairs plus `listingPrice`/`scope`/`period`/`pitch`; `text` takes 1–3 paragraphs
+≤220 chars each plus an italicize-last-paragraph toggle; `cta` needs exactly 2 paragraphs, agent
+name/DRE/headshot/logo injected server-side; `banner` needs a room label, caption, and an image
+URL). Unlike the cover and staging tools, this one tool takes no `listingKey` — every kind's
+content is literal fields the caller already has, not a server-side lookup, so
+`createCarouselSlide()` in `chatrealty.ts` calls it without one. Same
+Cloudinary-URL-then-`importUrlAsset` ingestion as the cover, same never-fires-until-clicked
+guardrail. The exact per-stat/per-paragraph field shape is inferred from the reference doc's
+prose description (no field-level schema was captured), same confidence category as the Krea
+asset-upload field-name guesswork — worth a live check once a ChatRealty token exists.
+
+The tile also surfaces an interior-photo picker for `stage_listing_with_agent` (Nano Banana
+composites the agent's headshot into up to 10 interior photos, ~$0.04/photo — the one real
+generation call in this chain, unlike the three templated-layout tools above it): each pulled
+photo carries its 0-based `get_listing_photos` position (`ChatRealtyPulledImage.photoIndex`), so
+the picker's checkboxes feed exact `photoIndexes` straight to `stageListingWithAgent()` in
+`chatrealty.ts` rather than guessing an index — same posture as every other billed connector call,
+the button fires only on a user click. Staged results land as local `lyme-asset://` image nodes
+(the same `importUrlAsset` path every other Cloudinary-returning tool in this chain uses), so the
+`banner` carousel-slide kind's `imageUrl` field — which needs a live Cloudinary URL, not a local
+asset path — still takes a manually pasted URL rather than reading a staged node directly; closing
+that gap for real would mean re-uploading a staged asset somewhere Cloudinary-reachable, out of
+scope for this pass. All four items in `node-enrichment-strategy.md`'s Listing photos build order
+are now shipped.
+
+A fifth tool this tile never touched, added later (Recommendations item 2 in
+`../reports/node-enrichment-report.md`): `create_article`, a DRAFT-only blog/market-insight/tips
+post on the agent's own CMS (`update_article`'s `status: 'published'` is the real publish step and
+stays out of scope, per AGENTS.md rule 6). A category picker (market insights / articles / tips) +
+title/excerpt/content form sits beneath the staging picker; a "Prefill from listing facts" button
+reuses `bridge.chatRealty.listingContext()` — the same `plan_listing_carousel` call the Scripting
+panel's context-enrichment already makes — to seed the content textarea with real numbers instead
+of a blank box, without overwriting anything the user's already typed. `createArticleDraft()` in
+`chatrealty.ts` parses the tool's loosely-documented "JSON text block (slug)" response defensively
+(tries `slug`/`slugId`/`id` keys, falls back to the raw trimmed text) since no field-level schema
+was captured for this response any more than the carousel-slide fields were. Unlike every other
+tool in this chain, the result isn't a Cloudinary URL — no canvas node is created, only a status
+line showing the returned slug.
+
+A sixth tool, `create_landing_page` (Recommendations item 2's own "still open" note — a
+structurally bigger sibling to `create_article`, deliberately left for its own pass at the time):
+another DRAFT-only CMS write, this time a lead-capture landing page
+(`update_landing_page`'s `status: 'published'` is the real publish step, same AGENTS.md rule 6
+boundary). The reference doc documents only `title`/`content` as required and describes a
+`landingPage` block covering hero media, a YouTube embed, a theme override, and lead-form
+fields/recipients — but never gives the lead-form sub-shape a field-level schema anywhere, so
+`createLandingPageDraft()` in `chatrealty.ts` only sends the three simplest `landingPage` fields
+(`heroType`, `youtubeUrl`, `themeOverride`) and leaves lead-form configuration to the CMS's own
+editor once the draft exists, rather than guessing at an undocumented array shape. Sits beneath
+the article form as a fourth mini-form (title/content/hero-type toggle/YouTube URL/theme
+override), same "Prefill from listing facts" button reusing `listingContext()`. The tool's result
+is documented as `editUrl` + `previewUrl` rather than a bare slug — `createLandingPageDraft()`
+tries those two JSON keys first, falling back to scanning the raw response text for URLs. Not run
+live — no ChatRealty token in this sandbox, so the response-parsing fallback is unverified end to
+end.
 
 ## Where routing happens
 

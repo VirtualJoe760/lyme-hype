@@ -104,8 +104,13 @@ export interface GenerationParams {
   aspectRatio?: string
   durationSec?: number
   resolution?: string
-  /** Restrict to a single connector by id; omit to let the agent choose. */
+  /** Restrict to a single connector by id; omit to let the agent choose.
+   *  Superseded by `connectorIds` when both are set. */
   connectorId?: string
+  /** Restrict to a specific SET of connectors — lets the agent chain tools
+   *  across exactly those (e.g. muapi + yapper for Deepfake's upload-then-
+   *  lipsync handoff) without opening every installed connector. */
+  connectorIds?: string[]
   /** Nudge toward a specific model within a connector (e.g. "Midjourney" on
    *  muapi for production-tier image) — advisory, included in the prompt. */
   modelHint?: string
@@ -117,12 +122,42 @@ export interface GenerationParams {
   startFramePath?: string
   /** Frame conditioning for video: last frame (same as start = seamless loop). */
   endFramePath?: string
+  /** Local audio file(s) to hand the agent (e.g. Deepfake's generated speech
+   *  clip) — lyme-asset:// URLs or absolute paths, resolved main-side the
+   *  same way as referenceImagePaths. */
+  referenceAudioPaths?: string[]
+  /** The face/performance media to drive (Deepfake's source video or still
+   *  photo) — lyme-asset:// URL or absolute path, resolved main-side. */
+  sourceMediaPath?: string
+  /** A previously generated video to extend by ~7s (Veo via the Gemini
+   *  wrapper's gemini_extend_video) — lyme-asset:// URL or absolute path,
+   *  resolved main-side. Set alongside `extendVideoDurationSec` when the
+   *  source clip's current length is known, so the wrapper can enforce
+   *  Veo's 148s total-extension cap. */
+  extendVideoPath?: string
+  /** The source clip's current total length in seconds, if known. */
+  extendVideoDurationSec?: number
 }
 
 export interface LocalToolResult {
   ok: boolean
   src?: string
   error?: string
+}
+
+/** Combine dialog's four non-generative pairs — real local ffmpeg compositing,
+ *  no connector/agent call. video+video and image+video/audio+video/audio+audio
+ *  each map to one deterministic filter graph, unlike image+image/audio+image
+ *  which need the agent's judgment and go through GenerationParams instead. */
+export type CombineLocalKind = 'stitch-video' | 'overlay-image' | 'score-video' | 'mix-audio'
+
+export interface CombineLocalRequest {
+  kind: CombineLocalKind
+  /** lyme-asset:// URLs. Meaning depends on kind: stitch-video/mix-audio are
+   *  order-preserving pairs; overlay-image is {video, image}; score-video is
+   *  {video, audio}. */
+  aUrl: string
+  bUrl: string
 }
 
 export interface VoiceEntry {
@@ -137,21 +172,46 @@ export interface AudioToolResult {
   text?: string
   /** Structured voice rows when the listing parsed; raw `text` is the fallback. */
   voices?: VoiceEntry[]
+  /** `GET /audio/voices` rows — id-keyed, unlike ElevenLabs's name-keyed `voices`,
+   *  since Yapper's `/audio/speech` takes a `voiceId`, not a name. */
+  yapperVoices?: YapperVoiceEntry[]
+  /** Yapper's `/audio/speech` free daily-character tier remaining count. */
+  freeCharactersRemainingToday?: number
   error?: string
+}
+
+export interface YapperVoiceEntry {
+  id: string
+  name: string
 }
 
 export interface TrainedStyle {
   id: string
   name: string
-  /** 'fal' for the fal-hosted Krea trainers (current path); 'krea' survives on
-   *  legacy entries from the short-lived Krea-native client. */
+  /** 'fal' for the fal-hosted Krea trainers (the default); 'krea' for styles
+   *  trained via Krea's own `/styles/train` (`krea-training.ts`) — the only
+   *  ones usable via `styles:[{id,strength}]` at generation time. Drives
+   *  Generate image's routing: a style always generates through the backend
+   *  that trained it. */
   connectorId: 'krea' | 'fal'
-  /** Which fal trainer produced it ('krea-2' | 'flux-krea'). */
+  /** Which trainer produced it: fal's ('krea-2' | 'flux-krea') or Krea's own
+   *  ('krea-k2') — see `connectorId` for which backend the style lives on
+   *  (a 'krea-k2' style always has `connectorId: 'krea'`). */
   trainer?: string
   /** URL of the trained LoRA weights (safetensors) — the generation input. */
   loraUrl?: string
   trainedAt: string
   referenceImageCount: number
+  /** ElevenLabs voice name paired with this identity — turns a plain trained
+   *  LoRA into a "Reference person" (likeness + voice in one record) that the
+   *  Deepfake tile can pick from. Matches elevenlabs-tools.ts's `voiceName`
+   *  param (the MCP tool takes voice_name, not an id). */
+  voiceName?: string
+  /** Free-text tone/persona tag ("calm authoritative newsreader", "energetic
+   *  upbeat vlogger") — lets a Storyboard shot's "feeling" annotation suggest
+   *  which Reference person a Deepfake script should default to, instead of
+   *  the user re-picking the same person by hand for every matching shot. */
+  personaTone?: string
 }
 
 export interface TrainStyleResult {
@@ -218,6 +278,11 @@ export interface MediaNodeData {
   /** Storyboard image panels: restrict promotion's generation to one connector
    *  (the storyboard-tier model choice — Gemini vs OpenAI). */
   connectorId?: string
+  /** Real measured length of a video node (probed client-side after generation
+   *  or extension, docs/ui/node-enrichment-strategy.md Recommendations #3) —
+   *  what Veo's 148s chained-extension cap actually needs, since the requested
+   *  duration and the delivered one aren't guaranteed to match. */
+  videoDurationSec?: number
   [key: string]: unknown
 }
 
@@ -435,12 +500,108 @@ export interface ChatRealtyPulledImage {
   label: string
   listingKey: string
   detailUrl: string | null
+  /** 0-based position in the `get_listing_photos` response — the exact index
+   *  `stage_listing_with_agent`'s `photoIndexes` param expects, so the staging
+   *  picker can reuse these pulled photos instead of guessing indices. */
+  photoIndex: number
 }
 
 export interface ChatRealtyPullResult {
   ok: boolean
   images: ChatRealtyPulledImage[]
   listings: ChatRealtyListing[]
+  error?: string
+}
+
+export interface ChatRealtyCoverResult {
+  ok: boolean
+  /** lyme-asset:// URL of the downloaded cover image, when ok. */
+  src?: string
+  error?: string
+}
+
+/** `plan_listing_carousel`'s material — real facts/CMA stats for a listing,
+ *  handed to the Scripting panel as context instead of an agent guessing
+ *  numbers. Raw JSON text, not parsed: the agent reads it directly. */
+export interface ChatRealtyListingContextResult {
+  ok: boolean
+  text?: string
+  error?: string
+}
+
+export interface ChatRealtyCarouselStat {
+  label: string
+  value: string
+}
+
+/** `create_carousel_slide`'s per-kind field shapes. Not tied to a listingKey —
+ *  unlike cover/staging, the tool takes literal content the caller already has
+ *  (from `plan_listing_carousel`'s material or the user's own copy), not a
+ *  server-side lookup. */
+export type ChatRealtyCarouselSlideInput =
+  | { kind: 'banner'; label: string; caption: string; imageUrl: string }
+  | {
+      kind: 'cma'
+      stats: ChatRealtyCarouselStat[]
+      listingPrice: string
+      scope: string
+      period: string
+      pitch: string
+    }
+  | { kind: 'text'; paragraphs: string[]; italicLast: boolean }
+  | { kind: 'cta'; paragraphs: [string, string] }
+
+/** `stage_listing_with_agent`'s result — the one real generation call in the
+ *  ChatRealty creative-rendering chain (~$0.04/photo). The picker that builds
+ *  the request never fires it on its own; a human presses Generate. */
+export interface ChatRealtyStageResult {
+  ok: boolean
+  images?: { src: string }[]
+  error?: string
+}
+
+/** `create_article`'s input — a CMS DRAFT, never a publish. `update_article`'s
+ *  `status: 'published'` transition is the real publish step and is explicitly
+ *  out of Lyme Hype's scope (AGENTS.md rule 6); this tile only ever drafts. */
+export interface ChatRealtyArticleDraftInput {
+  title: string
+  content: string
+  category: 'articles' | 'market-insights' | 'real-estate-tips'
+  excerpt?: string
+  tags?: string[]
+}
+
+/** `create_article`'s result — a DRAFT slug on the agent's own CMS, not a
+ *  Cloudinary asset, so nothing lands on the canvas as a media node. */
+export interface ChatRealtyArticleDraftResult {
+  ok: boolean
+  slug?: string
+  error?: string
+}
+
+/** `create_landing_page`'s input — a CMS DRAFT, same publish boundary as
+ *  articles (AGENTS.md rule 6). The reference doc documents `title`/`content`
+ *  as the only required fields and describes a `landingPage` block covering
+ *  hero media, a YouTube embed, a theme override, and lead-form
+ *  fields/recipients — only the three simplest of those (`heroType`,
+ *  `youtubeUrl`, `themeOverride`) are wired here; the lead-form field/
+ *  recipient sub-shape isn't documented at the field level anywhere in the
+ *  reference doc, so it's deliberately left out rather than guessed. */
+export interface ChatRealtyLandingPageDraftInput {
+  title: string
+  content: string
+  heroType?: 'photo' | 'video'
+  youtubeUrl?: string
+  themeOverride?: string
+}
+
+/** `create_landing_page`'s result — the reference doc says it returns
+ *  `editUrl` + `previewUrl` rather than the bare slug `create_article`
+ *  returns; nothing lands on the canvas as a media node either way. */
+export interface ChatRealtyLandingPageDraftResult {
+  ok: boolean
+  editUrl?: string
+  previewUrl?: string
   error?: string
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ConnectorView, TrainedStyle, VoiceEntry } from '@shared/types'
+import type { ConnectorView, TrainedStyle, VoiceEntry, YapperVoiceEntry } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { ChatRealtyPull } from './ChatRealtyPull'
@@ -33,7 +33,7 @@ const TILES: { key: Screen; glyph: string; label: string; blurb: string }[] = [
   { key: 'motion', glyph: '✦', label: 'Motion graphics', blurb: 'References → reveal animation → alpha' },
   { key: 'isolate', glyph: '⏏', label: 'Isolate audio', blurb: 'Extract a track locally — free, no tokens' },
   { key: 'lora', glyph: '◈', label: 'Create a LoRA', blurb: "Train a reusable style on fal's Krea trainers" },
-  { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Lip-sync / talking avatars via Yapper' },
+  { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Reference person → speech → lip-sync/face' },
   { key: 'upload', glyph: '↑', label: 'Upload', blurb: 'A file from this machine' },
   { key: 'link', glyph: '⛓', label: 'Link', blurb: 'Download a direct media URL' },
   { key: 'pull', glyph: '⌂', label: 'Listing photos', blurb: 'Pull real MLS photos (ChatRealty)' }
@@ -63,7 +63,7 @@ const TILE_NEEDS: Partial<Record<Screen, { anyOf: string[]; label: string }>> = 
   audio: { anyOf: ['elevenlabs'], label: 'elevenlabs' },
   motion: { anyOf: ['gemini', 'openai'], label: 'gemini/openai' },
   lora: { anyOf: ['fal'], label: 'fal' },
-  deepfake: { anyOf: ['yapper'], label: 'yapper' },
+  deepfake: { anyOf: ['yapper', 'muapi'], label: 'yapper/muapi' },
   pull: { anyOf: ['chatrealty'], label: 'chatrealty' }
 }
 
@@ -85,6 +85,35 @@ function tileReady(
 const ASPECTS = ['9:16', '1:1', '16:9']
 const DURATIONS = ['6s', '12s', '15s']
 const RESOLUTIONS = ['720p', '1080p']
+
+/** Yapper's video-generation catalog (docs/connectors/reference/yapper.md) —
+ *  the hosted MCP connector is a full aggregator, not lipsync-only, but
+ *  nothing let a user reach a specific model by id before this. Passed as
+ *  `modelHint`; `generation.ts`'s buildPrompt turns it into a preference line
+ *  the agent matches against yapper_start_process's own `model` enum. */
+const YAPPER_VIDEO_MODELS: { id: string; label: string }[] = [
+  { id: '', label: 'Yapper model: agent picks' },
+  { id: 'seedance-2.5', label: 'seedance-2.5 (4-30s · 720p)' },
+  { id: 'seedance-2.0', label: 'seedance-2.0 (4-15s · 2160p)' },
+  { id: 'seedance-2.0-fast', label: 'seedance-2.0-fast (4-15s · 2160p)' },
+  { id: 'seedance-2.0-mini', label: 'seedance-2.0-mini (4-15s · 720p, cheap)' },
+  { id: 'seedance-2.0-open', label: 'seedance-2.0-open (4-15s · 2160p)' },
+  { id: 'kling-3.0', label: 'kling-3.0 (4-15s · 1080p)' },
+  { id: 'kling-3.0-pro', label: 'kling-3.0-pro (4-15s · 1080p)' },
+  { id: 'veo3-quality', label: 'veo3-quality (8s · 1080p)' },
+  { id: 'veo3-fast', label: 'veo3-fast (8s · 1080p, cheap)' },
+  { id: 'sora-2', label: 'sora-2 (4-20s · 1080p)' },
+  { id: 'sora-2-pro', label: 'sora-2-pro (4-20s · 1080p)' },
+  { id: 'wan-3.0', label: 'wan-3.0 (2-30s · 1080p)' },
+  { id: 'wan-2.7', label: 'wan-2.7 (2-10s · 1080p)' },
+  { id: 'flux-3', label: 'flux-3 (5-20s · 1080p)' },
+  { id: 'minimax-h3', label: 'minimax-h3 (5-15s · 1440p)' },
+  { id: 'pixverse-v6', label: 'pixverse-v6 (1-15s · 1080p)' },
+  { id: 'grok-imagine', label: 'grok-imagine (4-15s · 720p)' },
+  { id: 'grok-imagine-v1.5', label: 'grok-imagine-v1.5 (1-15s · 720p)' },
+  { id: 'gemini-omni-flash', label: 'gemini-omni-flash (3-10s · 1080p, no frame ctrl)' },
+  { id: 'happy-horse', label: 'happy-horse (3-15s · 720p)' }
+]
 
 let generateCounter = 0
 function labelFromPrompt(prompt: string, prefix: string): string {
@@ -159,6 +188,7 @@ function ResultRow(props: { nodeId: string | null }): React.JSX.Element | null {
 
 function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const generateMedia = useStudio((s) => s.generateMedia)
+  const nodes = useStudio((s) => s.nodes)
   const [prompt, setPrompt] = useState('')
   const [aspect, setAspect] = useState('9:16')
   const [duration, setDuration] = useState('12s')
@@ -167,20 +197,72 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
   const [resolution, setResolution] = useState('1080p')
   // Routing intent (catalog.md): muapi is the video primary when installed.
   const muapiReady = connectorReady(props.connectors, 'muapi')
+  const geminiReady = connectorReady(props.connectors, 'gemini')
+  const yapperReady = connectorReady(props.connectors, 'yapper')
+  const falReady = connectorReady(props.connectors, 'fal')
   const [connector, setConnector] = useState(muapiReady ? 'muapi' : '')
+  const [startFrameNodeId, setStartFrameNodeId] = useState('')
+  const [yapperModel, setYapperModel] = useState('')
+  // i2v used to force gemini unconditionally (docs/architecture/capability-map.md
+  // §2's "i2v everywhere except Gemini needs asset-upload first" — fal's half of
+  // that gap closed 2026-08-09, this picker is the UI half). Only offered once
+  // fal is actually connected; gemini stays the default either way.
+  const [i2vConnector, setI2vConnector] = useState<'gemini' | 'fal'>('gemini')
   const { ready } = tileReady(props.connectors, 'video')
+
+  // Extend an existing clip (Veo, +7s per call, 148s chained-extension cap) —
+  // a separate flow from fresh generation, docs/ui/node-enrichment-strategy.md
+  // Recommendations #3. Only Gemini's wrapper supports this.
+  const extendableNodes = nodes.filter(
+    (n) => n.data.mediaType === 'video' && n.data.status === 'ready' && n.data.src && !n.data.panel
+  )
+  const [extendNodeId, setExtendNodeId] = useState('')
+  const [extendPrompt, setExtendPrompt] = useState('')
+  const [extendResultId, setExtendResultId] = useState<string | null>(null)
+  const extendNode = extendableNodes.find((n) => n.id === extendNodeId)
+  const extendCurrentSec = extendNode?.data.videoDurationSec
+  const VEO_EXTENSION_CAP_SEC = 148
+  const extendWouldExceedCap =
+    extendCurrentSec !== undefined && extendCurrentSec + 7 > VEO_EXTENSION_CAP_SEC
+
+  // i2v: only Gemini's Veo wrapper accepts a start_frame_path today (capability
+  // map §2 — muapi/fal need asset-upload first, still open plumbing), so
+  // picking a starting frame overrides whatever connector is otherwise chosen.
+  const imageNodes = nodes.filter(
+    (n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src && !n.data.panel
+  )
+  const startFrameSrc = imageNodes.find((n) => n.id === startFrameNodeId)?.data.src
+  const effectiveConnectorId = startFrameSrc
+    ? i2vConnector
+    : yapperModel
+      ? 'yapper'
+      : connector || undefined
+  const runOk = startFrameSrc
+    ? i2vConnector === 'fal'
+      ? falReady
+      : geminiReady
+    : yapperModel
+      ? yapperReady
+      : ready
+  const runLabel = startFrameSrc
+    ? i2vConnector === 'fal'
+      ? falReady
+        ? 'runs on fal · i2v (agent picks a catalog model)'
+        : 'i2v needs fal connected'
+      : geminiReady
+        ? 'runs on gemini · i2v start frame (Veo)'
+        : 'i2v needs gemini connected'
+    : yapperModel
+      ? yapperReady
+        ? `runs on yapper · ${yapperModel}`
+        : 'needs yapper connected'
+      : ready
+        ? `runs on ${connector || 'agent pick'}${connector === 'muapi' ? ' · seedance' : ''}`
+        : 'no video connector connected'
 
   return (
     <>
-      <RunLine
-        ok={ready}
-        label={
-          ready
-            ? `runs on ${connector || 'agent pick'}${connector === 'muapi' ? ' · seedance' : ''}`
-            : 'no video connector connected'
-        }
-        cost="$$ paid"
-      />
+      <RunLine ok={runOk} label={runLabel} cost="$$ paid" />
       <textarea
         className="prompt-area"
         placeholder="lantern spirit rising from a river of flames, chorus swell, wide shot"
@@ -207,6 +289,43 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
               </option>
             ))}
           </select>
+          {imageNodes.length > 0 && (
+            <select
+              className="cr-input create-select"
+              value={startFrameNodeId}
+              onChange={(e) => setStartFrameNodeId(e.target.value)}
+            >
+              <option value="">Starting frame: none (text → video)</option>
+              {imageNodes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  Starting frame: {n.data.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {startFrameSrc && falReady && (
+            <select
+              className="cr-input create-select"
+              value={i2vConnector}
+              onChange={(e) => setI2vConnector(e.target.value as 'gemini' | 'fal')}
+            >
+              <option value="gemini">i2v via: gemini (Veo, verified)</option>
+              <option value="fal">i2v via: fal (catalog i2v — Kling/Seedance/WAN)</option>
+            </select>
+          )}
+          {yapperReady && (
+            <select
+              className="cr-input create-select"
+              value={yapperModel}
+              onChange={(e) => setYapperModel(e.target.value)}
+            >
+              {YAPPER_VIDEO_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
       <button
@@ -221,7 +340,9 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
               aspectRatio: aspect,
               durationSec: parseInt(duration, 10) || undefined,
               resolution,
-              connectorId: connector || undefined
+              connectorId: effectiveConnectorId,
+              startFramePath: startFrameSrc,
+              modelHint: startFrameSrc ? undefined : yapperModel || undefined
             })
           )
         }
@@ -229,6 +350,65 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
         Generate
       </button>
       <ResultRow nodeId={resultId} />
+      {extendableNodes.length > 0 && (
+        <div className="more-body">
+          <select
+            className="cr-input create-select"
+            value={extendNodeId}
+            onChange={(e) => setExtendNodeId(e.target.value)}
+          >
+            <option value="">Extend an existing clip: none</option>
+            {extendableNodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                Extend: {n.data.label}
+                {n.data.videoDurationSec ? ` (${Math.round(n.data.videoDurationSec)}s)` : ''}
+              </option>
+            ))}
+          </select>
+          {extendNode && (
+            <>
+              <textarea
+                className="prompt-area"
+                placeholder="what happens in the next 7 seconds"
+                value={extendPrompt}
+                onChange={(e) => setExtendPrompt(e.target.value)}
+              />
+              <RunLine
+                ok={geminiReady && !extendWouldExceedCap}
+                label={
+                  !geminiReady
+                    ? 'extend needs gemini connected'
+                    : extendWouldExceedCap
+                      ? `would exceed Veo's ${VEO_EXTENSION_CAP_SEC}s cap`
+                      : extendCurrentSec !== undefined
+                        ? `runs on gemini · +7s (${Math.round(extendCurrentSec)}s → ${Math.round(extendCurrentSec + 7)}s)`
+                        : 'runs on gemini · +7s (length unknown, cap unenforced client-side)'
+                }
+                cost="$$ paid"
+              />
+              <button
+                className="generate-btn"
+                disabled={!extendPrompt.trim() || !geminiReady || extendWouldExceedCap}
+                onClick={() =>
+                  setExtendResultId(
+                    generateMedia({
+                      label: labelFromPrompt(extendPrompt, 'clip'),
+                      mediaType: 'video',
+                      prompt: extendPrompt.trim(),
+                      connectorId: 'gemini',
+                      extendVideoPath: extendNode.data.src,
+                      extendVideoDurationSec: extendCurrentSec
+                    })
+                  )
+                }
+              >
+                Extend +7s
+              </button>
+              <ResultRow nodeId={extendResultId} />
+            </>
+          )}
+        </div>
+      )}
     </>
   )
 }
@@ -248,8 +428,11 @@ function ImageScreen(props: {
   const style = props.styles.find((s) => s.id === styleId)
   const muapiReady = connectorReady(props.connectors, 'muapi')
 
+  const kreaTier = tier === 'production' ? 'krea/krea-2/large (highest quality)' : 'krea/krea-2/medium'
   const runLabel = style
-    ? `fal · ${style.trainer === 'flux-krea' ? 'flux-krea-lora' : 'krea 2 lora'} · "${style.name}"`
+    ? style.connectorId === 'krea'
+      ? `krea · styles:[{id}] · "${style.name}" · ${tier === 'production' ? 'K2 large' : 'K2 medium'}`
+      : `fal · ${style.trainer === 'flux-krea' ? 'flux-krea-lora' : 'krea 2 lora'} · "${style.name}"`
     : tier === 'production'
       ? muapiReady
         ? 'midjourney via muapi'
@@ -257,16 +440,31 @@ function ImageScreen(props: {
       : storyboardConnector
         ? `${storyboardConnector} · storyboard tier`
         : 'no storyboard connector'
-  const runOk = style ? connectorReady(props.connectors, 'fal') : tier === 'production' ? muapiReady : !!storyboardConnector
+  const runOk = style
+    ? connectorReady(props.connectors, style.connectorId)
+    : tier === 'production'
+      ? muapiReady
+      : !!storyboardConnector
 
   function handleGenerate(): void {
     // The tier choice drives GenerationParams.connectorId — the routing gap
-    // closed in Phase 13. A trained LoRA routes through fal with the weights
-    // URL in the hint so the agent passes it to the model's lora parameter.
+    // closed in Phase 13. A trained LoRA routes through the backend it was
+    // trained on: fal (weights URL, tier-agnostic) or Krea (styles:[{id}],
+    // where tier now genuinely picks K2 medium vs. K2 large — the production-
+    // tier LoRA route fal has no equivalent for; docs/ui/node-enrichment-
+    // strategy.md row 4).
     const connectorId =
-      style !== undefined ? 'fal' : tier === 'production' ? (muapiReady ? 'muapi' : undefined) : storyboardConnector || undefined
+      style !== undefined
+        ? style.connectorId
+        : tier === 'production'
+          ? muapiReady
+            ? 'muapi'
+            : undefined
+          : storyboardConnector || undefined
     const styleHint = style
-      ? `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
+      ? style.connectorId === 'krea'
+        ? `the Krea 2 ${kreaTier} with my trained style (call krea's generate tool with styles: [{id: "${style.id}", strength: 1}])`
+        : `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
       : undefined
     setResultId(
       generateMedia({
@@ -331,24 +529,63 @@ function ImageScreen(props: {
 
 type AudioJob = 'voice' | 'music' | 'sfx' | 'clone'
 
-function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
+function AudioScreen(props: {
+  connectors: ConnectorView[]
+  styles: TrainedStyle[]
+  onStyleUpdated: (style: TrainedStyle) => void
+}): React.JSX.Element {
   const addNode = useStudio((s) => s.addNode)
   const focusNode = useStudio((s) => s.focusNode)
+  const generateMedia = useStudio((s) => s.generateMedia)
   const [job, setJob] = useState<AudioJob>('voice')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const ready = connectorReady(props.connectors, 'elevenlabs')
+  // Yapper's REST TTS key is a synthetic vault id, not a ConnectorDef
+  // (docs/connectors/reference/yapper.md "Two credentials, easy to
+  // conflate"), so it can't be read off props.connectors like `ready` above —
+  // same duplicated id/string as ConnectorsTab.tsx's YAPPER_REST_ID, since
+  // that file lives in a different process and can't share the main-side
+  // constant in yapper-rest.ts.
+  const [yapperTtsReady, setYapperTtsReady] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void bridge.secrets.list().then((secrets) => {
+      if (alive) setYapperTtsReady(secrets.some((s) => s.connectorId === 'yapper-rest'))
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+  // Voice-only fallback: Yapper's `/audio/speech` has a free daily-character
+  // tier and needs no ElevenLabs connection, but it's a single default voice
+  // with no browsing/preview yet — a smaller feature than the ElevenLabs path.
+  const useYapperVoiceFallback = !ready && yapperTtsReady
+  // Music-only fallback: ElevenLabs's compose_music has no substitute inside
+  // ElevenLabs itself, but muapi's Suno wrapper (`muapi_audio_create` — full
+  // songs, not `muapi_audio_from_text`'s MMAudio SFX) covers the same job
+  // through the agent path, same as Deepfake's muapi/yapper chain.
+  const muapiReady = connectorReady(props.connectors, 'muapi')
+  const useMuapiMusicFallback = !ready && muapiReady
+  const [instrumental, setInstrumental] = useState(false)
+  const [musicResultId, setMusicResultId] = useState<string | null>(null)
 
   const [voiceQuery, setVoiceQuery] = useState('')
   const [voices, setVoices] = useState<VoiceEntry[] | null>(null)
   const [voicesRaw, setVoicesRaw] = useState('')
   const [voiceName, setVoiceName] = useState('')
   const [previewing, setPreviewing] = useState<string | null>(null)
+  const [yapperVoiceProvider, setYapperVoiceProvider] = useState<'cartesia' | 'elevenlabs'>('cartesia')
+  const [yapperVoiceQuery, setYapperVoiceQuery] = useState('')
+  const [yapperVoices, setYapperVoices] = useState<YapperVoiceEntry[] | null>(null)
+  const [yapperVoiceId, setYapperVoiceId] = useState('')
+  const [yapperVoiceError, setYapperVoiceError] = useState('')
   const [text, setText] = useState('')
   const [musicLength, setMusicLength] = useState('60s')
   const [sfxDuration, setSfxDuration] = useState('2s')
   const [cloneName, setCloneName] = useState('')
   const [cloneFiles, setCloneFiles] = useState<string[]>([])
+  const [cloneAttachId, setCloneAttachId] = useState('')
   const previewAudio = useRef<HTMLAudioElement | null>(null)
 
   async function browse(): Promise<void> {
@@ -361,6 +598,25 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
       } else {
         setVoices(null)
         setVoicesRaw(`⚠ ${result?.error ?? 'failed'}`)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function browseYapperVoices(): Promise<void> {
+    setBusy(true)
+    setYapperVoiceError('')
+    try {
+      const result = await bridge.audioTools.yapperVoices({
+        provider: yapperVoiceProvider,
+        search: yapperVoiceQuery || undefined
+      })
+      if (result?.ok) {
+        setYapperVoices(result.yapperVoices ?? [])
+      } else {
+        setYapperVoices(null)
+        setYapperVoiceError(result?.error ?? 'Voice list failed.')
       }
     } finally {
       setBusy(false)
@@ -385,13 +641,34 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
     }
   }
 
+  function composeMusicViaMuapi(): void {
+    // Agent-driven, not a direct REST call like the other jobs — muapi's Suno
+    // wrapper runs through the same generateMedia/ResultRow lifecycle Video
+    // and Deepfake already use, so the node renders on the canvas itself
+    // instead of this screen's synchronous ok/src status line.
+    setStatus(null)
+    setMusicResultId(
+      generateMedia({
+        label: labelFromPrompt(text, 'music'),
+        mediaType: 'audio',
+        prompt: [text.trim(), instrumental ? 'Instrumental only, no vocals.' : undefined]
+          .filter(Boolean)
+          .join(' '),
+        connectorId: 'muapi',
+        modelHint: 'suno'
+      })
+    )
+  }
+
   async function run(kind: AudioJob): Promise<void> {
     setBusy(true)
     setStatus(null)
     try {
       const result =
         kind === 'voice'
-          ? await bridge.audioTools.tts({ text, voiceName: voiceName || undefined })
+          ? useYapperVoiceFallback
+            ? await bridge.audioTools.yapperTts({ text, voiceId: yapperVoiceId || undefined })
+            : await bridge.audioTools.tts({ text, voiceName: voiceName || undefined })
           : kind === 'music'
             ? await bridge.audioTools.music({ prompt: text, lengthMs: (parseInt(musicLength, 10) || 60) * 1000 })
             : kind === 'sfx'
@@ -405,7 +682,31 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
           src: result.src,
           startRendering: false
         })
-        setStatus({ kind: 'ok', text: 'Audio node added to the canvas.' })
+        setStatus({
+          kind: 'ok',
+          text:
+            kind === 'voice' && useYapperVoiceFallback
+              ? `Audio node added to the canvas — Yapper free tier${
+                  typeof result.freeCharactersRemainingToday === 'number'
+                    ? ` (${result.freeCharactersRemainingToday} free characters left today)`
+                    : ''
+                }.`
+              : 'Audio node added to the canvas.'
+        })
+      } else if (result?.ok && kind === 'clone' && cloneAttachId) {
+        // voice_clone has no file output — cloneName IS the new voice's name,
+        // so attaching to a Reference person needs no parsing of the reply.
+        const attachedStyle = props.styles.find((s) => s.id === cloneAttachId)
+        const updated = await bridge.lora.setVoice(cloneAttachId, cloneName)
+        if (updated) {
+          props.onStyleUpdated(updated)
+          setStatus({
+            kind: 'ok',
+            text: `Voice "${cloneName}" cloned and attached to Reference person "${attachedStyle?.name ?? updated.name}".`
+          })
+        } else {
+          setStatus({ kind: 'error', text: 'Voice cloned, but attaching it to the Reference person failed.' })
+        }
       } else if (result?.ok) {
         setStatus({ kind: 'ok', text: result.text ?? 'Done.' })
       } else {
@@ -419,9 +720,25 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
   return (
     <>
       <RunLine
-        ok={ready}
-        label={ready ? 'elevenlabs · direct tool calls' : 'ElevenLabs not connected'}
-        cost="$ per generation"
+        ok={ready || yapperTtsReady || muapiReady}
+        label={
+          ready
+            ? 'elevenlabs · direct tool calls'
+            : yapperTtsReady && muapiReady
+              ? 'yapper free tier (voice) + muapi Suno (music), no ElevenLabs connected'
+              : yapperTtsReady
+                ? 'yapper free tier · voice only, no ElevenLabs connected'
+                : muapiReady
+                  ? 'muapi Suno · music only, no ElevenLabs connected'
+                  : 'ElevenLabs not connected'
+        }
+        cost={
+          ready
+            ? '$ per generation'
+            : yapperTtsReady || muapiReady
+              ? 'free daily tier (voice) / credits (music) · $ once connected'
+              : '$ per generation'
+        }
       />
       <div className="tab-row">
         {(['voice', 'music', 'sfx', 'clone'] as AudioJob[]).map((j) => (
@@ -433,71 +750,170 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
 
       {job === 'voice' && (
         <>
-          <div className="mgfx-row">
-            <input
-              className="cr-input"
-              placeholder="Search your voice library…"
-              value={voiceQuery}
-              onChange={(e) => setVoiceQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void browse()
-              }}
-            />
-            <button className="conn-mini" disabled={busy} onClick={() => void browse()}>
-              Browse
-            </button>
-          </div>
-          {voices && voices.length > 0 && (
-            <div className="voice-list">
-              {voices.map((v) => (
-                <div key={v.name} className={`voice-row${voiceName === v.name ? ' sel' : ''}`}>
+          {useYapperVoiceFallback && (
+            <>
+              <p className="aside-help">
+                ElevenLabs isn't connected — using Yapper's free daily-character TTS tier instead.
+                Connect ElevenLabs in Settings for the full voice library.
+              </p>
+              <div className="tab-row">
+                {(['cartesia', 'elevenlabs'] as const).map((p) => (
                   <button
-                    className="voice-play"
-                    title="Preview (tiny TTS call, cached)"
-                    disabled={previewing !== null}
-                    onClick={() => void preview(v.name)}
+                    key={p}
+                    className={yapperVoiceProvider === p ? 'active' : ''}
+                    onClick={() => {
+                      setYapperVoiceProvider(p)
+                      setYapperVoices(null)
+                      setYapperVoiceId('')
+                    }}
                   >
-                    {previewing === v.name ? '…' : '▶'}
+                    {p === 'cartesia' ? 'Cartesia' : 'ElevenLabs (via Yapper)'}
                   </button>
-                  <button className="voice-name" onClick={() => setVoiceName(v.name)}>
-                    {v.name}
-                  </button>
-                  <span className="voice-tags">{v.tags}</span>
+                ))}
+              </div>
+              <div className="mgfx-row">
+                <input
+                  className="cr-input"
+                  placeholder="Search this provider's voices…"
+                  value={yapperVoiceQuery}
+                  onChange={(e) => setYapperVoiceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void browseYapperVoices()
+                  }}
+                />
+                <button className="conn-mini" disabled={busy} onClick={() => void browseYapperVoices()}>
+                  Browse
+                </button>
+              </div>
+              {yapperVoiceError && <p className="aside-help">⚠ {yapperVoiceError}</p>}
+              {yapperVoices && yapperVoices.length > 0 && (
+                <div className="voice-list">
+                  {yapperVoices.map((v) => (
+                    <div key={v.id} className={`voice-row${yapperVoiceId === v.id ? ' sel' : ''}`}>
+                      <button className="voice-name" onClick={() => setYapperVoiceId(v.id)}>
+                        {v.name}
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+              {yapperVoices && yapperVoices.length === 0 && (
+                <p className="aside-help">No voices matched — try clearing the search.</p>
+              )}
+              {yapperVoiceId && (
+                <p className="aside-help">
+                  Using{' '}
+                  {yapperVoices?.find((v) => v.id === yapperVoiceId)?.name ?? yapperVoiceId}.{' '}
+                  <button className="voice-name" onClick={() => setYapperVoiceId('')}>
+                    Clear
+                  </button>
+                </p>
+              )}
+            </>
           )}
-          {voicesRaw && <pre className="create-voice-list">{voicesRaw}</pre>}
-          <input
-            className="cr-input create-select"
-            placeholder="Voice name (pick above; empty = default)"
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-          />
+          {!useYapperVoiceFallback && (
+            <>
+              <div className="mgfx-row">
+                <input
+                  className="cr-input"
+                  placeholder="Search your voice library…"
+                  value={voiceQuery}
+                  onChange={(e) => setVoiceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void browse()
+                  }}
+                />
+                <button className="conn-mini" disabled={busy} onClick={() => void browse()}>
+                  Browse
+                </button>
+              </div>
+              {voices && voices.length > 0 && (
+                <div className="voice-list">
+                  {voices.map((v) => (
+                    <div key={v.name} className={`voice-row${voiceName === v.name ? ' sel' : ''}`}>
+                      <button
+                        className="voice-play"
+                        title="Preview (tiny TTS call, cached)"
+                        disabled={previewing !== null}
+                        onClick={() => void preview(v.name)}
+                      >
+                        {previewing === v.name ? '…' : '▶'}
+                      </button>
+                      <button className="voice-name" onClick={() => setVoiceName(v.name)}>
+                        {v.name}
+                      </button>
+                      <span className="voice-tags">{v.tags}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {voicesRaw && <pre className="create-voice-list">{voicesRaw}</pre>}
+              <input
+                className="cr-input create-select"
+                placeholder="Voice name (pick above; empty = default)"
+                value={voiceName}
+                onChange={(e) => setVoiceName(e.target.value)}
+              />
+            </>
+          )}
           <textarea
             className="prompt-area"
             placeholder="The line to speak…"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run('voice')}>
-            {busy ? 'Generating…' : '♪ Generate voiceover'}
+          <button
+            className="generate-btn"
+            disabled={busy || !text.trim() || (!ready && !yapperTtsReady)}
+            onClick={() => void run('voice')}
+          >
+            {busy ? 'Generating…' : useYapperVoiceFallback ? '♪ Generate voiceover (Yapper free tier)' : '♪ Generate voiceover'}
           </button>
         </>
       )}
 
       {job === 'music' && (
         <>
+          {useMuapiMusicFallback && (
+            <p className="aside-help">
+              ElevenLabs isn't connected — composing with muapi's Suno wrapper instead. Full songs,
+              agent-routed (credits, not a fixed per-track price); connect ElevenLabs in Settings
+              for the direct compose_music path.
+            </p>
+          )}
           <textarea
             className="prompt-area"
             placeholder="lo-fi citrus groove, 90 bpm, warm tape hiss"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <ChipRow options={['30s', '60s', '120s']} value={musicLength} onChange={setMusicLength} />
-          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run('music')}>
-            {busy ? 'Composing…' : '♪ Compose music'}
-          </button>
+          {useMuapiMusicFallback ? (
+            <>
+              <label className="mgfx-row">
+                <input
+                  type="checkbox"
+                  checked={instrumental}
+                  onChange={(e) => setInstrumental(e.target.checked)}
+                />
+                Instrumental only (no vocals)
+              </label>
+              <button className="generate-btn" disabled={!text.trim()} onClick={composeMusicViaMuapi}>
+                ♪ Compose music (muapi · Suno)
+              </button>
+              <ResultRow nodeId={musicResultId} />
+            </>
+          ) : (
+            <>
+              <ChipRow options={['30s', '60s', '120s']} value={musicLength} onChange={setMusicLength} />
+              <button
+                className="generate-btn"
+                disabled={busy || !ready || !text.trim()}
+                onClick={() => void run('music')}
+              >
+                {busy ? 'Composing…' : '♪ Compose music'}
+              </button>
+            </>
+          )}
         </>
       )}
 
@@ -534,6 +950,18 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
           >
             {cloneFiles.length > 0 ? `${cloneFiles.length} sample(s) picked` : '↑ Pick sample audio files'}
           </button>
+          <select
+            className="cr-input create-select"
+            value={cloneAttachId}
+            onChange={(e) => setCloneAttachId(e.target.value)}
+          >
+            <option value="">Don't attach to a Reference person</option>
+            {props.styles.map((s) => (
+              <option key={s.id} value={s.id}>
+                Attach to "{s.name}"{s.voiceName ? ` (replaces voice: ${s.voiceName})` : ''}
+              </option>
+            ))}
+          </select>
           <button
             className="generate-btn"
             disabled={busy || !cloneName.trim() || cloneFiles.length === 0}
@@ -658,19 +1086,29 @@ function IsolateScreen(): React.JSX.Element {
 
 const TRAINERS = [
   { id: 'krea-2', label: 'Krea 2 — best Krea look ($0.003/step)', steps: ['100', '300', '1000'], defaultSteps: '300' },
-  { id: 'flux-krea', label: 'FLUX.1 Krea [dev] (~$2/run)', steps: ['500', '1000', '2000'], defaultSteps: '1000' }
+  { id: 'flux-krea', label: 'FLUX.1 Krea [dev] (~$2/run)', steps: ['500', '1000', '2000'], defaultSteps: '1000' },
+  {
+    id: 'krea-k2',
+    label: 'Krea 2 direct — production styles route (Krea API balance)',
+    steps: ['500', '1000', '1500'],
+    defaultSteps: '1000'
+  }
 ]
 
-function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
-  const [name, setName] = useState('')
-  const [files, setFiles] = useState<string[]>([])
+function LoraScreen(props: {
+  connectors: ConnectorView[]
+  prefill?: { imageSrc: string; name: string } | null
+}): React.JSX.Element {
+  const [name, setName] = useState(props.prefill?.name ?? '')
+  const [files, setFiles] = useState<string[]>(props.prefill ? [props.prefill.imageSrc] : [])
   const [trainer, setTrainer] = useState(TRAINERS[0].id)
   const [steps, setSteps] = useState(TRAINERS[0].defaultSteps)
-  const [kind, setKind] = useState<'style' | 'subject'>('style')
+  const [kind, setKind] = useState<'style' | 'subject'>(props.prefill ? 'subject' : 'style')
   const [triggerWord, setTriggerWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
-  const ready = connectorReady(props.connectors, 'fal')
+  const trainerConnectorId = trainer === 'krea-k2' ? 'krea' : 'fal'
+  const ready = connectorReady(props.connectors, trainerConnectorId)
 
   const trainerDef = TRAINERS.find((t) => t.id === trainer) ?? TRAINERS[0]
 
@@ -705,10 +1143,20 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
     <>
       <RunLine
         ok={ready}
-        label={ready ? `fal · ${trainerDef.id} trainer` : 'fal not connected'}
-        cost={trainerDef.id === 'krea-2' ? '$0.003/step' : '~$2/run'}
+        label={ready ? `${trainerConnectorId} · ${trainerDef.id} trainer` : `${trainerConnectorId} not connected`}
+        cost={
+          trainerDef.id === 'krea-2'
+            ? '$0.003/step'
+            : trainerDef.id === 'krea-k2'
+              ? '$$ Krea API balance (unpublished per-job rate)'
+              : '~$2/run'
+        }
       />
-      <p className="aside-help">Use 4+ example images; more is better.</p>
+      <p className="aside-help">
+        {props.prefill
+          ? 'Started from a Deepfake reference photo — pick more of the same person for a stronger identity LoRA (4+ is better).'
+          : 'Use 4+ example images; more is better.'}
+      </p>
       <select
         className="cr-input create-select"
         value={trainer}
@@ -746,7 +1194,11 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
       />
       <button
         className="action-btn"
-        onClick={() => void bridge.media.pickFiles('image').then((f) => f && setFiles(f))}
+        onClick={() =>
+          void bridge.media
+            .pickFiles('image')
+            .then((f) => f && setFiles((prev) => [...new Set([...prev, ...f])]))
+        }
       >
         {files.length > 0 ? `${files.length} training image(s) picked` : '↑ Pick training images'}
       </button>
@@ -763,43 +1215,233 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   )
 }
 
-function DeepfakeScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
-  const generateMedia = useStudio((s) => s.generateMedia)
-  const [prompt, setPrompt] = useState('')
-  const [resultId, setResultId] = useState<string | null>(null)
-  const ready = connectorReady(props.connectors, 'yapper')
+/**
+ * Scores each Reference person's `personaTone` tag against a shot's "feeling"
+ * hint by word overlap and returns the best match, or undefined if nobody has
+ * a tone tag or nothing overlaps — an honest "no suggestion" beats guessing
+ * (docs/ui/node-enrichment-strategy.md, row 8). Only considers styles that are
+ * actually Reference people (have a voice paired) — a bare trained style with
+ * no voice can't drive Stage 1's speech anyway.
+ */
+function suggestReferencePerson(styles: TrainedStyle[], toneHint: string): TrainedStyle | undefined {
+  const hintWords = new Set(toneHint.toLowerCase().match(/[a-z]+/g) ?? [])
+  if (hintWords.size === 0) return undefined
+  let best: TrainedStyle | undefined
+  let bestScore = 0
+  for (const style of styles) {
+    if (!style.voiceName || !style.personaTone) continue
+    const toneWords = style.personaTone.toLowerCase().match(/[a-z]+/g) ?? []
+    const score = toneWords.filter((w) => hintWords.has(w)).length
+    if (score > bestScore) {
+      best = style
+      bestScore = score
+    }
+  }
+  return best
+}
 
-  // Yapper's real API surface (verified): lip-sync/talking-avatar only — no
-  // face-swap process type exists, so no face-swap mode is offered.
+/**
+ * Staged, per docs/ui/node-enrichment-strategy.md's flagship build order: a
+ * Reference person (trained identity + ElevenLabs voice, paired in Settings ›
+ * Trained styles) speaks a script — Stage 1 renders the speech directly via
+ * ElevenLabs (each stage its own visible node, same pattern as the Motion
+ * graphics wizard), Stage 2 drives a source video/photo with it through
+ * whichever of Yapper/muapi are connected, restricted with `connectorIds` so
+ * the agent can chain an upload tool into a lip-sync/face-swap tool without
+ * opening every installed connector.
+ */
+function DeepfakeScreen(props: {
+  connectors: ConnectorView[]
+  styles: TrainedStyle[]
+  onTrainFromFace: (imageSrc: string, name: string) => void
+}): React.JSX.Element {
+  const nodes = useStudio((s) => s.nodes)
+  const addNode = useStudio((s) => s.addNode)
+  const generateMedia = useStudio((s) => s.generateMedia)
+  const deepfakeHandoff = useStudio((s) => s.deepfakeHandoff)
+  const clearDeepfakeHandoff = useStudio((s) => s.clearDeepfakeHandoff)
+
+  const [personId, setPersonId] = useState('')
+  const [voiceName, setVoiceName] = useState('')
+  const [script, setScript] = useState('')
+  const [faceNodeId, setFaceNodeId] = useState('')
+  const [speechBusy, setSpeechBusy] = useState(false)
+  const [speechStatus, setSpeechStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const [speechSrc, setSpeechSrc] = useState<string | null>(null)
+  const [resultId, setResultId] = useState<string | null>(null)
+  const [handoffNote, setHandoffNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!deepfakeHandoff) return
+    setScript(deepfakeHandoff.script)
+    const suggested = suggestReferencePerson(props.styles, deepfakeHandoff.toneHint)
+    if (suggested) {
+      setPersonId(suggested.id)
+      setHandoffNote(
+        `Script sent from Storyboard. Feeling "${deepfakeHandoff.toneHint}" matched "${suggested.name}" — pick a different Reference person if that's wrong.`
+      )
+    } else {
+      setHandoffNote(
+        deepfakeHandoff.toneHint
+          ? `Script sent from Storyboard. No Reference person's tone matched "${deepfakeHandoff.toneHint}" — pick one below, or tag a person's tone in Settings › Trained styles.`
+          : 'Script sent from Storyboard.'
+      )
+    }
+    clearDeepfakeHandoff()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepfakeHandoff])
+
+  const person = props.styles.find((s) => s.id === personId)
+  const elevenlabsReady = connectorReady(props.connectors, 'elevenlabs')
+  const faceConnectorIds = ['yapper', 'muapi'].filter((id) => connectorReady(props.connectors, id))
+  const ready = faceConnectorIds.length > 0
+  const effectiveVoice = voiceName.trim() || person?.voiceName || ''
+
+  const faceNodes = nodes.filter(
+    (n) =>
+      (n.data.mediaType === 'video' || n.data.mediaType === 'image') &&
+      n.data.status === 'ready' &&
+      n.data.src &&
+      !n.data.panel
+  )
+  const faceNode = faceNodes.find((n) => n.id === faceNodeId)
+  const faceImageSrc = faceNode?.data.mediaType === 'image' ? faceNode.data.src : undefined
+
+  async function generateSpeech(): Promise<void> {
+    setSpeechBusy(true)
+    setSpeechStatus(null)
+    try {
+      const result = await bridge.audioTools.tts({ text: script, voiceName: effectiveVoice || undefined })
+      if (result?.ok && result.src) {
+        addNode({
+          label: labelFromPrompt(script, 'df-speech'),
+          mediaType: 'audio',
+          source: 'generate',
+          src: result.src,
+          startRendering: false
+        })
+        setSpeechSrc(result.src)
+        setSpeechStatus({ kind: 'ok', text: 'Speech generated — audio node added to the canvas.' })
+      } else {
+        setSpeechStatus({ kind: 'error', text: result?.error ?? 'Speech generation failed.' })
+      }
+    } finally {
+      setSpeechBusy(false)
+    }
+  }
+
+  function generateFace(): void {
+    const faceSrc = faceNode?.data.src
+    if (!speechSrc || !faceSrc) return
+    const chainNote =
+      faceConnectorIds.includes('muapi') && faceConnectorIds.includes('yapper')
+        ? 'Preferred route: muapi — call its own upload tool on the source media and the speech audio to get hosted URLs (if not already URLs), then muapi_edit_lipsync with those URLs. If the source is only a still photo (no source performance video), use muapi_enhance_face_swap in image mode instead — that swaps identity but will not move the mouth to match speech. Yapper is the fallback: import the same hosted URLs as Yapper assets (yapper_import_asset), then start a video-lipsync process with model "max".'
+        : faceConnectorIds.includes('muapi')
+          ? 'Use muapi: call its own upload tool on the source media and the speech audio to get hosted URLs, then muapi_edit_lipsync with those URLs (or muapi_enhance_face_swap in image mode if the source is only a still photo, no source video).'
+          : 'Use Yapper: if the source media and speech audio are not already Yapper assets, import each by URL with yapper_import_asset (they need to already be hosted somewhere reachable — this connector has no local-file-upload tool), then start a video-lipsync process with model "max".'
+
+    setResultId(
+      generateMedia({
+        label: labelFromPrompt(script, 'df'),
+        mediaType: 'video',
+        prompt: [
+          'Talking-avatar lip-sync: drive the source face/performance media with the already-generated speech audio — do not regenerate the speech.',
+          person ? `Reference person: "${person.name}".` : undefined,
+          `Script that was spoken: "${script.trim()}"`,
+          chainNote
+        ]
+          .filter(Boolean)
+          .join(' '),
+        connectorIds: faceConnectorIds,
+        sourceMediaPath: faceSrc,
+        referenceAudioPaths: [speechSrc]
+      })
+    )
+  }
+
   return (
     <>
-      <RunLine ok={ready} label={ready ? 'yapper · max lip-sync' : 'Yapper not connected'} cost="credits" />
+      <RunLine
+        ok={ready}
+        label={ready ? `${faceConnectorIds.join(' + ')} · lip-sync/face` : 'Yapper or muapi not connected'}
+        cost="credits"
+      />
       <p className="aside-help">
-        Talking-avatar / lip-sync via Yapper's Max model. Describe who talks (an asset in your
-        Yapper library, or one the agent imports by URL) and the script — the agent chains speech
-        generation and lip-sync.
+        Staged talking-avatar: pick a Reference person (identity + voice, paired in Settings ›
+        Trained styles), write the script, generate the speech, then drive a source video or photo
+        with it.
       </p>
+      {handoffNote && <p className="cr-msg">{handoffNote}</p>}
+
+      {props.styles.length > 0 && (
+        <select
+          className="cr-input create-select"
+          value={personId}
+          onChange={(e) => setPersonId(e.target.value)}
+        >
+          <option value="">Reference person: none (type a voice name below)</option>
+          {props.styles.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+              {s.voiceName ? ` · voice: ${s.voiceName}` : ' · no voice yet'}
+            </option>
+          ))}
+        </select>
+      )}
+      <input
+        className="cr-input create-select"
+        placeholder="ElevenLabs voice name (from the person above, or type one)"
+        value={voiceName}
+        onChange={(e) => setVoiceName(e.target.value)}
+      />
       <textarea
         className="prompt-area"
-        placeholder="Who talks, and the script they deliver…"
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
+        placeholder="The script they deliver…"
+        value={script}
+        onChange={(e) => setScript(e.target.value)}
       />
       <button
-        className="generate-btn"
-        disabled={!prompt.trim()}
-        onClick={() =>
-          setResultId(
-            generateMedia({
-              label: labelFromPrompt(prompt, 'df'),
-              mediaType: 'video',
-              prompt: `Talking-avatar lip-sync job (generate the speech audio first if needed, then lip-sync): ${prompt.trim()}`,
-              connectorId: 'yapper'
-            })
-          )
-        }
+        className="action-btn"
+        disabled={!elevenlabsReady || speechBusy || !script.trim()}
+        title={elevenlabsReady ? undefined : 'ElevenLabs not connected'}
+        onClick={() => void generateSpeech()}
       >
-        Generate via Yapper
+        {speechBusy ? 'Generating speech…' : '1 · Generate speech (ElevenLabs)'}
+      </button>
+      {speechStatus && (
+        <p className={`cr-msg ${speechStatus.kind === 'ok' ? 'done' : 'error'}`}>{speechStatus.text}</p>
+      )}
+
+      {faceNodes.length > 0 ? (
+        <select
+          className="cr-input create-select"
+          value={faceNodeId}
+          onChange={(e) => setFaceNodeId(e.target.value)}
+        >
+          <option value="">Face/performance media: pick a canvas node…</option>
+          {faceNodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              ({n.data.mediaType}) {n.data.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="aside-note">
+          No ready video/image node on the canvas yet — upload or generate one first.
+        </p>
+      )}
+      {faceImageSrc && (
+        <button
+          className="action-btn"
+          onClick={() =>
+            props.onTrainFromFace(faceImageSrc, person ? `${person.name} — LoRA` : faceNode!.data.label)
+          }
+        >
+          ◈ Train a LoRA from this photo
+        </button>
+      )}
+      <button className="generate-btn" disabled={!ready || !speechSrc || !faceNode} onClick={generateFace}>
+        2 · Lip-sync / face
       </button>
       <ResultRow nodeId={resultId} />
     </>
@@ -885,11 +1527,17 @@ export function AsidePanel(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('home')
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
   const [styles, setStyles] = useState<TrainedStyle[]>([])
+  const [loraPrefill, setLoraPrefill] = useState<{ imageSrc: string; name: string } | null>(null)
+  const deepfakeHandoff = useStudio((s) => s.deepfakeHandoff)
 
   useEffect(() => {
     void bridge.connectors.list().then(setConnectors)
     void bridge.lora.list().then(setStyles)
   }, [screen])
+
+  useEffect(() => {
+    if (deepfakeHandoff) setScreen('deepfake')
+  }, [deepfakeHandoff])
 
   const home = (): void => setScreen('home')
 
@@ -931,7 +1579,10 @@ export function AsidePanel(): React.JSX.Element {
                       ? tile.blurb
                       : `${tile.blurb} — connect any of: ${state.options}`
                   }
-                  onClick={() => setScreen(tile.key)}
+                  onClick={() => {
+                    setLoraPrefill(null)
+                    setScreen(tile.key)
+                  }}
                 >
                   <span className={`create-tile-thumb sw${(index % 6) + 1}`}>
                     {tile.glyph}
@@ -948,10 +1599,27 @@ export function AsidePanel(): React.JSX.Element {
         )}
         {screen === 'video' && <VideoScreen connectors={connectors} />}
         {screen === 'image' && <ImageScreen connectors={connectors} styles={styles} />}
-        {screen === 'audio' && <AudioScreen connectors={connectors} />}
+        {screen === 'audio' && (
+          <AudioScreen
+            connectors={connectors}
+            styles={styles}
+            onStyleUpdated={(updated) =>
+              setStyles((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+            }
+          />
+        )}
         {screen === 'isolate' && <IsolateScreen />}
-        {screen === 'lora' && <LoraScreen connectors={connectors} />}
-        {screen === 'deepfake' && <DeepfakeScreen connectors={connectors} />}
+        {screen === 'lora' && <LoraScreen connectors={connectors} prefill={loraPrefill} />}
+        {screen === 'deepfake' && (
+          <DeepfakeScreen
+            connectors={connectors}
+            styles={styles}
+            onTrainFromFace={(imageSrc, name) => {
+              setLoraPrefill({ imageSrc, name })
+              setScreen('lora')
+            }}
+          />
+        )}
         {screen === 'upload' && <UploadScreen done={home} />}
         {screen === 'link' && <LinkScreen done={home} />}
         {screen === 'motion' && <MotionGraphicsWizard />}

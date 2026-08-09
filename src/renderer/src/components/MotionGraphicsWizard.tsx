@@ -22,9 +22,28 @@ type Stage = 'refs' | 'variations' | 'batch' | 'final' | 'animate' | 'alpha'
 const VARIATION_COUNT = 2
 const IMAGES_PER_VARIATION = 2
 
+/** Matches gemini-mcp.cjs's MAX_REFERENCE_IMAGES — Nano Banana 2 accepts up to
+ *  10 object refs (old guidance was 3, gemini-2.5-era); OpenAI's wrapper takes
+ *  even more (16, undocumented cap), so 10 is the binding limit either way. */
+const MAX_REF_IMAGES = 10
+
 const STORYBOARD_IMAGE_CONNECTORS = [
   { id: 'gemini', label: 'Gemini' },
   { id: 'openai', label: 'OpenAI' }
+]
+
+/** Veo 3.1 variants the Gemini wrapper's gemini_generate_video tool accepts as
+ *  `model` (resources/gemini-mcp.cjs's VIDEO_MODELS) — surfaced here so a
+ *  reveal/loop iteration pass can use lite (~8x cheaper, 720p) and only the
+ *  final render pays for the default quality tier. Passed as `modelHint`,
+ *  which lands in the agent's prompt verbatim (generation.ts's buildPrompt) —
+ *  using the literal model id keeps it an unambiguous match against the
+ *  tool's own enum rather than a label the agent has to interpret.
+ */
+const VIDEO_TIERS: { id: string; label: string }[] = [
+  { id: '', label: 'Quality: default (veo-3.1, best result)' },
+  { id: 'veo-3.1-fast-generate-preview', label: 'Quality: fast (balanced cost/speed)' },
+  { id: 'veo-3.1-lite-generate-preview', label: 'Quality: lite (720p, cheapest — good for iterating)' }
 ]
 
 const DEFAULT_MOTION_PROMPT = [
@@ -56,6 +75,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
 
   // Stage 3 — batch
   const [connectorChoice, setConnectorChoice] = useState('')
+  const [muapiEditMode, setMuapiEditMode] = useState(false)
   const [installedIds, setInstalledIds] = useState<string[]>([])
   const [batch, setBatch] = useState<BatchItem[]>([])
   const [pickedId, setPickedId] = useState<string | null>(null)
@@ -67,6 +87,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
   const [bgColor, setBgColor] = useState('#000000')
   const [loop, setLoop] = useState(false)
   const [motionPrompt, setMotionPrompt] = useState(DEFAULT_MOTION_PROMPT)
+  const [videoTier, setVideoTier] = useState('')
   const [animateStarted, setAnimateStarted] = useState(false)
 
   // Stage 6 — alpha
@@ -77,6 +98,8 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     void bridge.connectors.list().then((list) => setInstalledIds(list.map((c) => c.id)))
   }, [])
   const imageConnectors = STORYBOARD_IMAGE_CONNECTORS.filter((c) => installedIds.includes(c.id))
+  const muapiAvailable = installedIds.includes('muapi')
+  const useMuapiEdit = muapiEditMode && muapiAvailable
 
   const imageNodes = nodes.filter(
     (n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src && !n.data.panel
@@ -183,6 +206,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     }
     setBatch(items)
     setStage('batch')
+    const editingRef = useMuapiEdit && refSrcs.length > 0 ? refSrcs[0] : undefined
     await Promise.all(
       items.map(async (item, index) => {
         const variation = variations[Math.floor(index / IMAGES_PER_VARIATION)]
@@ -190,7 +214,8 @@ export function MotionGraphicsWizard(): React.JSX.Element {
           .run({
             mediaType: 'image',
             prompt: variation,
-            connectorId: connectorChoice || undefined
+            connectorId: editingRef ? 'muapi' : connectorChoice || undefined,
+            referenceImagePaths: editingRef ? [editingRef] : undefined
           })
           .catch((err) => ({ ok: false as const, mediaType: 'image' as const, error: String(err), src: undefined }))
         setBatch((prev) =>
@@ -217,12 +242,16 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     setFinalSrc(null)
     try {
       // Reference-reinforced: the winning prompt regenerated WITH the original
-      // reference images as input — the workflow's key quality step.
+      // reference images as input — the workflow's key quality step. muapi's
+      // edit mode can only take one image (muapi_image_edit's single image_url
+      // param), so it reuses the same first reference the batch pass edited
+      // rather than all of refSrcs.
+      const editingRef = useMuapiEdit && refSrcs.length > 0 ? refSrcs[0] : undefined
       const result = await bridge.generate.run({
         mediaType: 'image',
         prompt: variation,
-        connectorId: connectorChoice || undefined,
-        referenceImagePaths: refSrcs
+        connectorId: editingRef ? 'muapi' : connectorChoice || undefined,
+        referenceImagePaths: editingRef ? [editingRef] : refSrcs
       })
       if (result?.ok && result.src) {
         setFinalSrc(result.src)
@@ -262,6 +291,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
         motionGfx: true,
         prompt: motionPrompt,
         connectorId: installedIds.includes('gemini') ? 'gemini' : undefined,
+        modelHint: videoTier || undefined,
         startFramePath: startSrc,
         endFramePath: finalSrc
       })
@@ -347,8 +377,8 @@ export function MotionGraphicsWizard(): React.JSX.Element {
       {stage === 'refs' && (
         <>
           <p className="aside-help">
-            Pick 1–5 reference images from the canvas (upload them first if needed), describe the
-            design, and the agent abstracts their style into prompt variations.
+            Pick 1–{MAX_REF_IMAGES} reference images from the canvas (upload them first if needed),
+            describe the design, and the agent abstracts their style into prompt variations.
           </p>
           <div className="mgfx-ref-grid">
             {imageNodes.length === 0 && (
@@ -361,7 +391,11 @@ export function MotionGraphicsWizard(): React.JSX.Element {
                 title={n.data.label}
                 onClick={() =>
                   setRefIds((ids) =>
-                    ids.includes(n.id) ? ids.filter((i) => i !== n.id) : ids.length < 5 ? [...ids, n.id] : ids
+                    ids.includes(n.id)
+                      ? ids.filter((i) => i !== n.id)
+                      : ids.length < MAX_REF_IMAGES
+                        ? [...ids, n.id]
+                        : ids
                   )
                 }
               >
@@ -379,6 +413,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
             <select
               className="cr-input mgfx-select"
               value={connectorChoice}
+              disabled={useMuapiEdit}
               onChange={(e) => setConnectorChoice(e.target.value)}
             >
               <option value="">Image model: agent picks</option>
@@ -386,6 +421,18 @@ export function MotionGraphicsWizard(): React.JSX.Element {
                 <option key={c.id} value={c.id}>Image model: {c.label}</option>
               ))}
             </select>
+          )}
+          {muapiAvailable && (
+            <label className="mgfx-checkbox">
+              <input
+                type="checkbox"
+                checked={muapiEditMode}
+                disabled={refIds.length === 0}
+                onChange={(e) => setMuapiEditMode(e.target.checked)}
+              />
+              Batch via muapi image-edit — edits your first picked reference photo per variation,
+              instead of generating from text alone
+            </label>
           )}
           <button
             className="generate-btn"
@@ -504,6 +551,17 @@ export function MotionGraphicsWizard(): React.JSX.Element {
             value={motionPrompt}
             onChange={(e) => setMotionPrompt(e.target.value)}
           />
+          {installedIds.includes('gemini') && (
+            <select
+              className="cr-input mgfx-select"
+              value={videoTier}
+              onChange={(e) => setVideoTier(e.target.value)}
+            >
+              {VIDEO_TIERS.map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          )}
           <button className="generate-btn" disabled={busy} onClick={() => void runAnimate()}>
             {busy ? 'Starting…' : '▶ Generate the animation'}
           </button>

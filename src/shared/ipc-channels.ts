@@ -23,6 +23,7 @@ export const IPC = {
   mediaSaveDataUrl: 'media:save-data-url',
   mediaIsolateAudio: 'media:isolate-audio',
   mediaKeyAlpha: 'media:key-alpha',
+  mediaCombineLocal: 'media:combine-local',
 
   audioVoices: 'audio:voices',
   audioPreview: 'audio:preview',
@@ -30,10 +31,14 @@ export const IPC = {
   audioMusic: 'audio:music',
   audioSfx: 'audio:sfx',
   audioClone: 'audio:clone',
+  audioYapperTts: 'audio:yapper-tts',
+  audioYapperVoices: 'audio:yapper-voices',
 
   loraTrain: 'lora:train',
   loraList: 'lora:list',
   loraDelete: 'lora:delete',
+  loraSetVoice: 'lora:set-voice',
+  loraSetTone: 'lora:set-tone',
 
   generateRun: 'generate:run',
 
@@ -41,6 +46,12 @@ export const IPC = {
 
   chatRealtyStatus: 'chatrealty:status',
   chatRealtyPull: 'chatrealty:pull',
+  chatRealtyCover: 'chatrealty:create-cover',
+  chatRealtyListingContext: 'chatrealty:listing-context',
+  chatRealtyCarouselSlide: 'chatrealty:create-carousel-slide',
+  chatRealtyStage: 'chatrealty:stage-listing',
+  chatRealtyArticleDraft: 'chatrealty:create-article-draft',
+  chatRealtyLandingPageDraft: 'chatrealty:create-landing-page-draft',
 
   connectorsList: 'connectors:list',
   connectorsSave: 'connectors:save',

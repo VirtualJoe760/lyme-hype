@@ -1,7 +1,8 @@
 import { readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { app, net } from 'electron'
 import { readSecretValue } from './credential-vault'
+import { trainKreaStyle } from './krea-training'
 
 /**
  * LoRA training via fal's hosted Krea-family trainers — chosen over Krea's own
@@ -89,6 +90,31 @@ export function deleteTrainedStyle(id: string): void {
   writeTrainedStyles(listTrainedStyles().filter((s) => s.id !== id))
 }
 
+/** Pairs an ElevenLabs voice with an existing trained identity — the
+ *  "Reference person" concept (docs/ui/node-enrichment-strategy.md). Pass an
+ *  empty/whitespace name to detach the voice. */
+export function setTrainedStyleVoice(id: string, voiceName: string): TrainedStyle | null {
+  const styles = listTrainedStyles()
+  const style = styles.find((s) => s.id === id)
+  if (!style) return null
+  style.voiceName = voiceName.trim() || undefined
+  writeTrainedStyles(styles)
+  return style
+}
+
+/** Tags a Reference person with a free-text tone/persona descriptor, matched
+ *  against a Storyboard shot's "feeling" annotation to auto-suggest a person
+ *  on the Deepfake screen (docs/ui/node-enrichment-strategy.md, row 8). Pass
+ *  an empty/whitespace tone to clear it. */
+export function setTrainedStylePersonaTone(id: string, personaTone: string): TrainedStyle | null {
+  const styles = listTrainedStyles()
+  const style = styles.find((s) => s.id === id)
+  if (!style) return null
+  style.personaTone = personaTone.trim() || undefined
+  writeTrainedStyles(styles)
+  return style
+}
+
 /* ---------- store-only ZIP writer (no dependency) ---------- */
 
 const CRC_TABLE = (() => {
@@ -165,29 +191,85 @@ function falAuth(): string | null {
   return token.startsWith('Key ') ? token : `Key ${token.replace(/^Bearer\s+/i, '')}`
 }
 
-async function uploadZip(zip: Buffer, auth: string): Promise<string> {
+/** The storage-initiate → PUT round trip, shared by the zip-bundle upload
+ *  below and by `uploadLocalFileToFal`'s single-file case. Returns null (not
+ *  a data URI) on failure — callers that can fall back to inline bytes do so
+ *  themselves, since a data URI isn't a valid response for every caller
+ *  (fal's model `image_url`-style params want a real URL, not a data URI). */
+async function uploadBufferToFal(
+  data: Buffer,
+  fileName: string,
+  contentType: string,
+  auth: string
+): Promise<string | null> {
   try {
     const initiate = await net.fetch(STORAGE_INITIATE, {
       method: 'POST',
       headers: { Authorization: auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ file_name: 'training-images.zip', content_type: 'application/zip' })
+      body: JSON.stringify({ file_name: fileName, content_type: contentType })
     })
-    if (initiate.ok) {
-      const json = (await initiate.json()) as { upload_url?: string; file_url?: string }
-      if (json.upload_url && json.file_url) {
-        const put = await net.fetch(json.upload_url, {
-          method: 'PUT',
-          headers: { 'content-type': 'application/zip' },
-          body: new Uint8Array(zip)
-        })
-        if (put.ok) return json.file_url
-      }
-    }
+    if (!initiate.ok) return null
+    const json = (await initiate.json()) as { upload_url?: string; file_url?: string }
+    if (!json.upload_url || !json.file_url) return null
+    const put = await net.fetch(json.upload_url, {
+      method: 'PUT',
+      headers: { 'content-type': contentType },
+      body: new Uint8Array(data)
+    })
+    return put.ok ? json.file_url : null
   } catch {
-    /* fall through to data URI */
+    return null
   }
+}
+
+async function uploadZip(zip: Buffer, auth: string): Promise<string> {
+  const url = await uploadBufferToFal(zip, 'training-images.zip', 'application/zip', auth)
   // Fallback: fal *_data_url fields also accept base64 data URIs.
-  return `data:application/zip;base64,${zip.toString('base64')}`
+  return url ?? `data:application/zip;base64,${zip.toString('base64')}`
+}
+
+const EXT_CONTENT_TYPE: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg'
+}
+
+export interface FalUploadResult {
+  ok: boolean
+  url?: string
+  error?: string
+}
+
+/** Local file → fal-hosted URL via the REST storage-initiate flow. fal's
+ *  hosted MCP `upload_file` tool only accepts a remote URL — the server is
+ *  stateless and can't read a local disk path — so a generation agent has no
+ *  tool of its own to get a local reference image/source video/audio onto
+ *  fal the way it can with muapi's stdio `muapi_upload_file`. This is the
+ *  cross-cutting `asset-upload` gap flagged since the first enrichment run
+ *  (docs/reports/node-enrichment-report.md Recommendations #1) for fal
+ *  specifically; `generation.ts` calls this to pre-upload before the agent
+ *  turn instead of asking the agent to find an upload tool that isn't there. */
+export async function uploadLocalFileToFal(path: string): Promise<FalUploadResult> {
+  const auth = falAuth()
+  if (!auth) return { ok: false, error: 'fal is not connected — set a key in Settings › Connectors.' }
+  let data: Buffer
+  try {
+    data = readFileSync(path)
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+  const contentType = EXT_CONTENT_TYPE[extname(path).toLowerCase()] ?? 'application/octet-stream'
+  const url = await uploadBufferToFal(data, basename(path), contentType, auth)
+  return url ? { ok: true, url } : { ok: false, error: 'fal storage upload failed.' }
 }
 
 function trainerInput(
@@ -272,6 +354,13 @@ export async function trainStyle(input: {
   trainer?: string
   kind?: TrainerKind
 }): Promise<TrainResult> {
+  if (input.trainer === 'krea-k2') {
+    const result = await trainKreaStyle(input)
+    if (result.ok && result.style) {
+      writeTrainedStyles([...listTrainedStyles().filter((s) => s.id !== result.style!.id), result.style])
+    }
+    return result
+  }
   const auth = falAuth()
   if (!auth) {
     return { ok: false, error: 'fal is not connected — install it and set a key in Settings › Connectors.' }

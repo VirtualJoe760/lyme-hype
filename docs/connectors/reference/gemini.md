@@ -27,7 +27,7 @@ wizard (start frame → end frame interpolation). Routed through Lyme Hype's **o
 
 ## Tool surface
 
-Two tools, both **synchronous from the agent's point of view** (the wrapper does any polling internally and only returns when the file is on disk).
+Three tools, all **synchronous from the agent's point of view** (the wrapper does any polling internally and only returns when the file is on disk).
 
 ### `gemini_generate_image`
 - Purpose: text→image, optionally conditioned on local reference images (compose/edit — Nano Banana takes input images natively). [verified]
@@ -42,7 +42,14 @@ Two tools, both **synchronous from the agent's point of view** (the wrapper does
 - Wire: `POST models/{model}:predictLongRunning`; `instances[0].image` = start frame, `instances[0].lastFrame` = end frame, both as `{bytesBase64Encoded, mimeType}` — that wire shape is valid. [verified] When `lastFrame` is present the wrapper sets `parameters.durationSeconds = 8` (required by the API). [verified]
 - Job pattern: long-running operation; the wrapper polls `GET {operation.name}` every 10 s, 6-minute timeout, then downloads the result URI itself (URI requires `x-goog-api-key` and follows redirects). [verified]
 - Returns: `RESULT_FILE: <absolute path>.mp4`. [verified]
-- Not exposed by the wrapper: `durationSeconds` (except the forced 8 s), `resolution`, `negativePrompt`, `referenceImages`, video extension (`instances[0].video`), `personGeneration`. [verified]
+- Not exposed by the wrapper: `durationSeconds` (except the forced 8 s), `resolution`, `negativePrompt`, `referenceImages`, `personGeneration`. [verified]
+
+### `gemini_extend_video`
+- Purpose: append ~7 s of new content onto a Veo-generated clip (the "extend" mechanism the model table's Video row already documented as a capability, but the wrapper never exposed until now). Not supported on `veo-3.1-lite-generate-preview`. [docs]
+- Params: `source_video_path` (string, required — absolute local path of a prior `gemini_generate_video`/`gemini_extend_video` result mp4); `prompt` (string, required — what happens next); `model` (optional, non-lite Veo variant); `previous_duration_seconds` (number, optional — lets the wrapper reject an extension that would exceed the 148 s cap before spending a call on it). [verified wrapper]
+- Wire: `POST models/{model}:predictLongRunning`; `instances[0].video = {inlineData: {mimeType: 'video/mp4', data: <base64 of the local file>}}`, `parameters.durationSeconds = 8` (mandatory for extension, same as `lastFrame`). **[unverified]** — this is the shape shown in Google's own Veo docs page, but at least one third-party report (a Google AI developer forum thread, 2026) claims the live REST endpoint rejects base64 video on this field with "bytesBase64Encoded isn't supported by this model" and wants `video: {uri: <files/...:download URL>}` instead — the short-lived (2-day) authed URI from the *original* generation's operation response, not something you can construct from a local file. The wrapper deliberately re-encodes the local mp4 instead of threading that URI through, because it already discards the URI after downloading the source clip (no operation state is retained across calls) — re-architecting to keep it alive would be a bigger change than this pass scoped. **First thing to try if this 400s against a real key**: swap to the `uri` shape and have callers pass the original operation's video URI (would require the wrapper to return it alongside `RESULT_FILE` from `gemini_generate_video`, a breaking response-shape change for callers). [unverified — flagging for a live check, same pattern as Krea's undocumented `/assets` response field and Yapper's `AudioVoice` shape]
+- Job pattern / returns: identical to `gemini_generate_video` (long-running op, 10 s poll, 6-minute timeout, `RESULT_FILE: <path>.mp4`). [verified wrapper]
+- Not yet wired to a UI picker — `generation.ts` accepts `GenerationParams.extendVideoPath`/`extendVideoDurationSec` and hints the agent toward this tool, but nothing on the canvas sets those fields yet (no "Extend +7s" button on a video node). Backend-only as of 2026-08-09.
 
 ## Models
 

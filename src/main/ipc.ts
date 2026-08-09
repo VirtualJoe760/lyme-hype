@@ -1,6 +1,10 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type {
+  ChatRealtyArticleDraftInput,
+  ChatRealtyCarouselSlideInput,
+  ChatRealtyLandingPageDraftInput,
+  CombineLocalKind,
   ConnectorDef,
   GenerationParams,
   ConversationTurnRequest,
@@ -13,13 +17,29 @@ import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, sav
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
+import { listYapperVoices, synthesizeYapperSpeech } from './yapper-rest'
 import { exportTimeline } from './ffmpeg'
-import { deleteTrainedStyle, listTrainedStyles, trainStyle } from './fal-training'
-import { isolateAudio, keyAlpha } from './media-tools'
+import {
+  deleteTrainedStyle,
+  listTrainedStyles,
+  setTrainedStylePersonaTone,
+  setTrainedStyleVoice,
+  trainStyle
+} from './fal-training'
+import { combineLocal, isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
-import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import {
+  createArticleDraft,
+  createCarouselSlide,
+  createLandingPageDraft,
+  createListingCover,
+  hasChatRealtyToken,
+  planListingCarousel,
+  pullListingPhotos,
+  stageListingWithAgent
+} from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { addSuggestion, listSuggestions, openSuggestionKeyPage, reconcileInstalledConnectors } from './connector-suggestions'
 import { deleteSecret, listSecretReports } from './credential-vault'
@@ -196,6 +216,14 @@ export function registerIpc(window: BrowserWindow): void {
     }
   )
 
+  ipcMain.handle(
+    IPC.mediaCombineLocal,
+    (e, input: { kind: CombineLocalKind; aUrl: string; bUrl: string }) => {
+      if (!isMainSender(e)) return null
+      return combineLocal(input)
+    }
+  )
+
   ipcMain.handle(IPC.audioVoices, (e, query: string) => {
     if (!isMainSender(e)) return null
     return searchVoices(typeof query === 'string' ? query : '')
@@ -220,6 +248,14 @@ export function registerIpc(window: BrowserWindow): void {
     if (!isMainSender(e)) return null
     return cloneVoice(input)
   })
+  ipcMain.handle(IPC.audioYapperTts, (e, input: { text: string; voiceId?: string }) => {
+    if (!isMainSender(e)) return null
+    return synthesizeYapperSpeech(input)
+  })
+  ipcMain.handle(IPC.audioYapperVoices, (e, input: { provider: 'cartesia' | 'elevenlabs'; search?: string }) => {
+    if (!isMainSender(e)) return null
+    return listYapperVoices(input)
+  })
 
   ipcMain.handle(
     IPC.loraTrain,
@@ -235,13 +271,30 @@ export function registerIpc(window: BrowserWindow): void {
       }
     ) => {
       if (!isMainSender(e)) return null
-      return trainStyle(input)
+      // Training images may be lyme-asset:// canvas node URLs (e.g. the
+      // Deepfake screen's "train a LoRA from this photo" shortcut), not just
+      // paths from the native file picker — resolve to disk paths here, same
+      // as scriptingTurn's vision input above.
+      return trainStyle({
+        ...input,
+        imagePaths: input.imagePaths
+          .map((p) => (p.startsWith('lyme-asset://') ? assetPathForUrl(p) : p))
+          .filter((p): p is string => p !== null)
+      })
     }
   )
   ipcMain.handle(IPC.loraList, (e) => (isMainSender(e) ? listTrainedStyles() : []))
   ipcMain.handle(IPC.loraDelete, (e, id: string) => {
     if (!isMainSender(e)) return
     deleteTrainedStyle(id)
+  })
+  ipcMain.handle(IPC.loraSetVoice, (e, id: string, voiceName: string) => {
+    if (!isMainSender(e)) return null
+    return setTrainedStyleVoice(id, voiceName)
+  })
+  ipcMain.handle(IPC.loraSetTone, (e, id: string, personaTone: string) => {
+    if (!isMainSender(e)) return null
+    return setTrainedStylePersonaTone(id, personaTone)
   })
 
   ipcMain.handle(IPC.generateRun, (e, params: GenerationParams) => {
@@ -264,6 +317,40 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.chatRealtyPull, (e, query: string) => {
     if (!isMainSender(e)) return null
     return pullListingPhotos(typeof query === 'string' ? query : '')
+  })
+  ipcMain.handle(
+    IPC.chatRealtyCover,
+    (
+      e,
+      listingKey: string,
+      opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+    ) => {
+      if (!isMainSender(e)) return null
+      return createListingCover(listingKey, opts)
+    }
+  )
+  ipcMain.handle(IPC.chatRealtyListingContext, (e, listingKey: string) => {
+    if (!isMainSender(e)) return null
+    return planListingCarousel(typeof listingKey === 'string' ? listingKey : '')
+  })
+  ipcMain.handle(IPC.chatRealtyCarouselSlide, (e, input: ChatRealtyCarouselSlideInput) => {
+    if (!isMainSender(e)) return null
+    return createCarouselSlide(input)
+  })
+  ipcMain.handle(IPC.chatRealtyStage, (e, listingKey: string, photoIndexes: number[]) => {
+    if (!isMainSender(e)) return null
+    return stageListingWithAgent(
+      typeof listingKey === 'string' ? listingKey : '',
+      Array.isArray(photoIndexes) ? photoIndexes.filter((n) => Number.isInteger(n)) : []
+    )
+  })
+  ipcMain.handle(IPC.chatRealtyArticleDraft, (e, input: ChatRealtyArticleDraftInput) => {
+    if (!isMainSender(e)) return null
+    return createArticleDraft(input)
+  })
+  ipcMain.handle(IPC.chatRealtyLandingPageDraft, (e, input: ChatRealtyLandingPageDraftInput) => {
+    if (!isMainSender(e)) return null
+    return createLandingPageDraft(input)
   })
 
   ipcMain.handle(IPC.connectorsList, (e) => {

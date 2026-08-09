@@ -3,6 +3,10 @@ import { create } from 'zustand'
 import type {
   AgentStreamEvent,
   CanvasNodeState,
+  ChatRealtyArticleDraftInput,
+  ChatRealtyCarouselSlideInput,
+  ChatRealtyLandingPageDraftInput,
+  CombineLocalKind,
   CutExportResult,
   ExportClip,
   MediaNodeData,
@@ -38,6 +42,37 @@ function toNodeState(node: MediaFlowNode): CanvasNodeState {
 
 function pickSwatch(): number {
   return 1 + Math.floor(Math.random() * 6)
+}
+
+/** Combine dialog's four ffmpeg-only pairs (video+video, image+video,
+ *  audio+video, audio+audio) — deterministic filter graphs, no agent
+ *  judgment needed, unlike image+image/audio+image which route through
+ *  generateMedia instead. Returns null for the two generative pairs (handled
+ *  earlier in confirmCombine) or if either node has no src yet. */
+function localCombineFor(
+  source: MediaFlowNode,
+  target: MediaFlowNode
+): { kind: CombineLocalKind; aUrl: string; bUrl: string } | null {
+  if (!source.data.src || !target.data.src) return null
+  const pair = [source.data.mediaType, target.data.mediaType].sort().join('+')
+  switch (pair) {
+    case 'video+video':
+      return { kind: 'stitch-video', aUrl: source.data.src, bUrl: target.data.src }
+    case 'image+video': {
+      const video = source.data.mediaType === 'video' ? source : target
+      const image = source.data.mediaType === 'image' ? source : target
+      return { kind: 'overlay-image', aUrl: video.data.src!, bUrl: image.data.src! }
+    }
+    case 'audio+video': {
+      const video = source.data.mediaType === 'video' ? source : target
+      const audio = source.data.mediaType === 'audio' ? source : target
+      return { kind: 'score-video', aUrl: video.data.src!, bUrl: audio.data.src! }
+    }
+    case 'audio+audio':
+      return { kind: 'mix-audio', aUrl: source.data.src, bUrl: target.data.src }
+    default:
+      return null
+  }
 }
 
 /** Stub-generation latency so the Rendering… state is visible (real jobs land in Phase 4). */
@@ -229,7 +264,7 @@ interface StudioStore {
 
   openCombine(sourceId: string, targetId: string): void
   closeCombine(): void
-  confirmCombine(): void
+  confirmCombine(note?: string): void
 
   openPlay(nodeId: string): void
   closePlay(): void
@@ -255,10 +290,19 @@ interface StudioStore {
     nodeId?: string
     /** Restrict to one connector (tier routing); omit = agent picks freely. */
     connectorId?: string
+    /** Restrict to a specific set of connectors (e.g. Deepfake's muapi+yapper
+     *  upload-then-lipsync chain) — takes precedence over connectorId. */
+    connectorIds?: string[]
     modelHint?: string
     referenceImagePaths?: string[]
     startFramePath?: string
     endFramePath?: string
+    referenceAudioPaths?: string[]
+    sourceMediaPath?: string
+    /** Extends an existing video by ~7s via Veo (docs/ui/node-enrichment-
+     *  strategy.md Recommendations #3) instead of generating fresh. */
+    extendVideoPath?: string
+    extendVideoDurationSec?: number
     /** Returns the node id IMMEDIATELY (generation continues async) so Create
      *  screens can track the node's rendering → ready/error lifecycle. */
   }): string
@@ -281,6 +325,14 @@ interface StudioStore {
   runShotBreakdown(): Promise<{ ok: boolean; count: number; stillActive?: boolean; error?: string }>
   improvePanelPrompt(nodeId: string): Promise<void>
 
+  /** Set when a Storyboard panel is sent to the Deepfake tile — the Create
+   *  panel's aside picks this up to prefill the script and suggest a
+   *  Reference person by tone (docs/ui/node-enrichment-strategy.md, row 8).
+   *  Cleared once the Deepfake screen has consumed it. */
+  deepfakeHandoff: { script: string; toneHint: string } | null
+  sendPanelToDeepfake(nodeId: string): void
+  clearDeepfakeHandoff(): void
+
   toggleRail(): void
   toggleAside(): void
   toggleTimeline(): void
@@ -291,7 +343,32 @@ interface StudioStore {
   setTheme(theme: ThemeId): void
 
   pingAgent(): Promise<void>
-  pullChatRealtyPhotos(query: string): Promise<{ ok: boolean; count: number; error?: string }>
+  pullChatRealtyPhotos(query: string): Promise<{
+    ok: boolean
+    count: number
+    error?: string
+    topListing?: { listingKey: string; address: string; city: string; detailUrl: string | null }
+    photos: { src: string; label: string; photoIndex: number }[]
+  }>
+  createChatRealtyCover(
+    listingKey: string,
+    opts: { hook: string; body: string; city?: string; label: string; detailUrl?: string }
+  ): Promise<{ ok: boolean; error?: string }>
+  createChatRealtyCarouselSlide(
+    input: ChatRealtyCarouselSlideInput,
+    opts: { label: string; listingKey?: string; detailUrl?: string }
+  ): Promise<{ ok: boolean; error?: string }>
+  stageChatRealtyListing(
+    listingKey: string,
+    photoIndexes: number[],
+    opts: { labelBase: string; detailUrl?: string }
+  ): Promise<{ ok: boolean; count: number; error?: string }>
+  createChatRealtyArticleDraft(
+    input: ChatRealtyArticleDraftInput
+  ): Promise<{ ok: boolean; slug?: string; error?: string }>
+  createChatRealtyLandingPageDraft(
+    input: ChatRealtyLandingPageDraftInput
+  ): Promise<{ ok: boolean; editUrl?: string; previewUrl?: string; error?: string }>
   flushPersist(): void
 }
 
@@ -847,7 +924,7 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({ combine: null })
     },
 
-    confirmCombine() {
+    confirmCombine(note) {
       const { combine, nodes } = get()
       if (!combine) return
       const source = nodes.find((n) => n.id === combine.sourceId)
@@ -855,6 +932,88 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({ combine: null })
       if (!source || !target) return
 
+      const label = `combine_${source.data.label.slice(0, 8)}+${target.data.label.slice(0, 8)}`
+      const position = {
+        x: (source.position.x + target.position.x) / 2 + 40,
+        y: (source.position.y + target.position.y) / 2 + 60
+      }
+      const pair = [source.data.mediaType, target.data.mediaType].sort().join('+')
+      const trimmedNote = note?.trim()
+
+      // image+image and audio+image are real generation chains — reference-
+      // conditioning and lipsync/animate-with-audio respectively — reusing
+      // the same GenerationParams fields Deepfake's Stage 2 and Motion
+      // graphics' References stage already established, because "how should
+      // these mix" needs the agent's judgment. Every other pair (video+video,
+      // image+video, audio+video, audio+audio) is deterministic instead —
+      // see localCombineFor — and composites via local ffmpeg, no agent turn.
+      if (pair === 'image+image' && source.data.src && target.data.src) {
+        get().generateMedia({
+          label,
+          mediaType: 'image',
+          position,
+          prompt:
+            trimmedNote ||
+            'Merge these two reference images into one new image, blending their content and style together.',
+          referenceImagePaths: [source.data.src, target.data.src]
+        })
+        return
+      }
+
+      if (pair === 'audio+image') {
+        const imageNode = source.data.mediaType === 'image' ? source : target
+        const audioNode = source.data.mediaType === 'audio' ? source : target
+        if (imageNode.data.src && audioNode.data.src) {
+          get().generateMedia({
+            label,
+            mediaType: 'video',
+            position,
+            prompt: [
+              trimmedNote ||
+                'Animate this still image driven by the accompanying audio.',
+              'If the image shows a face, lip-sync its mouth to the audio like a talking avatar. Otherwise animate the still to the mood and pacing of the audio and use the audio as its soundtrack.'
+            ].join(' '),
+            sourceMediaPath: imageNode.data.src,
+            referenceAudioPaths: [audioNode.data.src]
+          })
+          return
+        }
+      }
+
+      const local = localCombineFor(source, target)
+      if (local) {
+        const outMediaType: MediaType = local.kind === 'mix-audio' ? 'audio' : 'video'
+        const id = nextId('node')
+        const node: MediaFlowNode = {
+          id,
+          type: 'media',
+          position,
+          data: {
+            label,
+            mediaType: outMediaType,
+            // Local ffmpeg composite, not an agent generation — same
+            // provenance IsolateScreen already uses for its ffmpeg output.
+            source: 'upload',
+            status: 'rendering',
+            swatch: pickSwatch()
+          }
+        }
+        set({ nodes: [...get().nodes, node] })
+        persist()
+        void (async () => {
+          const result = await bridge.media.combineLocal(local)
+          if (result?.ok && result.src) {
+            patchNodeAnywhere(id, { src: result.src, status: 'ready', error: undefined })
+          } else {
+            patchNodeAnywhere(id, { status: 'error', error: result?.error ?? 'Local combine failed.' })
+          }
+        })()
+        return
+      }
+
+      // Unreachable for MediaType's current three values (every pairing is
+      // either generative above or local here) — kept as a safety net rather
+      // than assuming a future MediaType addition is covered automatically.
       const types = new Set<MediaType>([source.data.mediaType, target.data.mediaType])
       const mediaType: MediaType = types.has('video')
         ? 'video'
@@ -862,15 +1021,11 @@ export const useStudio = create<StudioStore>((set, get) => {
           ? 'video'
           : source.data.mediaType
 
-      const midpoint = {
-        x: (source.position.x + target.position.x) / 2 + 40,
-        y: (source.position.y + target.position.y) / 2 + 60
-      }
       get().addNode({
-        label: `combine_${source.data.label.slice(0, 8)}+${target.data.label.slice(0, 8)}`,
+        label,
         mediaType,
         source: 'generate',
-        position: midpoint,
+        position,
         startRendering: true
       })
     },
@@ -1053,10 +1208,15 @@ export const useStudio = create<StudioStore>((set, get) => {
             durationSec: input.durationSec,
             resolution: input.resolution,
             connectorId: input.connectorId,
+            connectorIds: input.connectorIds,
             modelHint: input.modelHint,
             referenceImagePaths: input.referenceImagePaths,
             startFramePath: input.startFramePath,
-            endFramePath: input.endFramePath
+            endFramePath: input.endFramePath,
+            referenceAudioPaths: input.referenceAudioPaths,
+            sourceMediaPath: input.sourceMediaPath,
+            extendVideoPath: input.extendVideoPath,
+            extendVideoDurationSec: input.extendVideoDurationSec
           })
         } catch (error) {
           result = {
@@ -1067,11 +1227,17 @@ export const useStudio = create<StudioStore>((set, get) => {
         }
 
         if (result?.ok && result.src) {
+          // Real measured length, not the requested one — Veo's 148s chained-
+          // extension cap needs the actual total, and extension calls don't
+          // report duration at all (only the fixed +7s/8s intent).
+          const videoDurationSec =
+            input.mediaType === 'video' ? await probeDuration(result.src, 'video') : undefined
           patchNodeAnywhere(id, {
             src: result.src,
             status: 'ready',
             error: undefined,
-            genNote: result.note
+            genNote: result.note,
+            ...(videoDurationSec ? { videoDurationSec } : {})
           })
         } else {
           patchNodeAnywhere(id, {
@@ -1099,6 +1265,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     scriptingStream: null,
     improvingPanelId: null,
     improveError: null,
+    deepfakeHandoff: null,
 
     async sendScriptingMessage(text) {
       const trimmed = text.trim()
@@ -1118,6 +1285,27 @@ export const useStudio = create<StudioStore>((set, get) => {
       })
       set({ scriptingBusy: true, scriptingStream: { sessionId, text: '' } })
 
+      // Real listing facts/CMA stats over an agent guessing them, when this
+      // conversation has a ChatRealty-sourced node in play — fetched once,
+      // on the conversation's first turn only, and folded into the prompt
+      // (not the displayed message) rather than a standalone context UI.
+      let promptForTurn = trimmed
+      if (history.length === 0) {
+        const listingNodes = session.nodes.filter((n) => Boolean(n.data.listingKey))
+        const listingKey = listingNodes[listingNodes.length - 1]?.data.listingKey
+        if (listingKey) {
+          const context = await bridge.chatRealty.listingContext(listingKey)
+          if (context?.ok && context.text) {
+            promptForTurn = [
+              "Real listing facts and CMA stats for this session's listing, from ChatRealty — use these numbers instead of inventing any:",
+              context.text,
+              '---',
+              trimmed
+            ].join('\n\n')
+          }
+        }
+      }
+
       const unsubscribe = bridge.scripting.onStream((event) => {
         if (event.conversationId === sessionId) {
           const current = get().scriptingStream
@@ -1130,7 +1318,7 @@ export const useStudio = create<StudioStore>((set, get) => {
         const result = await bridge.scripting.turn({
           conversationId: sessionId,
           resumeSessionId: scripting.agentSessionId,
-          prompt: trimmed,
+          prompt: promptForTurn,
           history
         })
         // Re-read: the turn may outlive a session switch; write to the
@@ -1282,6 +1470,21 @@ export const useStudio = create<StudioStore>((set, get) => {
       }
     },
 
+    sendPanelToDeepfake(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node?.data.panel || !node.data.shotDescription) return
+      set({
+        deepfakeHandoff: {
+          script: node.data.shotDescription,
+          toneHint: node.data.feeling ?? ''
+        }
+      })
+    },
+
+    clearDeepfakeHandoff() {
+      set({ deepfakeHandoff: null })
+    },
+
     toggleRail() {
       set({ railCollapsed: !get().railCollapsed })
     },
@@ -1367,7 +1570,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     async pullChatRealtyPhotos(query) {
       const result = await bridge.chatRealty.pull(query)
       if (!result || !result.ok) {
-        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.' }
+        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.', photos: [] }
       }
       const cols = 3
       const gap = 128
@@ -1385,11 +1588,98 @@ export const useStudio = create<StudioStore>((set, get) => {
           startRendering: false
         })
       })
+      const top = result.listings[0]
       return {
         ok: true,
         count: result.images.length,
-        error: result.images.length === 0 ? (result.error ?? 'No photos found.') : undefined
+        error: result.images.length === 0 ? (result.error ?? 'No photos found.') : undefined,
+        topListing: top
+          ? { listingKey: top.listingKey, address: top.address, city: top.city, detailUrl: top.detailUrl }
+          : undefined,
+        photos: result.images.map((img) => ({
+          src: img.src,
+          label: img.label,
+          photoIndex: img.photoIndex
+        }))
       }
+    },
+
+    async createChatRealtyCover(listingKey, opts) {
+      const result = await bridge.chatRealty.createCover(listingKey, {
+        hook: opts.hook,
+        body: opts.body,
+        city: opts.city
+      })
+      if (!result || !result.ok || !result.src) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      get().addNode({
+        label: opts.label,
+        mediaType: 'image',
+        source: 'generate',
+        src: result.src,
+        detailUrl: opts.detailUrl,
+        listingKey,
+        startRendering: false
+      })
+      return { ok: true }
+    },
+
+    async createChatRealtyCarouselSlide(input, opts) {
+      const result = await bridge.chatRealty.createCarouselSlide(input)
+      if (!result || !result.ok || !result.src) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      get().addNode({
+        label: opts.label,
+        mediaType: 'image',
+        source: 'generate',
+        src: result.src,
+        detailUrl: opts.detailUrl,
+        listingKey: opts.listingKey,
+        startRendering: false
+      })
+      return { ok: true }
+    },
+
+    async stageChatRealtyListing(listingKey, photoIndexes, opts) {
+      const result = await bridge.chatRealty.stageListing(listingKey, photoIndexes)
+      if (!result || !result.ok || !result.images || result.images.length === 0) {
+        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      const cols = 3
+      const gap = 128
+      const originX = 60
+      const originY = 260
+      result.images.forEach((img, i) => {
+        get().addNode({
+          label: `${opts.labelBase} · Staged ${String(i + 1).padStart(2, '0')}`,
+          mediaType: 'image',
+          source: 'generate',
+          src: img.src,
+          detailUrl: opts.detailUrl,
+          listingKey,
+          position: { x: originX + (i % cols) * gap, y: originY + Math.floor(i / cols) * gap },
+          startRendering: false
+        })
+      })
+      return { ok: true, count: result.images.length }
+    },
+
+    async createChatRealtyArticleDraft(input) {
+      const result = await bridge.chatRealty.createArticleDraft(input)
+      if (!result || !result.ok) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      return { ok: true, slug: result.slug }
+    },
+
+    async createChatRealtyLandingPageDraft(input) {
+      const result = await bridge.chatRealty.createLandingPageDraft(input)
+      if (!result || !result.ok) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      return { ok: true, editUrl: result.editUrl, previewUrl: result.previewUrl }
     },
 
     flushPersist() {

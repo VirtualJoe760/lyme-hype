@@ -1,8 +1,17 @@
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyArticleDraftInput,
+  ChatRealtyArticleDraftResult,
+  ChatRealtyCarouselSlideInput,
+  ChatRealtyCoverResult,
+  ChatRealtyLandingPageDraftInput,
+  ChatRealtyLandingPageDraftResult,
+  ChatRealtyListingContextResult,
   ChatRealtyPullResult,
+  ChatRealtyStageResult,
   ClaudeAuthStatus,
+  CombineLocalRequest,
   ConnectorDef,
   ConnectorSuggestion,
   ConnectorTestResult,
@@ -69,6 +78,7 @@ export interface Bridge {
       similarity?: number
       blend?: number
     }): Promise<LocalToolResult | null>
+    combineLocal(input: CombineLocalRequest): Promise<LocalToolResult | null>
   }
   audioTools: {
     voices(query: string): Promise<AudioToolResult | null>
@@ -77,6 +87,8 @@ export interface Bridge {
     music(input: { prompt: string; lengthMs?: number }): Promise<AudioToolResult | null>
     sfx(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null>
     clone(input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null>
+    yapperTts(input: { text: string; voiceId?: string }): Promise<AudioToolResult | null>
+    yapperVoices(input: { provider: 'cartesia' | 'elevenlabs'; search?: string }): Promise<AudioToolResult | null>
   }
   lora: {
     train(input: {
@@ -89,6 +101,8 @@ export interface Bridge {
     }): Promise<TrainStyleResult | null>
     list(): Promise<TrainedStyle[]>
     delete(id: string): Promise<void>
+    setVoice(id: string, voiceName: string): Promise<TrainedStyle | null>
+    setTone(id: string, personaTone: string): Promise<TrainedStyle | null>
   }
   generate: {
     run(params: GenerationParams): Promise<GenerationResult | null>
@@ -99,6 +113,17 @@ export interface Bridge {
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>
     pull(query: string): Promise<ChatRealtyPullResult | null>
+    createCover(
+      listingKey: string,
+      opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+    ): Promise<ChatRealtyCoverResult | null>
+    listingContext(listingKey: string): Promise<ChatRealtyListingContextResult | null>
+    createCarouselSlide(input: ChatRealtyCarouselSlideInput): Promise<ChatRealtyCoverResult | null>
+    stageListing(listingKey: string, photoIndexes: number[]): Promise<ChatRealtyStageResult | null>
+    createArticleDraft(input: ChatRealtyArticleDraftInput): Promise<ChatRealtyArticleDraftResult | null>
+    createLandingPageDraft(
+      input: ChatRealtyLandingPageDraftInput
+    ): Promise<ChatRealtyLandingPageDraftResult | null>
   }
   connectors: {
     list(): Promise<ConnectorView[]>
@@ -201,6 +226,10 @@ function createBrowserMock(): Bridge {
       keyAlpha: async () => ({
         ok: false,
         error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
+      }),
+      combineLocal: async () => ({
+        ok: false,
+        error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
       })
     },
     audioTools: {
@@ -227,6 +256,14 @@ function createBrowserMock(): Bridge {
       clone: async () => ({
         ok: false,
         error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      yapperTts: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      yapperVoices: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
       })
     },
     lora: {
@@ -235,7 +272,9 @@ function createBrowserMock(): Bridge {
         error: 'Krea training runs in the Electron main process — unavailable in browser preview.'
       }),
       list: async () => [],
-      delete: async () => {}
+      delete: async () => {},
+      setVoice: async () => null,
+      setTone: async () => null
     },
     generate: {
       run: async (params) => ({
@@ -256,6 +295,30 @@ function createBrowserMock(): Bridge {
         ok: false,
         images: [],
         listings: [],
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      createCover: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      listingContext: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      createCarouselSlide: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      stageListing: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      createArticleDraft: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      createLandingPageDraft: async () => ({
+        ok: false,
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       })
     },

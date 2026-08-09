@@ -61,6 +61,14 @@ function tileMark(name: string): string {
   return name.replace(/[^A-Za-z0-9 ]/g, '').trim().slice(0, 2).toUpperCase()
 }
 
+/** Yapper's OAuth MCP login and its REST `yap_live_…` upload key are
+ *  independent credentials (docs/connectors/reference/yapper.md) — this
+ *  synthetic vault id rides the same generic secret mechanism as a real
+ *  ConnectorDef without being one (there's no MCP server to test at the
+ *  REST base URL). */
+const YAPPER_REST_ID = 'yapper-rest'
+const YAPPER_REST_LABEL = 'API key (yap_live_…)'
+
 export function ConnectorsTab(): React.JSX.Element {
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
   const [suggestions, setSuggestions] = useState<ConnectorSuggestion[]>([])
@@ -68,10 +76,12 @@ export function ConnectorsTab(): React.JSX.Element {
   const [draft, setDraft] = useState<DraftConnector>(EMPTY_DRAFT)
   const [testResult, setTestResult] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [yapperRestSet, setYapperRestSet] = useState(false)
 
   const refresh = useCallback(async () => {
     setConnectors(await bridge.connectors.list())
     setSuggestions(await bridge.connectors.suggestions())
+    setYapperRestSet((await bridge.secrets.list()).some((s) => s.connectorId === YAPPER_REST_ID))
   }, [])
 
   useEffect(() => {
@@ -109,6 +119,15 @@ export function ConnectorsTab(): React.JSX.Element {
       setBusyId(null)
       await refresh()
     }
+  }
+
+  async function setYapperRestKey(): Promise<void> {
+    const report = await bridge.secrets.request({
+      connectorId: YAPPER_REST_ID,
+      connectorName: 'Yapper (REST uploads)',
+      fieldLabel: YAPPER_REST_LABEL
+    })
+    if (report) await refresh()
   }
 
   async function setCredential(view: ConnectorView): Promise<void> {
@@ -239,6 +258,18 @@ export function ConnectorsTab(): React.JSX.Element {
               </Button>
             </div>
             {testResult[c.id] && <div className="conn-test">{testResult[c.id]}</div>}
+            {c.id === 'yapper' && (
+              <div className="conn-actions" style={{ marginTop: 8 }}>
+                <div className="meta" style={{ flex: '1 1 100%' }}>
+                  REST upload key — separate from the account above; lets Deepfake hand Yapper
+                  a local video/audio file directly when no other connector can upload it.{' '}
+                  {yapperRestSet ? 'Key set.' : 'Not set — local-media ingest falls back to URL import only.'}
+                </div>
+                <Button onClick={() => void setYapperRestKey()}>
+                  {yapperRestSet ? 'Replace REST key' : 'Set REST key'}
+                </Button>
+              </div>
+            )}
           </div>
         ))}
       </div>
