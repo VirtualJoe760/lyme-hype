@@ -29,6 +29,14 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twelfth autonomous run) — collided with the eleventh run on row 6, independently;
+  found the identical `lora:train`/`lyme-asset://` bug but built a broader canvas-image-picker
+  feature where they built the more literally-named "train from this photo" shortcut on the
+  Deepfake screen itself, reviewed their already-pushed fix, found their reading more faithful to
+  the row's wording and the fix itself sound, reset to their commit rather than fight the merge
+  (six-file rebase conflict), re-verified `npm run typecheck` clean on their tip myself. No code
+  changes; see the report for the full writeup. Row 6 stays `done` from the eleventh run. Next:
+  row 7 (Combine).
 - 2026-08-09 (eleventh autonomous run) — Row 6 (Create a LoRA) closed: the Deepfake screen's
   face-node picker now shows a "◈ Train a LoRA from this photo" button whenever the picked node
   is a still image, jumping to the Create a LoRA screen with that image pre-loaded as the first

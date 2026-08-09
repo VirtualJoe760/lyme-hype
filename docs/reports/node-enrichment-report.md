@@ -7,6 +7,44 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twelfth autonomous run: collided with the eleventh on row 6, deferred after review
+
+Reached row 6 (Create a LoRA) independently at the same time as the run logged directly below —
+same starting point (row 5 fully done as of the tenth run), same queue item ("train from this
+deepfake's reference photos"), and, strikingly, the same real bug found along the way: `lora:train`'s
+IPC handler passed `imagePaths` straight to `trainStyle()`, which `readFileSync`s each path
+directly, with no resolution for `lyme-asset://` canvas-node URLs (unlike `scriptingTurn`'s
+existing resolution for the same scheme). Both runs independently wrote the identical
+`assetPathForUrl` fix for that half.
+
+Where the two runs diverged is the actual shortcut. I read "train from this deepfake's reference
+photos" as license for a general capability — `LoraScreen` gained a multi-select picker grid over
+*any* ready canvas image node (reusing Motion graphics' `mgfx-ref` selection pattern), so training
+images can come from disk and/or the canvas in one combined list. The other run read it more
+literally and built a tighter, more directly-named feature: a "◈ Train a LoRA from this photo"
+button on the Deepfake screen's own face-node picker, appearing only when the picked node is a
+still image, that jumps straight to Create a LoRA with that exact photo prefilled (plus a fix so
+the disk-file picker adds to the prefilled selection instead of replacing it). On reflection their
+version is the more faithful reading of the row's own wording — it's literally the one-click path
+from "this deepfake" to "a LoRA from its reference photo," where mine is a more general (arguably
+scope-creepy) canvas-image picker that solves a broader problem the row didn't actually ask for.
+
+By the time I went to push, `07e88f5` (the entry directly below) had already landed on the shared
+branch. I attempted the standard recovery (`git pull --rebase`), which conflicted in all six files
+either run had touched — both the identical `ipc.ts` fix and unrelated doc-log entries collided
+line-for-line, as expected from two runs solving the same row at once. Rather than hand-splice a
+merge under this run's time budget, I aborted the rebase, reviewed the other run's diff directly
+(`git show 07e88f5`), confirmed it's sound — clean `assetPathForUrl` resolution identical in
+substance to mine, a reasonable and well-scoped UI addition, `npm run typecheck` passes on their
+tip in this sandbox too — and reset this branch to their commit rather than fight the merge, the
+same call the eighth run made on row 4's collision. No code changes shipped from this pass; this
+entry and the corresponding progress-file note are the only diff. Row 6 stays `done` from the
+eleventh run's commit. Next run should move to row 7 (Combine) — currently a stub, real semantics
+spec'd in the strategy doc, and worth a fresh look at whether the still-open cross-cutting
+`asset-upload` helper is now genuinely blocking it or whether a narrower slice is buildable first.
+
+---
+
 ## 2026-08-09 — Eleventh autonomous run: Create a LoRA (row 6), Deepfake-photo shortcut — row closed
 
 Row 5 was fully done as of the tenth run, so this pass moved to row 6 per the strategy doc's
