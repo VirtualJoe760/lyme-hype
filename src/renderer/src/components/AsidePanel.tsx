@@ -53,16 +53,18 @@ const SCREEN_TITLES: Record<Screen, string> = {
   pull: 'Listing photos'
 }
 
-/** Which connectors make a tile ready (ANY of them). null = always ready
- *  (local ffmpeg / disk / download — never a connector). */
-const TILE_NEEDS: Partial<Record<Screen, string[]>> = {
-  video: ['muapi', 'fal', 'gemini', 'krea'],
-  image: ['gemini', 'openai', 'muapi', 'fal', 'krea'],
-  audio: ['elevenlabs'],
-  motion: ['gemini', 'openai'],
-  lora: ['fal'],
-  deepfake: ['yapper'],
-  pull: ['chatrealty']
+/** Which connectors make a tile ready (ANY of them satisfies) and how to name
+ *  the need — capability phrasing, since one node can be served by several
+ *  connectors. Derived from docs/architecture/capability-map.md §3; change
+ *  the map first, then this. Absent = always ready (local ffmpeg / disk). */
+const TILE_NEEDS: Partial<Record<Screen, { anyOf: string[]; label: string }>> = {
+  video: { anyOf: ['muapi', 'fal', 'gemini', 'krea', 'yapper'], label: 'a video tool' },
+  image: { anyOf: ['gemini', 'openai', 'muapi', 'fal', 'krea', 'yapper'], label: 'an image tool' },
+  audio: { anyOf: ['elevenlabs'], label: 'elevenlabs' },
+  motion: { anyOf: ['gemini', 'openai'], label: 'gemini/openai' },
+  lora: { anyOf: ['fal'], label: 'fal' },
+  deepfake: { anyOf: ['yapper'], label: 'yapper' },
+  pull: { anyOf: ['chatrealty'], label: 'chatrealty' }
 }
 
 function connectorReady(connectors: ConnectorView[], id: string): boolean {
@@ -70,11 +72,14 @@ function connectorReady(connectors: ConnectorView[], id: string): boolean {
   return !!def && (def.authType === 'none' || def.hasCredential)
 }
 
-function tileReady(connectors: ConnectorView[], screen: Screen): { ready: boolean; needs?: string } {
-  const needs = TILE_NEEDS[screen]
-  if (!needs) return { ready: true }
-  if (needs.some((id) => connectorReady(connectors, id))) return { ready: true }
-  return { ready: false, needs: needs[0] }
+function tileReady(
+  connectors: ConnectorView[],
+  screen: Screen
+): { ready: boolean; needs?: string; options?: string } {
+  const need = TILE_NEEDS[screen]
+  if (!need) return { ready: true }
+  if (need.anyOf.some((id) => connectorReady(connectors, id))) return { ready: true }
+  return { ready: false, needs: need.label, options: need.anyOf.join(' / ') }
 }
 
 const ASPECTS = ['9:16', '1:1', '16:9']
@@ -921,7 +926,11 @@ export function AsidePanel(): React.JSX.Element {
                 <button
                   key={tile.key}
                   className={`create-tile${state.ready ? '' : ' dim'}`}
-                  title={state.ready ? tile.blurb : `${tile.blurb} — connect ${state.needs} first`}
+                  title={
+                    state.ready
+                      ? tile.blurb
+                      : `${tile.blurb} — connect any of: ${state.options}`
+                  }
                   onClick={() => setScreen(tile.key)}
                 >
                   <span className={`create-tile-thumb sw${(index % 6) + 1}`}>

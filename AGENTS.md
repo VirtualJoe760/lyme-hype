@@ -89,12 +89,17 @@ lyme-hype/
 │   ├── history.md                    How the design got here — provenance, not a live spec.
 │   ├── build-plan.md                 The actual build order — read this to know what's next.
 │   ├── architecture/
-│   │   └── platform-decisions.md    Electron, UXP vs CEP, MCP-client model, ffmpeg engine.
+│   │   ├── platform-decisions.md    Electron, UXP vs CEP, MCP-client model, ffmpeg engine.
+│   │   └── capability-map.md        Routing source of truth: connector × capability matrix,
+│   │                                 creative-node needs table (drives tile readiness).
 │   ├── connectors/
 │   │   ├── model.md                  The generic connector mechanism + credential boundary.
 │   │   ├── catalog.md                Which tools, why each one, exact connect shapes, tier routing.
+│   │   ├── reference/                Aggregated external docs, one file per connector (tool
+│   │   │                             surfaces, model catalogs, pricing, gotchas; verified markers).
 │   │   └── publishing.md             Instagram/YouTube OAuth — a different mechanism, not MCP.
 │   ├── ui/
+│   │   ├── creative-nodes.md         Every creative building block + capabilities it consumes.
 │   │   ├── canvas-and-storyboard.md  Node types, Sessions, Storyboard + promote.
 │   │   ├── play-view.md              Full-takeover single-clip review/trim/split.
 │   │   ├── timeline.md               Multitrack Cut Room — built; spec + build-decision record.

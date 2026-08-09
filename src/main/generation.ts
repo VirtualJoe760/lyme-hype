@@ -47,7 +47,10 @@ function mcpName(connectorId: string): string {
  *  precedence over allowedTools in the SDK). muapi's are known concretely;
  *  the canUseTool regex backstop covers unknown servers' variants. */
 const DANGEROUS_TOOLS_BY_SERVER: Record<string, string[]> = {
-  muapi: ['muapi_account_topup', 'muapi_keys_create', 'muapi_keys_delete']
+  muapi: ['muapi_account_topup', 'muapi_keys_create', 'muapi_keys_delete'],
+  // The official ElevenLabs server ships side-effect tools alongside audio
+  // generation: real outbound phone calls and persistent billable agents.
+  elevenlabs: ['make_outbound_call', 'create_agent', 'add_knowledge_base_to_agent']
 }
 
 async function buildMcpServers(restrictId?: string): Promise<{

@@ -18,11 +18,14 @@ The agent isn't a chatbot answering questions in a box — it's actively driving
 - **[build-plan.md](build-plan.md)** — the actual build order: phases, what blocks what, what's done, what's next. The single "what do I build" doc.
 - **architecture/**
   - **[platform-decisions.md](architecture/platform-decisions.md)** — Electron, UXP vs. CEP for the Premiere plugin, the MCP-client model, the ffmpeg engine decision.
+  - **[capability-map.md](architecture/capability-map.md)** — the routing source of truth: capability vocabulary, the connector × capability matrix, the creative-node → capability table the UI derives readiness from, and the unwired paths worth planning around.
 - **connectors/**
   - **[model.md](connectors/model.md)** — the generic connector mechanism (stdio/http/OAuth transports), the credential boundary, the secure-credential component, the agent-as-setup-copilot idea.
-  - **[catalog.md](connectors/catalog.md)** — which specific tools are connected, why each one is used for what (video → muapi/Seedance, voice → ElevenLabs, production image → Midjourney via muapi, storyboard-tier image → Gemini/OpenAI, LoRA training → Krea, deepfake/likeness → Yapper, data → ChatRealty), and exact connect shapes.
+  - **[catalog.md](connectors/catalog.md)** — which specific tools are connected, why each one is used for what, and exact connect shapes.
+  - **[reference/](connectors/reference/)** — aggregated external documentation, one file per connector (muapi with its full model catalog, ElevenLabs and ChatRealty from live schema enumeration, Krea, fal, Gemini/Veo, OpenAI Images, Yapper): tool surfaces, models, result handling, pricing, gotchas — with verified/docs/unverified markers.
   - **[publishing.md](connectors/publishing.md)** — Instagram/YouTube OAuth publish. A different mechanism from the MCP connectors above, not a variant of them.
 - **ui/**
+  - **[creative-nodes.md](ui/creative-nodes.md)** — every creative building block (canvas nodes, panels, Create tasks, wizard stages, timeline clips) described by inputs/outputs and the capabilities each consumes; pairs with the capability map.
   - **[canvas-and-storyboard.md](ui/canvas-and-storyboard.md)** — node types, source methods, combine, Sessions, the Storyboard view and its promote mechanic.
   - **[play-view.md](ui/play-view.md)** — the full-takeover single-clip review/trim/split view.
   - **[timeline.md](ui/timeline.md)** — the planned multitrack rework of the Cut Room. Not built yet.

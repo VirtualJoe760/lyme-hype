@@ -32,9 +32,15 @@ const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image'
 const IMAGE_MODEL_FALLBACK = 'gemini-2.5-flash-image'
 const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || 'veo-3.1-generate-preview'
+// The 3.1 family, callable per-request: lite is ~8x cheaper ($0.05/s vs
+// $0.40/s), 720p-only, and still supports frame interpolation — the right
+// default lever for Motion graphics reveals.
+const VIDEO_MODELS = ['veo-3.1-generate-preview', 'veo-3.1-fast-generate-preview', 'veo-3.1-lite-generate-preview']
 const VIDEO_POLL_MS = 10_000
 const VIDEO_TIMEOUT_MS = 6 * 60_000
-const MAX_REFERENCE_IMAGES = 3
+// Nano Banana 2 accepts up to 10 object refs (the old 3-image guidance was
+// gemini-2.5-era); the fallback model still prefers ≤3.
+const MAX_REFERENCE_IMAGES = 10
 
 function apiKey() {
   const key = process.env.GEMINI_API_KEY
@@ -132,6 +138,7 @@ async function generateImage(args) {
 async function generateVideo(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
+  const model = VIDEO_MODELS.includes(args.model) ? args.model : VIDEO_MODEL
   const instance = { prompt }
   // Frame conditioning (whole veo-3.1 family): instance.image is the start
   // frame, instance.lastFrame the end frame — a start→end interpolation, the
@@ -144,7 +151,7 @@ async function generateVideo(args) {
   // lastFrame interpolation requires an 8-second duration per current docs.
   if (instance.lastFrame) parameters.durationSeconds = 8
   if (Object.keys(parameters).length > 0) body.parameters = parameters
-  const op = await api(`models/${VIDEO_MODEL}:predictLongRunning`, body)
+  const op = await api(`models/${model}:predictLongRunning`, body)
   if (!op.name) throw new Error('No operation returned for video generation')
 
   const deadline = Date.now() + VIDEO_TIMEOUT_MS
@@ -197,6 +204,11 @@ const TOOLS = [
       properties: {
         prompt: { type: 'string', description: 'What happens in the shot (time-segmented beats work well)' },
         aspectRatio: { type: 'string', description: 'e.g. 9:16 or 16:9 (optional)' },
+        model: {
+          type: 'string',
+          enum: VIDEO_MODELS,
+          description: 'Veo variant (optional). lite is ~8x cheaper (720p) and still supports start/end-frame interpolation — prefer it for overlays/reveals.'
+        },
         start_frame_path: { type: 'string', description: 'Absolute path of the first-frame image (optional)' },
         end_frame_path: { type: 'string', description: 'Absolute path of the last-frame image (optional)' }
       },

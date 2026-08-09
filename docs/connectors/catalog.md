@@ -2,6 +2,8 @@
 
 The generic mechanism is [model.md](model.md). This doc is the opposite of generic: which specific tools are connected, why *that* tool for *that* job, and the exact connect shape for each. Researched 2026-08-08, routing intent refined the same day once real usage patterns (cost, quality, specialty) became clear.
 
+**Deeper per-connector documentation lives in [reference/](reference/)** — aggregated 2026-08-09 from official docs and live schema enumeration: full tool surfaces, model catalogs, pricing, and gotchas. The connector × creative-node join is [`../architecture/capability-map.md`](../architecture/capability-map.md); this catalog stays the short "why this tool" summary.
+
 ## Routing philosophy
 
 Lyme Hype doesn't have one "generation connector" — it has several, each earning its place for a specific job rather than being interchangeable:

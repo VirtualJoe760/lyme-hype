@@ -60,18 +60,26 @@ function saveB64Result(json) {
 
 const MIME_FOR_EXT = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }
 
+const QUALITIES = ['low', 'medium', 'high', 'auto']
+
 async function generateImage(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
   const size = SIZES.includes(args.size) ? args.size : 'auto'
+  // Quality is THE price lever (a square image bills ~$0.006 low vs ~$0.211
+  // high) — default medium keeps the storyboard tier honest instead of
+  // silently billing at auto/high.
+  const quality = QUALITIES.includes(args.quality) ? args.quality : 'medium'
   const refs = Array.isArray(args.reference_image_paths) ? args.reference_image_paths.filter(Boolean) : []
 
   if (refs.length > 0) {
     // Reference-conditioned generation goes through the edits endpoint, which
-    // accepts input images alongside the prompt (multipart, not JSON).
+    // accepts input images alongside the prompt (multipart, not JSON; up to
+    // 16 reference images per the current docs).
     const form = new FormData()
     form.append('model', IMAGE_MODEL)
     form.append('prompt', prompt)
+    form.append('quality', quality)
     if (size !== 'auto') form.append('size', size)
     for (const p of refs) {
       const mime = MIME_FOR_EXT[extname(p).toLowerCase()] || 'image/png'
@@ -89,7 +97,7 @@ async function generateImage(args) {
   const res = await fetch(`${API_BASE}/images/generations`, {
     method: 'POST',
     headers: { authorization: `Bearer ${apiKey()}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: IMAGE_MODEL, prompt, size })
+    body: JSON.stringify({ model: IMAGE_MODEL, prompt, size, quality })
   })
   if (!res.ok) throw new Error(`OpenAI API ${res.status}: ${await readApiError(res)}`)
   return saveB64Result(await res.json())
@@ -105,6 +113,7 @@ const TOOLS = [
       properties: {
         prompt: { type: 'string', description: 'What to draw' },
         size: { type: 'string', enum: SIZES, description: 'Output size; 1024x1536 is portrait, 1536x1024 landscape (optional, default auto)' },
+        quality: { type: 'string', enum: QUALITIES, description: 'Render quality = price lever (low ≈ $0.006/sq, high ≈ $0.211/sq). Default medium; use low for storyboard sketches.' },
         reference_image_paths: {
           type: 'array',
           items: { type: 'string' },
