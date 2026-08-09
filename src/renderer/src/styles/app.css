@@ -1014,14 +1014,11 @@
 
 /* ---------- Create panel (aside) ---------- */
 
-.create-back {
-  color: var(--text-soft);
-  font-size: 12px;
-  margin-right: 6px;
-}
-
-.create-back:hover {
-  color: var(--accent);
+.create-back-row {
+  display: block;
+  width: calc(100% - 8px);
+  margin: 2px 4px 10px;
+  text-align: left;
 }
 
 .create-tiles {

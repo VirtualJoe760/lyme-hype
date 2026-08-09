@@ -668,16 +668,16 @@ export function AsidePanel(): React.JSX.Element {
             {collapsed ? '‹' : '›'}
           </button>
         </div>
-        <span>
-          {screen !== 'home' && (
-            <button className="create-back" onClick={home} title="Back to Create">
-              ←
-            </button>
-          )}
-          {SCREEN_TITLES[screen]}
-        </span>
+        <span>{SCREEN_TITLES[screen]}</span>
       </div>
       <div className="panel-body">
+        {screen !== 'home' && (
+          // Same back-button language Play view uses — a real labeled button
+          // leading the screen, not a glyph tucked into the header.
+          <button className="play-back create-back-row" onClick={home}>
+            ← Back to Create
+          </button>
+        )}
         {screen === 'home' && (
           <>
             <div className="create-tiles">

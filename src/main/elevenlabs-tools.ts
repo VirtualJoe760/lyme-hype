@@ -87,7 +87,10 @@ async function fileProducingCall(
   const outcome = await withElevenLabs(async (client) => {
     // Generation tools run long — music composition especially — so the
     // client's default 45s tools/call timeout is far too tight here.
-    const result = await client.callTool(toolName, args, timeoutMs)
+    // output_directory is a schema-verified param on every file-producing
+    // tool; passing it beats relying on the ELEVENLABS_MCP_BASE_PATH env
+    // alone (default is $HOME/Desktop otherwise).
+    const result = await client.callTool(toolName, { output_directory: outDir(), ...args }, timeoutMs)
     const text = resultText(result)
     if (result.isError) return { ok: false as const, error: text || `${toolName} failed.` }
     const filePath = extractFilePath(text)
@@ -102,8 +105,10 @@ async function fileProducingCall(
 
 export function searchVoices(query: string): Promise<AudioToolResult> {
   return withElevenLabs(async (client) => {
+    // There is no list_voices tool on the official server — search_voices with
+    // no search term IS the listing call (verified against the live schema).
     const result = await client.callTool(
-      query.trim() ? 'search_voices' : 'list_voices',
+      'search_voices',
       query.trim() ? { search: query.trim() } : {}
     )
     const text = resultText(result)
@@ -124,7 +129,8 @@ export function composeMusic(input: { prompt: string }): Promise<AudioToolResult
 
 export function soundEffects(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult> {
   const args: Record<string, unknown> = { text: input.prompt }
-  if (input.durationSec) args['duration_seconds'] = input.durationSec
+  // Schema-verified bound: the tool accepts 0.5–5 seconds only.
+  if (input.durationSec) args['duration_seconds'] = Math.min(5, Math.max(0.5, input.durationSec))
   return fileProducingCall('text_to_sound_effects', args, 180_000)
 }
 
