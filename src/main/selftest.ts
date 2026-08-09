@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { BrowserWindow, app, net } from 'electron'
 import { runAgentPrompt } from './agent'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
@@ -209,6 +210,8 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     // Gemini (bundled stdio wrapper) and Yapper (MCP OAuth) are now installable too.
     const hasGemini = suggestions.some((s) => s.id === 'gemini' && s.available)
     const hasYapper = suggestions.some((s) => s.id === 'yapper' && s.available)
+    // OpenAI Images — the second bundled wrapper (storyboard-tier image).
+    const hasOpenai = suggestions.some((s) => s.id === 'openai' && s.available)
     // Custom connector round-trip (all removable now).
     saveConnector({
       id: 'selftest-conn',
@@ -236,6 +239,7 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
       hasKrea &&
       hasGemini &&
       hasYapper &&
+      hasOpenai &&
       kreaHttp &&
       added &&
       removed &&
@@ -247,11 +251,37 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
       )
     } else {
       fail(
-        `connectors: muapi=${hasMuapi} krea=${hasKrea} gemini=${hasGemini} yapper=${hasYapper} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
+        `connectors: muapi=${hasMuapi} krea=${hasKrea} gemini=${hasGemini} yapper=${hasYapper} openai=${hasOpenai} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
       )
     }
   } catch (error) {
     fail(`connectors: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 7b. Bundled wrapper protocol smoke tests — spawn each owned stdio wrapper
+  //     with a dummy key, handshake, and list tools. Proves the MCP framing and
+  //     tool surface without any billed API call (dummy keys never reach a
+  //     network request in initialize/tools-list).
+  const wrappers: { file: string; env: Record<string, string>; tool: string }[] = [
+    { file: 'gemini-mcp.cjs', env: { GEMINI_API_KEY: 'selftest-dummy' }, tool: 'gemini_generate_image' },
+    { file: 'openai-image-mcp.cjs', env: { OPENAI_API_KEY: 'selftest-dummy' }, tool: 'openai_generate_image' }
+  ]
+  for (const wrapper of wrappers) {
+    try {
+      const probe = await probeStdioMcp({
+        command: 'node',
+        args: [join(app.getAppPath(), 'resources', wrapper.file)],
+        env: wrapper.env
+      })
+      const hasTool = probe.tools.some((t) => t.name === wrapper.tool)
+      if (probe.ok && hasTool) {
+        log(`wrapper ${wrapper.file}: PASS (${probe.serverInfo?.name}, ${probe.tools.length} tool(s), ${wrapper.tool} present)`)
+      } else {
+        fail(`wrapper ${wrapper.file}: ${probe.error ?? `handshake ok but ${wrapper.tool} missing`}`)
+      }
+    } catch (error) {
+      fail(`wrapper ${wrapper.file}: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   // 8. Claude auth override resolution — default is 'none' (this machine's own

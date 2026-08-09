@@ -46,12 +46,12 @@ Lyme Hype doesn't have one "generation connector" — it has several, each earni
 - Image/video are **paid-tier keys** on Google's side (the free tier is text-only).
 - **Routing intent:** one of two interchangeable storyboard-tier image options (see OpenAI below) — cheap, fast, good enough to judge a shot before spending on Midjourney.
 
-## OpenAI — storyboard-tier image (not yet built)
+## OpenAI — storyboard-tier image
 
-- **Key page:** `platform.openai.com/api-keys` · **Connect:** stdio, `OPENAI_API_KEY` · **Status: spec'd, not yet built.**
-- **No first-party OpenAI MCP server exists either** — same situation as Gemini before its wrapper was built. Several community MCP servers for `gpt-image-1` exist (e.g. `SureScaleAI/openai-gpt-image-mcp`, `spartanz51/imagegen-mcp`), but per the precedent set with Gemini, the plan is a small **owned** wrapper (`resources/openai-image-mcp.cjs`) rather than a dependency on one of those — same shape as `gemini-mcp.cjs`: a dependency-free plain-Node stdio server calling OpenAI's Images API directly (`POST https://api.openai.com/v1/images/generations`, model `gpt-image-1`, `Authorization: Bearer $OPENAI_API_KEY`) and returning a `RESULT_URL:`/`RESULT_FILE:` line the same way every other generation connector does.
+- **Key page:** `platform.openai.com/api-keys` · **Connect:** stdio, `OPENAI_API_KEY` · **Status: built and installable (2026-08-08).**
+- **Built in-house, not a community package** — same situation and same call as Gemini: no first-party OpenAI image MCP exists, community servers (`SureScaleAI/openai-gpt-image-mcp`, `spartanz51/imagegen-mcp`) were passed over for a small **owned** wrapper. `resources/openai-image-mcp.cjs` is a dependency-free plain-Node stdio server, one tool: `openai_generate_image` — `POST /v1/images/generations` (model `gpt-image-1`) for text-only prompts, and `POST /v1/images/edits` (multipart) when `reference_image_paths` are passed, so reference-conditioned generation (the Motion graphics workflow's stage-5 need) is supported from day one. gpt-image-1 returns base64, so results hand off as `RESULT_FILE:` like Gemini's.
 - **Routing intent:** the second of the two interchangeable storyboard-tier image options. Per the user's call: both Gemini and OpenAI get installed, and the Storyboard's per-node model choice is just "whichever the user picks" — Lyme Hype doesn't need to pick a winner between them.
-- **To build:** `resources/openai-image-mcp.cjs` (mirror `gemini-mcp.cjs`'s structure), a `connector-suggestions.ts` catalog entry (`kind: 'stdio'`, `command: 'node'`, `args: [join(app.getAppPath(), 'resources', 'openai-image-mcp.cjs')]`, `authType: 'apiKey'`, `secretKey: 'OPENAI_API_KEY'`), and a selftest protocol smoke-test entry matching Gemini's.
+- The selftest now includes a protocol smoke test for **both** bundled wrappers (spawn, handshake, tools/list with a dummy key — no billed call); the Gemini wrapper never actually had one before this.
 
 ## Krea — LoRA / custom style training
 
@@ -84,7 +84,7 @@ This is UI + a small amount of store/IPC wiring, not a new architectural idea �
 
 ## Known gaps, summarized
 
-- OpenAI image connector — spec'd here, not yet built (see above).
+- ~~OpenAI image connector~~ — built 2026-08-08 (see above).
 - Krea LoRA training — REST-only, not reachable through the current agent-driven MCP-only generation path (see above).
 - Connector-tier routing — the mechanism exists (`connectorId`), the UI doesn't wire it yet (see above).
 - Agent tool-selection with multiple similar connections generally (not just image tiers) — still unconfirmed by an actual multi-connector generation test; see the open question carried in `../architecture/platform-decisions.md`.

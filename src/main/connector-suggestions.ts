@@ -135,6 +135,27 @@ const CATALOG: CatalogEntry[] = [
     })
   },
   {
+    id: 'openai',
+    name: 'OpenAI Images',
+    blurb: 'gpt-image-1 via our bundled wrapper — the second storyboard-tier image option alongside Gemini.',
+    category: 'image',
+    keyPageUrl: 'https://platform.openai.com/api-keys',
+    available: true,
+    note: 'Runs the bundled resources/openai-image-mcp.cjs wrapper with your OPENAI_API_KEY.',
+    template: () => ({
+      id: 'openai',
+      name: 'OpenAI Images',
+      kind: 'stdio',
+      command: 'node',
+      // Resolved at install time; in dev app.getAppPath() is the repo root.
+      args: [join(app.getAppPath(), 'resources', 'openai-image-mcp.cjs')],
+      authType: 'apiKey',
+      secretKey: 'OPENAI_API_KEY',
+      secretFieldLabel: 'OpenAI API key',
+      docUrl: 'https://platform.openai.com/api-keys'
+    })
+  },
+  {
     id: 'yapper',
     name: 'Yapper',
     blurb: 'Seedance/Sora/Kling video studio over remote http MCP — connects with an OAuth login, no key to paste.',
