@@ -204,6 +204,21 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
   const [yapperModel, setYapperModel] = useState('')
   const { ready } = tileReady(props.connectors, 'video')
 
+  // Extend an existing clip (Veo, +7s per call, 148s chained-extension cap) —
+  // a separate flow from fresh generation, docs/ui/node-enrichment-strategy.md
+  // Recommendations #3. Only Gemini's wrapper supports this.
+  const extendableNodes = nodes.filter(
+    (n) => n.data.mediaType === 'video' && n.data.status === 'ready' && n.data.src && !n.data.panel
+  )
+  const [extendNodeId, setExtendNodeId] = useState('')
+  const [extendPrompt, setExtendPrompt] = useState('')
+  const [extendResultId, setExtendResultId] = useState<string | null>(null)
+  const extendNode = extendableNodes.find((n) => n.id === extendNodeId)
+  const extendCurrentSec = extendNode?.data.videoDurationSec
+  const VEO_EXTENSION_CAP_SEC = 148
+  const extendWouldExceedCap =
+    extendCurrentSec !== undefined && extendCurrentSec + 7 > VEO_EXTENSION_CAP_SEC
+
   // i2v: only Gemini's Veo wrapper accepts a start_frame_path today (capability
   // map §2 — muapi/fal need asset-upload first, still open plumbing), so
   // picking a starting frame overrides whatever connector is otherwise chosen.
@@ -305,6 +320,65 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
         Generate
       </button>
       <ResultRow nodeId={resultId} />
+      {extendableNodes.length > 0 && (
+        <div className="more-body">
+          <select
+            className="cr-input create-select"
+            value={extendNodeId}
+            onChange={(e) => setExtendNodeId(e.target.value)}
+          >
+            <option value="">Extend an existing clip: none</option>
+            {extendableNodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                Extend: {n.data.label}
+                {n.data.videoDurationSec ? ` (${Math.round(n.data.videoDurationSec)}s)` : ''}
+              </option>
+            ))}
+          </select>
+          {extendNode && (
+            <>
+              <textarea
+                className="prompt-area"
+                placeholder="what happens in the next 7 seconds"
+                value={extendPrompt}
+                onChange={(e) => setExtendPrompt(e.target.value)}
+              />
+              <RunLine
+                ok={geminiReady && !extendWouldExceedCap}
+                label={
+                  !geminiReady
+                    ? 'extend needs gemini connected'
+                    : extendWouldExceedCap
+                      ? `would exceed Veo's ${VEO_EXTENSION_CAP_SEC}s cap`
+                      : extendCurrentSec !== undefined
+                        ? `runs on gemini · +7s (${Math.round(extendCurrentSec)}s → ${Math.round(extendCurrentSec + 7)}s)`
+                        : 'runs on gemini · +7s (length unknown, cap unenforced client-side)'
+                }
+                cost="$$ paid"
+              />
+              <button
+                className="generate-btn"
+                disabled={!extendPrompt.trim() || !geminiReady || extendWouldExceedCap}
+                onClick={() =>
+                  setExtendResultId(
+                    generateMedia({
+                      label: labelFromPrompt(extendPrompt, 'clip'),
+                      mediaType: 'video',
+                      prompt: extendPrompt.trim(),
+                      connectorId: 'gemini',
+                      extendVideoPath: extendNode.data.src,
+                      extendVideoDurationSec: extendCurrentSec
+                    })
+                  )
+                }
+              >
+                Extend +7s
+              </button>
+              <ResultRow nodeId={extendResultId} />
+            </>
+          )}
+        </div>
+      )}
     </>
   )
 }

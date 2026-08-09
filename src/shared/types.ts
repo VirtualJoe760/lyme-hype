@@ -278,6 +278,11 @@ export interface MediaNodeData {
   /** Storyboard image panels: restrict promotion's generation to one connector
    *  (the storyboard-tier model choice — Gemini vs OpenAI). */
   connectorId?: string
+  /** Real measured length of a video node (probed client-side after generation
+   *  or extension, docs/ui/node-enrichment-strategy.md Recommendations #3) —
+   *  what Veo's 148s chained-extension cap actually needs, since the requested
+   *  duration and the delivered one aren't guaranteed to match. */
+  videoDurationSec?: number
   [key: string]: unknown
 }
 

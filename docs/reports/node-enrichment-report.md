@@ -7,6 +7,54 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-fourth autonomous run: Veo video-extension canvas UI + real duration tracking (Recommendations item 3, closing it)
+
+Queue state going in: all ten rows `done` (rows 1/2 unchanged — both flagged nothing-safely-
+buildable-blind by prior runs). The twenty-third run's own resume note pointed straight at this:
+the `gemini_extend_video` wrapper and `GenerationParams.extendVideoPath`/`extendVideoDurationSec`
+existed end to end in the backend, but nothing in the UI ever set those fields, and the 148s
+chained-extension cap the wrapper can enforce needs a caller-supplied running total that nothing
+tracked.
+
+**What I built.** Two pieces, closing both gaps the prior run left open:
+
+1. **"Extend an existing clip" picker in `VideoScreen`** (`AsidePanel.tsx`). Lists every ready
+   video node on the canvas, a short "what happens in the next 7 seconds" prompt, and a dedicated
+   `Extend +7s` button that forces `connectorId: 'gemini'` (mirroring row 3's own starting-frame
+   picker, which forces the same connector for the same reason — Gemini is the only wired path)
+   and sends `extendVideoPath`/`extendVideoDurationSec`. The run-line shows the real before/after
+   duration when known, and the button disables client-side once the cap would be blown.
+2. **Real duration tracking, not requested-duration guesswork.** `MediaNodeData` gained
+   `videoDurationSec`. Rather than build a new probe, `store.ts`'s `generateMedia` now calls the
+   Cut Room's own `probeDuration()` helper (a detached `<video>` element's `loadedmetadata` event —
+   already used for `TimelineClip.sourceDuration`, this queue's "build once, reuse" pattern applied
+   to itself) on every video node right after generation *or* extension completes, so the node's
+   own actual measured length is what feeds the next extension's cap check — not what the user
+   typed into the duration chip, which a generation service is free to ignore.
+
+**What I deliberately left out.** No retry/backoff if the client-side probe fails (falls back to
+an honest "length unknown, cap unenforced client-side" run-line rather than assuming 0s or blocking
+outright — a node with an unset `videoDurationSec` can still be extended, just without the
+guardrail). No UI for the wrapper's own `previous_duration_seconds` mismatch case — if the probed
+length is ever wrong (e.g. a future non-Gemini video-extension source), the wrapper's own 148s
+server-side check is still the backstop, this is a convenience layer on top of it, not a
+replacement.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json`
+(fresh `npm install`, no `node_modules` at run start). **Not run live** — no Gemini key in this
+sandbox, no display to click the button in a real browser either; the wire-shape uncertainty the
+twenty-third run flagged (`inlineData` vs. `uri` for the prior-video reference) is still open and
+still needs a real click to settle, this pass only made the button exist. `creative-nodes.md` and
+`capability-map.md` updated in this commit; Recommendations item 3 in this report is now struck
+through as shipped.
+
+**Where this leaves things.** Not a queue row, so nothing to mark in the progress table.
+Recommendations item 3 is closed. Item 5 (muapi image-edit as Motion graphics' second batch source)
+is the next similarly-scoped candidate — flagged since row 2's very first pass as real, separately-
+scoped work needing its own design pass rather than a parameter wire-up.
+
+---
+
 ## 2026-08-09 — Twenty-third autonomous run: Veo video-extension wrapper tool (Recommendations item 3), backend only
 
 Queue state going in: all ten rows `done` (rows 1/2 technically `in-progress` but both flagged
@@ -1511,14 +1559,10 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    the live-billed-call caution every generation tile needs. Genuinely lower-risk than most of what
    this queue already shipped.
 
-3. ~~**Veo video-extension** (`+7s` chained, 720p)~~ — **backend half shipped, UI still open**
-   (2026-08-09, twenty-third autonomous run): `resources/gemini-mcp.cjs` gained `gemini_extend_video`
-   (`source_video_path` + `prompt` → `instances[0].video.inlineData` + forced 8 s duration, same
-   long-running-op pattern as `gemini_generate_video`), `GenerationParams` gained
-   `extendVideoPath`/`extendVideoDurationSec`, and `generation.ts`'s prompt builder hints the agent
-   toward the new tool when they're set. **Not a full ship** — see that run's entry below for what's
-   still missing (a canvas UI picker, chained-extension duration tracking, and a genuinely unverified
-   wire shape for the prior-video reference itself).
+3. ~~**Veo video-extension** (`+7s` chained, 720p)~~ — **shipped** (backend: 2026-08-09, twenty-third
+   autonomous run; canvas UI + duration tracking: 2026-08-09, twenty-fourth autonomous run). See that
+   run's entry below — the wire shape for the prior-video reference itself is still genuinely
+   unverified (no live key in this sandbox), worth a look on the first real click.
 
 4. ~~**Yapper's voice library** (`GET /audio/voices`)~~ — **shipped** (2026-08-09, twenty-second
    autonomous run): a Cartesia/ElevenLabs provider toggle on the Voice job's Yapper-fallback block

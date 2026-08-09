@@ -297,6 +297,10 @@ interface StudioStore {
     endFramePath?: string
     referenceAudioPaths?: string[]
     sourceMediaPath?: string
+    /** Extends an existing video by ~7s via Veo (docs/ui/node-enrichment-
+     *  strategy.md Recommendations #3) instead of generating fresh. */
+    extendVideoPath?: string
+    extendVideoDurationSec?: number
     /** Returns the node id IMMEDIATELY (generation continues async) so Create
      *  screens can track the node's rendering → ready/error lifecycle. */
   }): string
@@ -1202,7 +1206,9 @@ export const useStudio = create<StudioStore>((set, get) => {
             startFramePath: input.startFramePath,
             endFramePath: input.endFramePath,
             referenceAudioPaths: input.referenceAudioPaths,
-            sourceMediaPath: input.sourceMediaPath
+            sourceMediaPath: input.sourceMediaPath,
+            extendVideoPath: input.extendVideoPath,
+            extendVideoDurationSec: input.extendVideoDurationSec
           })
         } catch (error) {
           result = {
@@ -1213,11 +1219,17 @@ export const useStudio = create<StudioStore>((set, get) => {
         }
 
         if (result?.ok && result.src) {
+          // Real measured length, not the requested one — Veo's 148s chained-
+          // extension cap needs the actual total, and extension calls don't
+          // report duration at all (only the fixed +7s/8s intent).
+          const videoDurationSec =
+            input.mediaType === 'video' ? await probeDuration(result.src, 'video') : undefined
           patchNodeAnywhere(id, {
             src: result.src,
             status: 'ready',
             error: undefined,
-            genNote: result.note
+            genNote: result.note,
+            ...(videoDurationSec ? { videoDurationSec } : {})
           })
         } else {
           patchNodeAnywhere(id, {

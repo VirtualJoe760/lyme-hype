@@ -29,6 +29,17 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-fourth autonomous run) — queue confirmed fully `done`/blocked, same as prior
+  runs. Per the empty-queue guardrail, closed the twenty-third run's own resume item: shipped the
+  canvas "Extend +7s" picker in `VideoScreen` (`AsidePanel.tsx`, forces `connectorId: 'gemini'`,
+  sends `extendVideoPath`/`extendVideoDurationSec`) plus real client-probed duration tracking
+  (`MediaNodeData.videoDurationSec`, populated via the Cut Room's existing `probeDuration()` helper
+  right after every video generation/extension) so the 148s chained-extension cap is enforced
+  client-side against a measured length, not a guess. `npm run typecheck` clean (fresh `npm
+  install`, no `node_modules` at run start). Not run live — no Gemini key, no display in this
+  sandbox. `creative-nodes.md` and `capability-map.md` updated in this commit. Recommendations item
+  3 in the report is now closed; item 5 (muapi image-edit for Motion graphics) is the next
+  similarly-scoped candidate.
 - 2026-08-09 (twenty-third autonomous run) — queue confirmed fully `done`/blocked (rows 1–2 need a
   joint session or a design pass, rows 3–10 `done`), so per the empty-queue guardrail took the next
   Recommendations item: #3, Veo video-extension. Shipped `gemini_extend_video` in
