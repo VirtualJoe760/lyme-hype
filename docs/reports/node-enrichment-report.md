@@ -7,6 +7,31 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Fourth autonomous run: collided with a concurrent run on row 1, no new code
+
+Picked up row 1's remaining resume item (a) — the Yapper REST signed-upload path — independently
+and built essentially the same fix: a `secondaryCredential` concept on `ConnectorDef` (mine) /
+a synthetic vault id (`yapper-rest`, the run just below this entry) to hold the separate
+`yap_live_…` key, a REST client module doing the presigned-upload dance, a Settings row to set
+the key, and `generation.ts` pre-uploading local source media through it when Yapper is the only
+attached connector. By the time I finished and went to push, another run had already landed and
+pushed the equivalent work first (`9566779`, the entry directly below).
+
+Rather than force a rebase through eight files of near-identical diffs (`generation.ts`,
+`capability-map.md`, `creative-nodes.md`, the progress tracker, and this report all overlapped),
+I reset my branch to the pushed commit, confirmed `npm run typecheck` is still clean against it,
+and stopped — the guardrails are explicit that repeating completed work isn't the goal, and a
+git-history archaeology exercise to cherry-pick any genuinely-different bits (mine modeled the
+second credential as a first-class `ConnectorDef` field rather than a synthetic vault id; possibly
+worth a look in daylight, not autonomously) isn't worth the collision risk this deep into the run.
+
+Did not start row 2 this run — between building the (ultimately discarded) fix and reconciling
+against the concurrent push, the run's time budget was already spent, and starting fresh row-2
+work now would run into the same overlap risk that just cost this run its output. Next run should
+pick up row 2 (Motion graphics) with a clean slate.
+
+---
+
 ## 2026-08-09 — Third autonomous run: Deepfake (row 1), Yapper REST upload path built
 
 Resumed row 1 again — resume note left two items, (a) build the Yapper REST signed-upload path
