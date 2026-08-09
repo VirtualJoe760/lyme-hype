@@ -11,15 +11,17 @@ into `CLAUDE.md`.
 
 ## 0. Where this project actually is
 
-**Phases 1–7 are built (2026-08-08); Phases 10–12 are spec'd but not started.** `docs/` is the
-spec — read it before touching code, and read [`docs/build-plan.md`](docs/build-plan.md) to see
-which phases are done. The Electron + TypeScript app runs (`npm run dev`), the Claude Agent SDK
-drives real agent-driven generation across all seven catalog connectors, the credential vault +
-secure-credential modal are self-tested (`LYME_SELFTEST=1 npm run dev`), and Play/Storyboard/Cut
-Room export are all real. What's deferred to a joint session (a live generation call, the LGPL
-ffmpeg bundle, the Instagram publish port) and what's newly spec'd but unbuilt (an OpenAI image
-connector, the Scripting panel, the multitrack timeline, resizable panels) are both tracked in
-`docs/build-plan.md` — don't assume either category is done just because most of the app is.
+**Phases 1–7 and 10–13 are built (2026-08-08, two rounds); Phases 8–9 are not started.** `docs/`
+is the spec — read it before touching code, and read [`docs/build-plan.md`](docs/build-plan.md)
+to see which phases are done. The Electron + TypeScript app runs (`npm run dev`), the Claude
+Agent SDK drives real agent-driven generation across all eight catalog connectors (with
+connector-tier routing from the UI), the credential vault + secure-credential modal are
+self-tested (`LYME_SELFTEST=1 npm run dev`), and Play/Storyboard/Scripting/multitrack Cut
+Room/Create panel are all real. What's deferred to a joint session — live *billed* calls of any
+kind (generation, Krea LoRA training, frame-conditioned Veo renders, live ElevenLabs/Yapper tool
+output shapes), the LGPL ffmpeg bundle, the Instagram publish port — is tracked in
+`docs/build-plan.md` and the per-doc done-when notes; don't assume it's done just because the
+rest of the app is.
 
 Start here: [`docs/README.md`](docs/README.md). It links everything else and tracks what's
 decided vs. still open.
@@ -86,60 +88,71 @@ lyme-hype/
 │   ├── README.md                    Index. Start here.
 │   ├── history.md                    How the design got here — provenance, not a live spec.
 │   ├── build-plan.md                 The actual build order — read this to know what's next.
-│   ├── kickoff.md                    Paste-as-first-message prompt for the next autonomous
-│   │                                 build round. Overwritten each round, not accumulated.
 │   ├── architecture/
 │   │   └── platform-decisions.md    Electron, UXP vs CEP, MCP-client model, ffmpeg engine.
 │   ├── connectors/
 │   │   ├── model.md                  The generic connector mechanism + credential boundary.
-│   │   ├── catalog.md                Which tools, why each one, exact connect shapes.
+│   │   ├── catalog.md                Which tools, why each one, exact connect shapes, tier routing.
 │   │   └── publishing.md             Instagram/YouTube OAuth — a different mechanism, not MCP.
 │   ├── ui/
 │   │   ├── canvas-and-storyboard.md  Node types, Sessions, Storyboard + promote.
 │   │   ├── play-view.md              Full-takeover single-clip review/trim/split.
-│   │   ├── timeline.md               Multitrack Cut Room rework — spec'd, not built.
-│   │   ├── scripting-panel.md        Third middle-panel chat view — spec'd, not built.
-│   │   ├── layout-and-panels.md      Resizable/collapsible panels — spec'd, not built.
-│   │   └── create-panel.md           Aside redesign (tile grid + Motion graphics) — spec'd,
-│   │                                 not built.
+│   │   ├── timeline.md               Multitrack Cut Room — built; spec + build-decision record.
+│   │   ├── scripting-panel.md        Third middle-panel chat view — built; ditto.
+│   │   ├── layout-and-panels.md      Resizable/collapsible panels — built; ditto.
+│   │   └── create-panel.md           Create panel + Motion graphics wizard — built; ditto.
 │   └── concepts/
 │       ├── studio-concept-directions.html   Interactive mockup — three visual-identity
 │       │                                    directions, Storyboard, Play, Connections panel.
 │       └── fonts/                    Bitcount Prop Single + Press Start 2P, self-hosted.
 ├── resources/            Bundled runtime assets shipped with the app (not build tooling).
-│   └── gemini-mcp.cjs    Dependency-free stdio MCP server wrapping Gemini's REST API.
+│   ├── gemini-mcp.cjs    Dependency-free stdio MCP server wrapping Gemini's REST API (image w/
+│   │                     reference input + Veo video w/ start/end-frame conditioning).
+│   └── openai-image-mcp.cjs   Same pattern for OpenAI gpt-image-1 (generations + edits-with-
+│                              references endpoints).
 ├── src/
 │   ├── main/             Electron main process. index.ts (boot/window + navigation lockdown +
 │   │                     asset protocol), ipc.ts (all handlers, sender-validated), agent.ts
 │   │                     (single-turn Agent SDK calls, dynamic import — ESM-only dep in a CJS
-│   │                     bundle), generation.ts (agent-driven media generation: attaches every
-│   │                     installed connector as an MCP server, canUseTool hard-denies non-MCP
-│   │                     tools), sessions-store.ts (JSON in userData), credential-vault.ts
-│   │                     (safeStorage/DPAPI), secure-credential.ts (native secret modal),
-│   │                     mcp-client.ts (stdio MCP client) + mcp-http.ts (Streamable-HTTP MCP
-│   │                     client) + mcp-oauth.ts (MCP OAuth client: discovery, dynamic
-│   │                     registration, PKCE, loopback redirect) + mcp-probe.ts (connection
-│   │                     check, both transports), chatrealty.ts (pull listing photos + the
-│   │                     ChatRealty connector template), connectors-store.ts (generic connector
-│   │                     CRUD + live test across all transports), connector-suggestions.ts (the
-│   │                     seven-tool catalog + templates), claude-auth.ts (Claude default login +
-│   │                     explicit overrides), model-providers.ts (agent LLM: Claude default /
-│   │                     Kimi / custom Anthropic-compatible), asset-store.ts (lyme-asset://
-│   │                     protocol + import/download into userData/assets), ffmpeg.ts (binary
-│   │                     discovery + the export filter-graph builder), selftest.ts
+│   │                     bundle), conversations.ts (generic multi-turn conversation plumbing:
+│   │                     SDK session resume + transcript-replay fallback, streaming, vision
+│   │                     input; serves Scripting AND Motion graphics), generation.ts
+│   │                     (agent-driven media generation: attaches every installed connector as
+│   │                     an MCP server, canUseTool hard-denies non-MCP tools; connectorId
+│   │                     restriction + reference/frame image params), sessions-store.ts (JSON
+│   │                     in userData), credential-vault.ts (safeStorage/DPAPI),
+│   │                     secure-credential.ts (native secret modal), mcp-client.ts (stdio MCP
+│   │                     client) + mcp-http.ts (Streamable-HTTP MCP client) + mcp-oauth.ts
+│   │                     (MCP OAuth client: discovery, dynamic registration, PKCE, loopback
+│   │                     redirect) + mcp-probe.ts (connection check, both transports),
+│   │                     chatrealty.ts (pull listing photos + the ChatRealty connector
+│   │                     template), connectors-store.ts (generic connector CRUD + live test
+│   │                     across all transports), connector-suggestions.ts (the eight-tool
+│   │                     catalog + templates), claude-auth.ts (Claude default login + explicit
+│   │                     overrides), model-providers.ts (agent LLM: Claude default / Kimi /
+│   │                     custom Anthropic-compatible), asset-store.ts (lyme-asset:// protocol +
+│   │                     import/download into userData/assets), ffmpeg.ts (binary discovery +
+│   │                     the multitrack overlay+amix export graph builder), media-tools.ts
+│   │                     (local ffmpeg: isolate-audio + colorkey→VP9-alpha keying),
+│   │                     elevenlabs-tools.ts (direct ElevenLabs MCP tool calls — voice/music/
+│   │                     SFX/clone, no agent turn), krea-training.ts (LoRA training REST
+│   │                     client — the one deliberate non-MCP exception), selftest.ts
 │   │                     (LYME_SELFTEST=1 plumbing check, covers all of the above).
 │   ├── preload/          index.ts (the narrow `window.lyme` bridge — the studio renderer's whole
 │   │                     world), secure.ts (the modal's even narrower bridge), index.d.ts.
 │   ├── shared/           types.ts + ipc-channels.ts, imported by both sides as @shared/*.
 │   └── renderer/         React UI (Lime Cut skin, plus Night Terminal + Zest). index.html +
-│                         secure.html entries; src/store.ts (zustand), src/bridge.ts (real IPC or
-│                         browser-preview mock), src/components/* (TitleBar, Toolbar,
-│                         SessionsRail, CanvasArea + MediaNode, StoryboardView (real, not a
-│                         placeholder), PlayView, CutRoom, AsidePanel + AgentCard +
-│                         ChatRealtyPull, CombineDialog, settings/* (full-screen Settings shell +
-│                         Connectors/Models/Appearance tabs)), src/secure/* (modal page). Themes
-│                         are CSS-var token sets keyed on <html data-theme>; persists in
-│                         PersistedState.
+│                         secure.html entries; src/store.ts (zustand; sessions, canvas nodes,
+│                         multitrack timeline actions, scripting actions, panel sizes),
+│                         src/bridge.ts (real IPC or browser-preview mock), src/components/*
+│                         (TitleBar, Toolbar, SessionsRail, CanvasArea + MediaNode,
+│                         StoryboardView, ScriptingView, PlayView, CutRoom (multitrack timeline:
+│                         ruler/tracks/clips/monitor), AsidePanel (the Create panel tile grid +
+│                         task screens) + MotionGraphicsWizard + BatchResultsGrid + AgentCard +
+│                         ChatRealtyPull, PanelResizeHandle, CombineDialog, settings/*
+│                         (full-screen Settings shell + Connectors/Models/Trained styles/
+│                         Appearance tabs)), src/secure/* (modal page). Themes are CSS-var token
+│                         sets keyed on <html data-theme>; persists in PersistedState.
 ├── electron.vite.config.ts   Main/preload/renderer builds; two renderer entries (studio + modal).
 ├── tsconfig.json / .node.json / .web.json   Strict TS; `npm run typecheck` covers both sides.
 └── package.json          electron-vite 2 / Vite 5 / React 18 / Electron 38 — version rationale in
