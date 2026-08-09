@@ -2,7 +2,7 @@
 
 .app {
   display: grid;
-  grid-template-rows: 34px 42px 1fr;
+  grid-template-rows: 46px 42px 1fr;
   /* minmax(0, 1fr) keeps wide content (the timeline's ruler) from inflating
    * the column track: a scroll container's intrinsic width is its CONTENT's
    * width, and an auto track grows to fit it — pushing the aside off-screen. */
@@ -40,19 +40,30 @@
 .titlebar .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   font-family: var(--brand-font);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 27px;
+  font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--accent);
+  /* Fixed saturated green base (not the theme accent) so the hue-rotate
+   * sweep below covers the full RGB wheel identically in every theme. */
+  color: #4fd51e;
+  animation: brand-rgb 9s linear infinite;
 }
 
-.titlebar .brand .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
+@keyframes brand-rgb {
+  from {
+    filter: hue-rotate(0deg);
+  }
+  to {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.titlebar .brand .lime {
+  width: 27px;
+  height: 27px;
+  flex: none;
 }
 
 .titlebar .preview-tag {
@@ -2425,7 +2436,7 @@
 
 .settings-screen {
   position: fixed;
-  top: 34px;
+  top: 46px;
   left: 0;
   right: 0;
   bottom: 0;
