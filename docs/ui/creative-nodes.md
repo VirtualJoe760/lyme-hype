@@ -70,7 +70,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Generate audio · Voice** | voice pick (browse/preview) + line | audio node | `audio-tts` (+ `voice-library`) |
 | **Generate audio · Music** | prompt + length | audio node | `audio-music` |
 | **Generate audio · SFX** | prompt + duration (0.5–5s) | audio node | `audio-sfx` |
-| **Generate audio · Clone** | name + sample files | a reusable voice (not a node) | `voice-clone` |
+| **Generate audio · Clone** | name + sample files (+ optional Reference person to attach to) | a reusable voice (not a node) | `voice-clone` |
 | **Motion graphics** | references + instruction (wizard below) | image nodes + video node + alpha webm node | `image-gen`, `image-ref-conditioning`, `video-frame-conditioning`, local ffmpeg alpha |
 | **Isolate audio** | video node / file / direct URL | audio node | none — local ffmpeg (standing principle: local beats paid) |
 | **Create a LoRA** | trainer pick + style/subject + images + steps + trigger | trained style (Settings › Trained styles; `loraUrl`) | `lora-train` |
@@ -82,8 +82,11 @@ what does it cost. Readiness derives from the capability map's node→capability
 
 A `TrainedStyle` (Settings › Trained styles) can carry an optional `voiceName` — an ElevenLabs
 voice paired with the trained likeness, turning a plain LoRA record into a reusable "who talks"
-identity. Deepfake picks one, but the pairing itself is edited in Settings (not the Create panel)
-since it's account-level state, not a one-off generation input.
+identity. Deepfake picks one; the pairing itself is account-level state, edited from two places:
+inline in Settings › Trained styles (type an *existing* voice's name), or — the faster path when
+the voice doesn't exist yet — the Create panel's **Generate audio · Clone** job, which can attach
+its freshly-cloned voice to a chosen Reference person in the same action instead of requiring a
+trip to Settings afterward to paste the name in by hand.
 
 ## Deepfake (stages as nodes)
 

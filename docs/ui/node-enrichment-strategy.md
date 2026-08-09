@@ -87,6 +87,21 @@ sequence, each step independently shippable):
   typecheck` passes; the actual tool-chain prompt (does the agent really call
   `muapi_upload_file` → `muapi_edit_lipsync` in that order, correctly) is unverified until a
   joint session with real keys.
+- **2026-08-09, second pass — resume item (c) closed:** `voice_clone` (already implemented in
+  `elevenlabs-tools.ts`, already exposed as the Create panel's Generate audio · **Clone** job) was
+  never connected to the Reference person concept — cloning a voice and attaching it to a
+  `TrainedStyle` were two disconnected screens (clone here, then copy the name and paste it into
+  Settings › Trained styles by hand). `AudioScreen`'s clone job now takes an optional "attach to
+  Reference person" picker (`props.styles`, already fetched once at the `AsidePanel` level and
+  already threaded into `ImageScreen`/`DeepfakeScreen` the same way); on a successful clone with a
+  style selected, it calls `bridge.lora.setVoice` with the clone's own `name` — no reply-parsing
+  needed, since `voice_clone`'s only file-free confirmation text already echoes the name the
+  caller chose and the caller already has it in state — and lifts the updated `TrainedStyle` back
+  up via a new `onStyleUpdated` callback prop so the Deepfake screen sees the freshly-paired voice
+  without navigating away and back. Nothing here fires a live call beyond the same voice_clone
+  call the button already made before this change; only the *what happens after success* path is
+  new. `npm run typecheck` clean. Resume items (a) and (b) are still open — see the progress
+  queue's row 1 resume note.
 
 ---
 

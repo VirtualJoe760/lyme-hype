@@ -7,6 +7,54 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Second autonomous run: Deepfake (row 1), one resume item closed, still in-progress
+
+Per the routine's resume-in-place instruction, picked back up row 1 rather than moving to row 2 —
+the previous run's resume note left three specific open items, and I worked item (c): "voice_clone
+isn't wired into the Reference person flow."
+
+**What I found on inspection:** less missing than the note implied. `cloneVoice` already existed
+end-to-end in `elevenlabs-tools.ts`, already had a full IPC/preload/bridge path (`audio:clone`),
+and already had a real Create panel screen (Generate audio › **Clone** job: name a voice, pick
+sample files, fire `voice_clone`). What was actually missing was narrower and more useful to fix:
+that screen and the Reference person concept (Settings › Trained styles' `voiceName` field, built
+in the previous run) were two disconnected islands. Cloning a voice got you a name typed into a
+confirmation toast; pairing it with a trained identity meant remembering that name, navigating to
+Settings, and typing it into a different text field by hand.
+
+**Built:** `AudioScreen`'s clone job (`AsidePanel.tsx`) gained an optional "attach to Reference
+person" `<select>`, populated from the same `styles` list `AsidePanel` already fetches once and
+threads into `ImageScreen`/`DeepfakeScreen`. On a successful clone with a style selected, it calls
+`bridge.lora.setVoice(styleId, cloneName)` directly — no need to parse the clone confirmation text
+for a voice id, since the name the caller already has in state *is* the value `TrainedStyle.
+voiceName`/`text_to_speech`'s `voice_name` param wants — and lifts the updated `TrainedStyle` back
+up through a new `onStyleUpdated` prop so later navigation to the Deepfake screen sees the pairing
+immediately. This closes the loop the strategy doc's flagship section calls "Identity + Voice":
+clone → attach is now one action instead of two screens and a manual copy/paste.
+
+I did **not** touch anything about live invocation: the underlying `voice_clone` call the button
+fires was already there before this change and was already something only the human user triggers
+by pressing it — this run only changed what happens *after* a successful call returns, which is
+plumbing, not spend.
+
+**Researched:** re-read the ElevenLabs reference doc's `voice_clone` row (confirms: name+files in,
+confirmation text with a new voice id out, no file) to confirm the "no parsing needed" call was
+correct, and re-read `TrainedStylesTab.tsx`/`fal-training.ts`'s existing `setVoice` path to reuse
+it rather than add a second write path for the same field.
+
+**Verified:** `npm install` (168 packages, clean, same as last run — sandbox resets each session),
+then `npm run typecheck` (`tsconfig.node.json` + `tsconfig.web.json`): clean, zero errors. Same
+ceiling as last time — no display, no Electron runtime, no API keys in this sandbox — so this is a
+type-check-and-convention-match verification, not a "clicked the button and it worked" one.
+
+**Left in-progress** — resume items (a) Yapper REST signed-upload credential and (b) live
+verification of the muapi upload→lipsync chain are unchanged and still the right things for the
+next run to pick up; both are real scope that needs either a new credential model or an actual
+API key, neither of which belongs in an unattended overnight pass. Row 1's resume note has been
+trimmed to just those two.
+
+---
+
 ## 2026-08-09 — First autonomous run: Deepfake (row 1), left in-progress
 
 Worked the top of the queue — Deepfake, the flagship node the strategy doc already had a build

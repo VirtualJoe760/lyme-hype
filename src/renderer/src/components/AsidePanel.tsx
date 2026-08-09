@@ -331,7 +331,11 @@ function ImageScreen(props: {
 
 type AudioJob = 'voice' | 'music' | 'sfx' | 'clone'
 
-function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
+function AudioScreen(props: {
+  connectors: ConnectorView[]
+  styles: TrainedStyle[]
+  onStyleUpdated: (style: TrainedStyle) => void
+}): React.JSX.Element {
   const addNode = useStudio((s) => s.addNode)
   const focusNode = useStudio((s) => s.focusNode)
   const [job, setJob] = useState<AudioJob>('voice')
@@ -349,6 +353,7 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
   const [sfxDuration, setSfxDuration] = useState('2s')
   const [cloneName, setCloneName] = useState('')
   const [cloneFiles, setCloneFiles] = useState<string[]>([])
+  const [cloneAttachId, setCloneAttachId] = useState('')
   const previewAudio = useRef<HTMLAudioElement | null>(null)
 
   async function browse(): Promise<void> {
@@ -406,6 +411,20 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
           startRendering: false
         })
         setStatus({ kind: 'ok', text: 'Audio node added to the canvas.' })
+      } else if (result?.ok && kind === 'clone' && cloneAttachId) {
+        // voice_clone has no file output — cloneName IS the new voice's name,
+        // so attaching to a Reference person needs no parsing of the reply.
+        const attachedStyle = props.styles.find((s) => s.id === cloneAttachId)
+        const updated = await bridge.lora.setVoice(cloneAttachId, cloneName)
+        if (updated) {
+          props.onStyleUpdated(updated)
+          setStatus({
+            kind: 'ok',
+            text: `Voice "${cloneName}" cloned and attached to Reference person "${attachedStyle?.name ?? updated.name}".`
+          })
+        } else {
+          setStatus({ kind: 'error', text: 'Voice cloned, but attaching it to the Reference person failed.' })
+        }
       } else if (result?.ok) {
         setStatus({ kind: 'ok', text: result.text ?? 'Done.' })
       } else {
@@ -534,6 +553,18 @@ function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
           >
             {cloneFiles.length > 0 ? `${cloneFiles.length} sample(s) picked` : '↑ Pick sample audio files'}
           </button>
+          <select
+            className="cr-input create-select"
+            value={cloneAttachId}
+            onChange={(e) => setCloneAttachId(e.target.value)}
+          >
+            <option value="">Don't attach to a Reference person</option>
+            {props.styles.map((s) => (
+              <option key={s.id} value={s.id}>
+                Attach to "{s.name}"{s.voiceName ? ` (replaces voice: ${s.voiceName})` : ''}
+              </option>
+            ))}
+          </select>
           <button
             className="generate-btn"
             disabled={busy || !cloneName.trim() || cloneFiles.length === 0}
@@ -1074,7 +1105,15 @@ export function AsidePanel(): React.JSX.Element {
         )}
         {screen === 'video' && <VideoScreen connectors={connectors} />}
         {screen === 'image' && <ImageScreen connectors={connectors} styles={styles} />}
-        {screen === 'audio' && <AudioScreen connectors={connectors} />}
+        {screen === 'audio' && (
+          <AudioScreen
+            connectors={connectors}
+            styles={styles}
+            onStyleUpdated={(updated) =>
+              setStyles((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+            }
+          />
+        )}
         {screen === 'isolate' && <IsolateScreen />}
         {screen === 'lora' && <LoraScreen connectors={connectors} />}
         {screen === 'deepfake' && <DeepfakeScreen connectors={connectors} styles={styles} />}
