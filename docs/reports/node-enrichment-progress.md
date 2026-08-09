@@ -29,6 +29,20 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-eighth autonomous run) — collided with the twenty-seventh run on Recommendations
+  item 2, independently; both built a near-identical `createArticleDraft()` backend for
+  `create_article` (same types, same IPC channel name), differing only in UI placement — this run
+  put the form on the Storyboard panel (script-first, listing-optional), theirs on the Listing photos
+  tile with a "Prefill from listing facts" button that pulls real CMA numbers via the already-built
+  `plan_listing_carousel` plumbing. Reviewed their already-pushed commit (`c7999ed`): their version
+  is the more complete one on the merits — it ships the CMA-context enrichment this run's own writeup
+  named as the natural next step and left undone, and its UI consistently uses the shared `Button`
+  component throughout the new form. Reset to their commit rather than fight a multi-file merge for
+  two overlapping implementations, re-verified `npm run typecheck` clean on their tip myself. No code
+  changes this run; see the report for the one real (non-bug) product difference worth a human
+  glance — their entry point requires a listing pull first, this run's would not have. Recommendations
+  item 2 stays struck as shipped from the twenty-seventh run's own entry. Item 5 (muapi image-edit for
+  Motion graphics) remains the only open item on the list.
 - 2026-08-09 (twenty-seventh autonomous run) — queue confirmed fully `done`/blocked, same as prior
   runs (rows 1/2 still nothing-safely-buildable-blind). Per the empty-queue guardrail, took
   Recommendations item 2: ChatRealty's `create_article` CMS tool was completely unused despite the

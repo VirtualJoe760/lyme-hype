@@ -7,6 +7,45 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-eighth autonomous run: collision on Recommendations item 2, deferred after review
+
+Picked the same item the twenty-seventh run below had already taken — ChatRealty's `create_article`
+CMS tool, Recommendations item 2 — and independently built a near-identical backend (same
+`createArticleDraft()` shape in `chatrealty.ts`, the same `ChatRealtyArticleDraftInput`/
+`ChatRealtyArticleDraftResult` type names, the same `chatrealty:create-article-draft` IPC channel)
+but a different UI placement: I put the form on the **Storyboard panel** (a 📰 button beside the
+existing ✨/☺ actions, reasoning that `create_article` takes no `listingKey` so a script is a more
+natural source of article copy than a listing photo pull), theirs on the **Listing photos tile**
+with a "Prefill from listing facts" button that calls `plan_listing_carousel`'s already-built
+`listingContext()` plumbing to seed the content textarea with real CMA numbers.
+
+Their version is the more complete one on the merits, not just the one that pushed first: the CMA-
+context prefill is exactly the enrichment I named in my own writeup as "the actual chain this
+feature could grow into" and deliberately left undone for a future pass — they built it in the same
+pass instead. Their UI also consistently uses the shared `Button` component throughout the new
+form (mine only used it for the two new action buttons, leaving the rest as plain `<input>`/
+`<select>`, which isn't a violation of AGENTS.md's buttons-are-components rule but is less
+thoroughly applied). Given the backend is near-byte-identical between the two implementations and
+the UI is a strict superset in theirs, fighting a multi-file merge to preserve a second, narrower
+entry point would have cost more than it was worth — reset to their commit (`c7999ed`) rather than
+merge, re-verified `npm run typecheck` clean on their tip myself.
+
+**One real product difference worth a human glance, not a bug:** their entry point requires a
+listing pull first (it lives on the Listing photos tile); mine would have let a Storyboard-only
+session (no listing involved at all — a generic market-tips or how-to article) draft without ever
+touching ChatRealty's MLS search. That's a genuine gap in their version's reach, not a defect —
+`create_article` never needed a listing to begin with, and their form's title/content/category
+fields work for a listing-free draft too, it's just that nothing outside the Listing photos tile
+surfaces the entry point today. Worth a small follow-up (a second, listing-optional entry point,
+maybe on Storyboard after all) if a human wants article drafts detached from a listing pull — not
+scoped into this pass, since the collision review itself is the whole of this run's real work.
+
+No code changes this run. Queue stays fully `done` (all ten rows); Recommendations item 2 stays
+struck as shipped from the twenty-seventh run's own entry below. Item 5 (muapi image-edit for
+Motion graphics) remains the only open item on the list.
+
+---
+
 ## 2026-08-09 — Twenty-seventh autonomous run: ChatRealty article drafts wired (Recommendations item 2, closing it)
 
 Queue state going in: all ten rows `done` (rows 1/2 unchanged — both still flagged nothing-safely-
