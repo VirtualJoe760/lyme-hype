@@ -29,6 +29,25 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-sixth autonomous run) — queue confirmed fully `done`/blocked, same as prior
+  runs (rows 1/2 still nothing-safely-buildable-blind). Per the empty-queue guardrail, took the
+  "fal-forcing UI picker" item the twenty-fifth run's own writeup and Recommendations item 1 both
+  flagged as the next well-scoped slice: `VideoScreen`'s starting-frame select now shows a second
+  "i2v via" picker (gemini/fal) whenever a starting frame is chosen and fal is connected — picking
+  fal forces `connectorId: 'fal'` instead of the previously-unconditional gemini force. Along the
+  way, fixed a real latent bug in the shared `startFramePath` prompt hint: it told every connector
+  to "pass it as the tool's start_frame_path parameter," which is a literal, Gemini-wrapper-only
+  parameter name (confirmed by reading `resources/gemini-mcp.cjs`) — for fal's generic
+  `run_model`/`submit_job` (`endpoint_id` + `input`), the correct field name varies per model
+  (`image_url`/`start_image_url`/`first_frame_image`, see fal.md's model table), so the fal-only
+  pre-upload block was already labeling the uploaded URL correctly but the shared hint one line
+  above it was actively wrong for any non-Gemini tool — now conditional. `npm run typecheck` clean
+  (fresh `npm install`, no `node_modules` at run start). Not run live — no fal or Gemini key in
+  this sandbox. Default behavior unchanged for gemini-only setups (fal option only appears once
+  fal is connected). `capability-map.md` and `creative-nodes.md` updated in this commit.
+  Recommendations item 1 in the report is now fully closed (fal's asset-upload gap + its UI both
+  shipped); item 5 (muapi image-edit for Motion graphics) and item 2 (ChatRealty CMS draft
+  articles) are the next candidates, item 5 still design-pass-scoped, item 2 not yet scoped at all.
 - 2026-08-09 (twenty-fifth autonomous run) — queue confirmed fully `done`/blocked, same as prior
   runs. Per the empty-queue guardrail, took Recommendations item 1 (`asset-upload` cross-cutting
   helper) — flagged since the first run as the biggest unblocked gap. Found the gap was narrower

@@ -139,7 +139,7 @@ function buildPrompt(params: GenerationParams): string {
   }
   if (params.startFramePath) {
     lines.push(
-      `First-frame image on disk: ${params.startFramePath} — pass it as the tool's start_frame_path parameter.`
+      `First-frame image on disk: ${params.startFramePath} — for a tool with a literal start_frame_path parameter (e.g. gemini_generate_video), pass it there directly. Otherwise (e.g. fal's run_model/submit_job), call get_model_schema first and use whatever field name that model's schema expects for a starting image (commonly image_url, start_image_url, or first_frame_image) — do not assume start_frame_path is a real parameter on every tool.`
     )
   }
   if (params.endFramePath) {

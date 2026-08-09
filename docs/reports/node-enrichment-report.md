@@ -7,6 +7,62 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-sixth autonomous run: fal i2v canvas picker (Recommendations item 1, closing it)
+
+Queue state going in: all ten rows `done` (rows 1/2 unchanged — both still flagged nothing-safely-
+buildable-blind by prior runs: row 1 needs a joint session, row 2's remaining item needs its own
+design pass). The twenty-fifth run's own writeup and Recommendations item 1 both pointed at the
+same next slice: fal's local-file upload gap was closed backend-side, but no tile actually let a
+user route i2v generation through fal — the only i2v UI on the canvas forced Gemini unconditionally.
+
+**What I built.** `VideoScreen`'s starting-frame picker (`AsidePanel.tsx`) now shows a second
+select, "i2v via: gemini / fal," whenever a starting-frame image is chosen *and* fal is connected.
+Picking fal forces `connectorId: 'fal'` (mirroring the exact "force this connector" pattern
+Gemini's own picker and Yapper's model picker already use) instead of the old unconditional
+`startFrameSrc ? 'gemini' : ...` — gemini stays the default, and setups without fal connected see
+no UI change at all.
+
+**What I found along the way.** Reading `generation.ts`'s `buildPrompt()` to make sure the fal
+route would actually work turned up a real latent bug in the shared prompt hint, not just a UI
+gap: the line for `startFramePath` told *every* connector to "pass it as the tool's
+start_frame_path parameter." I checked — `start_frame_path` is a literal parameter name that only
+exists on Lyme Hype's own bundled `resources/gemini-mcp.cjs` wrapper (confirmed by reading its
+`inputSchema`); it isn't a real parameter on fal's tools at all. fal's generic `run_model`/
+`submit_job` tools take `endpoint_id` + a generic `input` object, and the correct image-field name
+inside `input` varies per model — `image_url`, `start_image_url`, `first_frame_image`, per the
+model table in `docs/connectors/reference/fal.md`. So an agent routed to fal with a starting frame
+would have been told to pass a parameter name fal's tools don't recognize. Made the hint
+conditional: for a tool with a literal `start_frame_path` param (Gemini), pass it there directly;
+otherwise, call `get_model_schema` first and match whatever field name that model's schema
+actually expects. This was silently wrong before today's UI change existed to expose it — worth
+flagging as the kind of thing that's easy to miss when a prompt hint is written for the first
+connector that needs it and never revisited when a second one arrives with a different tool shape.
+
+**What I deliberately left out.** No attempt to pin down fal's i2v field name more precisely than
+"commonly image_url/start_image_url/first_frame_image" — that would mean hardcoding a specific
+model choice rather than letting the agent pick from fal's ~15-model i2v catalog (Kling, Seedance,
+WAN, Veo 3.1, Pixverse, etc. — see fal.md), which is the whole point of routing through fal instead
+of Gemini's single fixed model. No change to the "Extend an existing clip" flow (Veo-only, no fal
+equivalent for video extension exists in the catalog).
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json`
+(fresh `npm install`, no `node_modules` at run start). **Not run live** — no fal or Gemini key in
+this sandbox, no display to click the picker in a real browser; which of the guessed field names an
+agent actually reaches for, and whether it reliably calls `get_model_schema` before guessing rather
+than after a failed call, is genuinely unverified until someone with a fal key tries it.
+`capability-map.md` (video-gen-i2v matrix cell, the node→capability table's Generate video row, and
+§4's fal-asset-upload open-item note) and `creative-nodes.md` (Generate video's tile row) updated
+in this commit.
+
+**Where this leaves things.** Not a queue row, so nothing to mark in the progress table.
+Recommendations item 1 in this report is now fully closed — both fal's asset-upload gap and the UI
+to actually reach it are shipped. Item 5 (muapi image-edit for Motion graphics) is still the next
+design-pass-scoped candidate; item 2 (ChatRealty CMS draft articles, flagged as "genuinely
+lower-risk than most of what this queue already shipped") is unscoped and worth a first analysis
+pass rather than another "wire an existing flag" slice.
+
+---
+
 ## 2026-08-09 — Twenty-fifth autonomous run: fal's `asset-upload` gap closed (Recommendations item 1, fal's slice)
 
 Queue state going in: all ten rows `done` (rows 1/2 unchanged — both still flagged nothing-safely-
@@ -1606,24 +1662,19 @@ empty-looking queue isn't a reason to invent busywork rows — instead, here's w
 considering next, in roughly the order I'd tackle them. None of this is scoped or built; it's a
 starting point for whoever plans the next phase of enrichment (human or routine).
 
-1. **The `asset-upload` cross-cutting helper — fal's slice shipped** (2026-08-09, twenty-fifth
-   autonomous run), muapi's and a general re-check of Yapper's still open. It's been flagged since
-   the first run (see "Cross-cutting plumbing" above) as blocking real muapi/fal i2v paths on rows
-   1, 3, and 7 — those tiles fall back to Gemini for image-conditioned generation today, not because
-   Gemini is the best fit, but because it's the only connector whose reference image handling
-   doesn't require a hosted URL first. fal specifically had no path at all: its hosted MCP
-   `upload_file` tool only accepts a remote URL (stateless server), so an agent routed to fal with a
-   local reference image/source file couldn't get it there by any means. `uploadLocalFileToFal()`
-   (`src/main/fal-training.ts`, generalized from the existing training-image zip-upload REST flow)
-   plus a fal-only pre-upload block in `generation.ts` (same shape as the existing Yapper-only
-   block) closes that: any tile whose manual connector picker selects fal now actually gets local
-   media through to it. **Still open:** no tile has a `connectorId: 'fal'`-forcing picker the way
-   Gemini/Yapper have (row 3's starting-frame/model pickers) — that's real, separately-scoped UI
-   work for a future pass. muapi's slice is arguably not a gap in the same sense (its stdio
-   `muapi_upload_file` tool is agent-callable directly, no helper needed — Deepfake's Stage 2 chain
-   already relies on exactly that), so the actual remaining scope here is narrower than "three
-   one-off wire-ups": mostly the fal-forcing UI, plus double-checking Yapper's own REST upload path
-   still covers what it needs to now that fal's is proven out.
+1. ~~**The `asset-upload` cross-cutting helper**~~ — **fal's slice shipped** (2026-08-09,
+   twenty-fifth autonomous run: `uploadLocalFileToFal()` + the fal-only pre-upload block in
+   `generation.ts`; twenty-sixth autonomous run: the `VideoScreen` "i2v via: gemini/fal" picker that
+   actually reaches it, plus a real bug fix — the shared `startFramePath` prompt hint was telling
+   every connector to use `start_frame_path`, a parameter name that only exists on Gemini's own
+   wrapper tool). It's been flagged since the first run (see "Cross-cutting plumbing" above) as
+   blocking real muapi/fal i2v paths on rows 1, 3, and 7. muapi's slice was never really a gap (its
+   stdio `muapi_upload_file` tool is agent-callable directly — Deepfake's Stage 2 chain already
+   relies on exactly that). **Still open, smaller scope now:** a general Yapper-slice re-check (its
+   own REST signed-upload path predates fal's and wasn't re-verified against it), and no other tile
+   besides Generate video forces `connectorId: 'fal'` yet — Motion graphics' and Combine's
+   image-conditioning paths could get the same "via: fal" treatment if a design pass wants it, but
+   neither was flagged as urgent the way Generate video's i2v case was.
 
 2. **ChatRealty's CMS tools are completely untouched and low-risk.** `create_article` /
    `create_landing_page` (both DRAFT-only — `update_article`/`update_landing_page`'s `status:

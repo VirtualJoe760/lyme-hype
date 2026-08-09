@@ -42,7 +42,7 @@ way around.
 | Capability | muapi | ElevenLabs | Krea | fal | Gemini | OpenAI | Yapper | ChatRealty |
 |---|---|---|---|---|---|---|---|---|
 | `video-gen-t2v` | ✓ Seedance/Kling/Veo/Sora (591 models) | — | ○ video models | ○ Seedance/WAN etc. | ✓ Veo 3.1 (lite = $0.05/s) | — | ○ ~20 models (sora-2, kling-3, seedance-2.x…) | — |
-| `video-gen-i2v` | ○ video-from-image (single image_url) | — | ○ | ○ (`asset-upload` now wired fal-side — REST pre-upload when fal is the sole connector; no fal-forcing picker on any tile yet) | ✓ start frame | — | ○ | — |
+| `video-gen-i2v` | ○ video-from-image (single image_url) | — | ○ | ✓ Generate video's i2v picker offers "via: fal" once fal is connected (`run_model`/`submit_job`, model picked by the agent from the i2v catalog) | ✓ start frame | — | ○ | — |
 | `video-frame-conditioning` | ○ **REST-only** (MCP tool can't express it) | — | ○ | ○ (5 different param spellings — check per model) | ✓ image+lastFrame (dur must be 8) | — | ○ | — |
 | `video-extension` | — | — | ○ Seedance 1.0 Pro `start_video` | — | ✓ Veo 3.1 wrapper tool + canvas "Extend +7s" picker (720p; client-probed `videoDurationSec` enforces the 148s cap client-side, wire shape unverified) | — | — | — |
 | `image-gen` | ✓ flux/nano-banana/imagen4 | — | ✓ K2 family (1K only) | ○ (nano-banana here = resold Gemini — prefer direct) | ✓ Nano Banana 2 | ✓ gpt-image-2 (quality = price lever) | ○ 11 models | ○ covers/carousel/staging (templated, Cloudinary URLs) |
@@ -87,7 +87,7 @@ $0.03 vs. $0.06/image).
 
 | Creative node | Requires (ANY provider of) | Default route | Escape hatch |
 |---|---|---|---|
-| Generate video | `video-gen-t2v` | muapi (Seedance) | connector select incl. agent-pick; picking a canvas image as a starting frame routes `video-gen-i2v` through gemini; a Yapper model pick routes through yapper with that model as `modelHint` |
+| Generate video | `video-gen-t2v` | muapi (Seedance) | connector select incl. agent-pick; picking a canvas image as a starting frame routes `video-gen-i2v` through gemini by default, or fal (agent picks a catalog i2v model) via an "i2v via" picker shown once fal is connected; a Yapper model pick routes through yapper with that model as `modelHint` |
 | Generate image · storyboard | `image-gen` | gemini/openai pick | — |
 | Generate image · production | `image-production` | muapi + hint "Midjourney" | tier toggle |
 | Generate image · with style | `lora-use` | routes by the style's own `connectorId` — fal (weights-URL hint) or krea (`styles:[{id}]` hint, tier picks K2 medium/large) | — |
@@ -152,15 +152,24 @@ several connectors can satisfy one node.
   picker, or `connectorIds: ['fal']`), pre-uploading every local `referenceImagePaths`/
   `startFramePath`/`endFramePath`/`sourceMediaPath`/`referenceAudioPaths` entry and handing the
   agent the resulting fal.media URLs directly with an explicit "already uploaded, don't try
-  yourself" instruction, mirroring the Yapper block's own wording. **No tile forces
-  `connectorId: 'fal'` specifically yet** (unlike Gemini's starting-frame picker or Yapper's model
-  picker) — this closes the backend half so any tile's existing manual connector `<select>` can
-  pick fal and have local media actually reach it; a `connectorId: 'fal'`-forcing picker (mirroring
-  row 3's Gemini/Yapper pattern) is real, separately-scoped UI work for a future pass. **Not run
+  yourself" instruction, mirroring the Yapper block's own wording. **Not run
   live** — no fal key configured in the sandbox that built this, and the `POST /storage/upload/
   initiate` request/response shape is read from the same verified reference-doc entry
   `fal-training.ts`'s zip upload already used (not newly re-verified), so risk is limited to the
   single-file case (arbitrary extension/content-type) never having been exercised before.
+- **fal i2v picker** (2026-08-09 enrichment run, closing the "no fal-forcing picker" gap the prior
+  entry left open): `VideoScreen`'s starting-frame select now shows a second "i2v via" picker
+  (gemini/fal) whenever a starting frame is chosen *and* fal is connected — picking fal forces
+  `connectorId: 'fal'` and still sends `startFramePath`, same as gemini's existing forced route.
+  fal's tool surface has no fixed `start_frame_path` param the way Gemini's bundled wrapper does
+  (its generic `run_model`/`submit_job` take `endpoint_id` + `input`, and the image field name
+  varies per model — `image_url`, `start_image_url`, `first_frame_image`, see fal.md's model
+  table), so `generation.ts`'s `buildPrompt()` now phrases the `startFramePath` hint conditionally:
+  use `start_frame_path` literally for a tool that has it, otherwise call `get_model_schema` first
+  and match the schema's own field name. Default stays gemini (verified, unchanged) — fal only
+  appears as an option, never auto-selected, and gemini-only setups see no UI change at all. **Not
+  run live** — no fal key in this sandbox; which of the field-name guesses an agent actually picks,
+  and whether it reliably calls `get_model_schema` first rather than guessing, is unverified.
 - **muapi frame conditioning is REST-only** — the MCP tool takes a single image_url even
   though the model enum lists first-last-frame models; if muapi-side interpolation ever
   matters, it's a REST call, not a tool call. (Gemini's wrapper covers this need today, and

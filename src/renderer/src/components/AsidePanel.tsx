@@ -199,9 +199,15 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
   const muapiReady = connectorReady(props.connectors, 'muapi')
   const geminiReady = connectorReady(props.connectors, 'gemini')
   const yapperReady = connectorReady(props.connectors, 'yapper')
+  const falReady = connectorReady(props.connectors, 'fal')
   const [connector, setConnector] = useState(muapiReady ? 'muapi' : '')
   const [startFrameNodeId, setStartFrameNodeId] = useState('')
   const [yapperModel, setYapperModel] = useState('')
+  // i2v used to force gemini unconditionally (docs/architecture/capability-map.md
+  // §2's "i2v everywhere except Gemini needs asset-upload first" — fal's half of
+  // that gap closed 2026-08-09, this picker is the UI half). Only offered once
+  // fal is actually connected; gemini stays the default either way.
+  const [i2vConnector, setI2vConnector] = useState<'gemini' | 'fal'>('gemini')
   const { ready } = tileReady(props.connectors, 'video')
 
   // Extend an existing clip (Veo, +7s per call, 148s chained-extension cap) —
@@ -226,12 +232,26 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
     (n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src && !n.data.panel
   )
   const startFrameSrc = imageNodes.find((n) => n.id === startFrameNodeId)?.data.src
-  const effectiveConnectorId = startFrameSrc ? 'gemini' : yapperModel ? 'yapper' : connector || undefined
-  const runOk = startFrameSrc ? geminiReady : yapperModel ? yapperReady : ready
+  const effectiveConnectorId = startFrameSrc
+    ? i2vConnector
+    : yapperModel
+      ? 'yapper'
+      : connector || undefined
+  const runOk = startFrameSrc
+    ? i2vConnector === 'fal'
+      ? falReady
+      : geminiReady
+    : yapperModel
+      ? yapperReady
+      : ready
   const runLabel = startFrameSrc
-    ? geminiReady
-      ? 'runs on gemini · i2v start frame (Veo)'
-      : 'i2v needs gemini connected'
+    ? i2vConnector === 'fal'
+      ? falReady
+        ? 'runs on fal · i2v (agent picks a catalog model)'
+        : 'i2v needs fal connected'
+      : geminiReady
+        ? 'runs on gemini · i2v start frame (Veo)'
+        : 'i2v needs gemini connected'
     : yapperModel
       ? yapperReady
         ? `runs on yapper · ${yapperModel}`
@@ -281,6 +301,16 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
                   Starting frame: {n.data.label}
                 </option>
               ))}
+            </select>
+          )}
+          {startFrameSrc && falReady && (
+            <select
+              className="cr-input create-select"
+              value={i2vConnector}
+              onChange={(e) => setI2vConnector(e.target.value as 'gemini' | 'fal')}
+            >
+              <option value="gemini">i2v via: gemini (Veo, verified)</option>
+              <option value="fal">i2v via: fal (catalog i2v — Kling/Seedance/WAN)</option>
             </select>
           )}
           {yapperReady && (
