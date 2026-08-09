@@ -7,6 +7,68 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Seventeenth autonomous run: Listing photos (row 10) — cover render shipped, the last queue row is now open
+
+The queue was fully `done` through row 9 going into this pass (confirmed by the sixteenth run's own
+collision-review entry below — it re-verified rows 1–9 rather than assuming). That left row 10,
+Listing photos / ChatRealty, the only row that never got a real analysis — its seed note in the
+strategy doc was one line: "staging/cover/carousel tools are paid-for and unused." Per the run
+instructions, a thin analysis gets written before code, so this pass did both.
+
+**What I researched.** Re-read `docs/connectors/reference/chatrealty.md`'s full tool surface (35
+tools, all `[verified]` from a live schema enumeration) rather than trusting the one-line seed note.
+The connector's "creative rendering" section has four tools nothing in the app calls:
+`create_listing_cover` (templated 4:5 Instagram cover, Cloudinary URL), `plan_listing_carousel`
+(structured facts + CMA stats + brand info for a carousel), `create_carousel_slide` (four render
+kinds: banner/cma/text/cta), and `stage_listing_with_agent` (Nano Banana composites the agent's own
+headshot into listing photos, ~$0.04/photo, the one real generation call in the set — the other
+three are templated server-side layout, not model calls). I did not web-search external best
+practices for this one — the gap here isn't "what's the best 2026 technique for real-estate social
+content," it's "we already pay for four tools in our own connector and call zero of them," which
+the reference doc answered completely on its own.
+
+**What I built.** Wrote the full chain analysis in `node-enrichment-strategy.md` (what the user's
+actually after — turning raw MLS photos into postable creative without leaving the app or paying a
+second connector for work ChatRealty already does — the four-tool chain, and a four-step build
+order), then shipped step 1: a "Create Instagram cover" mini-form that appears on the Listing photos
+tile right after a successful photo pull, scoped to the top-matched listing. The user types a hook
+(2–3 words) and body copy (≤260 chars, both required — this is ad copy, not something to
+auto-generate blind) and presses a button; that calls a new `createListingCover()` in
+`chatrealty.ts`, one deterministic `create_listing_cover` MCP tool call using the same no-agent-turn
+pattern `pullListingPhotos()` already established, extracts the Cloudinary URL from the text
+response, and downloads it through the existing `importUrlAsset()` path — the same URL-import
+mechanism the capability map already flagged as the right one for ChatRealty's Cloudinary-returning
+tools, now actually exercised for the first time. The result lands as a real image node exactly like
+a pulled photo does. Full plumbing thread: `ChatRealtyCoverResult` (`shared/types.ts`), a new
+`chatrealty:create-cover` IPC channel, preload + both sides of the renderer bridge (including the
+browser-preview mock's honest "unavailable" stub), a `createChatRealtyCover` store action shaped
+like `pullChatRealtyPhotos`, and `pullChatRealtyPhotos` itself extended to hand back the
+top-matched listing's key/address/city so the new form has something to key off without a second
+round trip.
+
+**What I verified.** `npm run typecheck` clean — fresh `npm install` in this sandbox (`node_modules`
+wasn't present at run start), both `tsconfig.node.json` and `tsconfig.web.json`. **Not run live** —
+no ChatRealty token is configured here, and even with one, this run wouldn't have fired it: the
+standing guardrail against autonomous billed calls applies regardless of how cheap or "just
+templated layout" a given tool is, so the button exists and does real work the moment a human
+clicks it, but nothing fires on its own. One thing worth a human glance once a token exists: the
+Cloudinary URL is pulled out of the tool's text response with a plain `https:\/\/\S+` regex, which
+is a best-effort read of a documented-but-not-hand-tested response shape — the same category of
+caveat the very first Deepfake pass flagged for its own REST-response parsing.
+
+**What I could not do.** The other three tools in the chain — CMA-backed Scripting context, the
+carousel slide builder, and the agent-in-photo staging picker — are real, separately-scoped
+features, each with its own UI shape (a staged-screen builder for carousel slides, an interior-photo
+picker for staging), not something to rush into the same 15–20 minute slice as the cover. They're
+written up in the strategy doc's build order and the progress queue's resume note so the next pass
+(or the next several) can pick any of them up without re-deriving the chain.
+
+**Queue state:** all ten rows have now had at least one real pass; row 10 is `in-progress` with
+three independently-shippable items left, everything else stays `done` per the prior runs' own
+entries below.
+
+---
+
 ## 2026-08-09 — Sixteenth autonomous run: row-9 collision with a concurrent run, deferred after review
 
 Started this run the same way another session evidently did: row 8 was `done`, the strategy doc's

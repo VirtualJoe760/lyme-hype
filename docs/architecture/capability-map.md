@@ -102,7 +102,7 @@ $0.03 vs. $0.06/image).
 | Create a LoRA | `lora-train` | fal trainer pick | — |
 | Storyboard promote (image) | `image-gen` | per-panel choice | agent-pick |
 | Storyboard → Deepfake handoff | *(none — local)* | word-overlap match of panel `feeling` against Reference people's `personaTone` | no match found (screen just prefills the script, picker stays "none") |
-| Listing photos | `data-mls` | chatrealty | — |
+| Listing photos | `data-mls` | chatrealty | top-matched listing also offers a branded Instagram cover render (`create_listing_cover`, hook+body required) — same connector, second tool, downloaded via `importUrlAsset` |
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
 | Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |
 | Combine · audio+image | `lipsync` or `video-gen-i2v` | agent-pick (unrestricted) | prompt tells the agent to branch on whether the image shows a face |
@@ -159,7 +159,11 @@ several connectors can satisfy one node.
   `GET /audio/voices`, left for later if it turns out to matter).
 - **Veo video-extension** (+7s chained, 720p) — a natural "extend this clip" action on video
   nodes; extending also resets the 2-day server retention clock.
-- **ChatRealty staging/covers/carousels** — creative tools already paid for; natural tiles,
-  but note their results come back as Cloudinary URLs (importUrlAsset path, not base64).
+- **ChatRealty staging/carousels** — `stage_listing_with_agent` (Nano Banana agent-headshot
+  compositing, ~$0.04/photo) and the carousel pair (`plan_listing_carousel` +
+  `create_carousel_slide`) are still unwired; natural next tiles. Covers are now wired
+  (2026-08-09 enrichment run, row 10): `create_listing_cover` renders from the Listing photos
+  tile's top-matched listing, downloaded via the `importUrlAsset` path this note already
+  predicted — first proof that path works end-to-end for a ChatRealty Cloudinary URL.
 - **muapi sandbox keys** return instant free mock data — the cheap way to integration-test
   the whole generation loop before the joint live session.

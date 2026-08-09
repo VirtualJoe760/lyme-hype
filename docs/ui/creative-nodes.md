@@ -84,7 +84,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images (local files, or a canvas node's `lyme-asset://` URL — e.g. Deepfake's "train a LoRA from this photo" shortcut) + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
 | **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
-| **Listing photos** | listing query | image nodes (with MLS provenance) | `data-mls` |
+| **Listing photos** | listing query (+ optional hook/body once photos are pulled) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render | `data-mls`; cover render via ChatRealty's own `create_listing_cover` tool (templated server-side layout, not a generation model — still a real API call, only fires on button press) |
 
 ## Reference person (Deepfake's identity + voice pairing)
 
@@ -198,6 +198,25 @@ real `src` (the Combine button disables otherwise), the same guard the two gener
 already had.
 
 ---
+
+## Listing photos → Instagram cover
+
+A pulled listing's real photos have always been the whole tile (`pullListingPhotos()` in
+`chatrealty.ts` — deterministic `search_listings` → `get_listing_photos`, no agent turn). ChatRealty
+exposes a second, paid-for tool the tile never touched: `create_listing_cover`, a templated 4:5
+Instagram cover render (hook/price/address/specs/body/agent headshot) that returns a Cloudinary
+URL, not base64 — a second ingestion path alongside the base64 photo pipeline. As of the 2026-08-09
+enrichment run (row 10), a successful pull surfaces a small "Create Instagram cover" form for the
+top-matched listing: hook (2–3 words) + body copy (≤260 chars, both required, user-authored — this
+is creative copy, not something to invent), city defaulted from the listing. Submitting calls
+`createListingCover()` in `chatrealty.ts` (one MCP tool call, same shape as the pull path), extracts
+the Cloudinary URL from the response, and downloads it via `importUrlAsset()` (the same URL-import
+path `docs/architecture/capability-map.md` already flagged as the right mechanism for ChatRealty's
+Cloudinary-returning tools) into a new image node. Same guardrail as every generation button in the
+app: nothing fires until the user presses it — this is wiring, not an autonomous call.
+`plan_listing_carousel`, `create_carousel_slide`, and `stage_listing_with_agent` remain unwired; see
+`node-enrichment-strategy.md`'s Listing photos analysis for the fuller chain and why cover-first was
+the right slice.
 
 ## Where routing happens
 

@@ -27,7 +27,7 @@ import { combineLocal, isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
-import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import { createListingCover, hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { addSuggestion, listSuggestions, openSuggestionKeyPage, reconcileInstalledConnectors } from './connector-suggestions'
 import { deleteSecret, listSecretReports } from './credential-vault'
@@ -302,6 +302,17 @@ export function registerIpc(window: BrowserWindow): void {
     if (!isMainSender(e)) return null
     return pullListingPhotos(typeof query === 'string' ? query : '')
   })
+  ipcMain.handle(
+    IPC.chatRealtyCover,
+    (
+      e,
+      listingKey: string,
+      opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+    ) => {
+      if (!isMainSender(e)) return null
+      return createListingCover(listingKey, opts)
+    }
+  )
 
   ipcMain.handle(IPC.connectorsList, (e) => {
     if (!isMainSender(e)) return []

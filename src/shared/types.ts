@@ -488,6 +488,13 @@ export interface ChatRealtyPullResult {
   error?: string
 }
 
+export interface ChatRealtyCoverResult {
+  ok: boolean
+  /** lyme-asset:// URL of the downloaded cover image, when ok. */
+  src?: string
+  error?: string
+}
+
 /** The only credential facts the agent or renderer ever sees — never the value. */
 export interface SecretReport {
   connectorId: string

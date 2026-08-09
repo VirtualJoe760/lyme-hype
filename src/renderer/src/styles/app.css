@@ -1714,6 +1714,18 @@
   color: var(--danger);
 }
 
+.cr-cover {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.cr-textarea {
+  resize: vertical;
+  min-height: 54px;
+  font-family: inherit;
+}
+
 /* ---------- agent link card ---------- */
 
 .agent-card {

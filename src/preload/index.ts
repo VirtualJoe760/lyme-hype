@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc-channels'
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyCoverResult,
   ChatRealtyPullResult,
   ClaudeAuthStatus,
   CombineLocalRequest,
@@ -143,7 +144,12 @@ const api = {
   chatRealty: {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),
     pull: (query: string): Promise<ChatRealtyPullResult | null> =>
-      ipcRenderer.invoke(IPC.chatRealtyPull, query)
+      ipcRenderer.invoke(IPC.chatRealtyPull, query),
+    createCover: (
+      listingKey: string,
+      opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+    ): Promise<ChatRealtyCoverResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyCover, listingKey, opts)
   },
   connectors: {
     list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),

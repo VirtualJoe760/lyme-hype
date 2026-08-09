@@ -130,6 +130,86 @@ sequence, each step independently shippable):
 
 ---
 
+## Listing photos (ChatRealty) — the chain from "pulled photos" to "postable creative"
+
+**What the user is trying to accomplish:** turn a real MLS listing into something they can post,
+not just a folder of raw agent photos on the canvas. The gap isn't data — `pullListingPhotos()`
+already gets real photos with real provenance — it's that the tile stops at "here are the photos,"
+when ChatRealty's own connector can turn those same photos into branded, Instagram-ready creative
+without leaving the app or paying a second generation connector for work ChatRealty already does
+server-side.
+
+**Current state (pre-enrichment):** two deterministic tool calls (`search_listings` →
+`get_listing_photos`), base64 → `saveImageAsset` → image nodes. None of the connector's 6 "creative
+rendering" tools (`create_listing_cover`, `plan_listing_carousel`, `create_carousel_slide`,
+`stage_listing_with_agent`) were ever called — `docs/architecture/capability-map.md` flagged them
+as paid-for and unused since the map was first written.
+
+**The chain that makes it real** (per-tool detail from `../connectors/reference/chatrealty.md`):
+
+1. **Cover — `create_listing_cover`.** One call, `listingKey` + user-authored `hook`/`body` +
+   defaulted `city`/`accentColor`/`photoIndex`, returns a Cloudinary URL. The lowest-friction of
+   the four creative tools: no photo selection needed (the template picks a reasonable default,
+   `photoIndex: 8`, itself a known-rough heuristic per the reference doc's gotchas), no multi-step
+   plan, one screen's worth of copy. Ships first.
+2. **Carousel material — `plan_listing_carousel`.** One call returning listing facts, a photo
+   index list, pre-formatted subdivision CMA stats, and the agent's brand color/handle/license —
+   exactly the structured material a Scripting-panel or Storyboard carousel workflow needs instead
+   of an agent guessing stats. Feeds step 3, and separately feeds script copy generally (real
+   numbers — "6 homes sold, median $2.36M" — instead of invented ones, the same principle
+   `get_market_stats`/`get_subdivision_cma`/`find_comparables` offer to any Scripting turn that
+   touches a listing).
+3. **Carousel slides — `create_carousel_slide`.** Four kinds (`banner`/`cma`/`text`/`cta`), each
+   with its own required-field shape (`cma` wants exactly 4 `stats` entries; `cta` wants exactly 2
+   `paragraphs`). `banner` is the one kind that composes with step 4 — it takes an `imageUrl` from
+   `stage_listing_with_agent` rather than a plain listing photo. Real scope: a slide-kind picker +
+   per-kind form, closer to the Motion graphics wizard's staged-screens pattern than a single call.
+4. **Agent-in-photo staging — `stage_listing_with_agent`.** Nano Banana composites the agent's own
+   headshot into up to 10 interior listing photos (~$0.04/photo, ~30s for 10) — a materially
+   different creative move than a template render, and the one tool in this chain that's a real
+   generation call, not templated layout. **Always pass interior `photoIndexes`** — the reference
+   doc's gotcha about default-selection landing on aerial/exterior shots (giant floating agent) is
+   not a hypothetical, it's the documented default behavior. This is real generation spend, same
+   category as every muapi/ElevenLabs/Krea call elsewhere in the app — build the picker, never fire
+   it autonomously.
+
+**Concrete build order:**
+1. Cover render on the Listing photos tile, scoped to the top-matched listing from a pull (no new
+   listing-picker UI needed — the pull already surfaces one listing's photos at a time). **Shipped
+   this run**, see below.
+2. Feed `plan_listing_carousel`'s structured facts/CMA material into the Scripting panel's context
+   when a listing-sourced node is in play — real numbers over invented ones, zero new UI (an
+   agent-context enrichment, not a new tile).
+3. Carousel slide builder — a `kind` picker + per-kind form on the Listing photos tile (or a new
+   tile), each slide landing as its own image node the same way the cover does.
+4. Agent-in-photo staging — an interior-photo picker (reusing the existing pulled-photo nodes,
+   filtered by user selection since the app has no room-classifier) feeding `photoIndexes`; this is
+   the one step that's a real paid call the user explicitly presses Generate on, same posture as
+   every other billed connector call in the app.
+
+**Status (2026-08-09 enrichment run — step 1 shipped):**
+
+- `createListingCover()` in `chatrealty.ts`: one `create_listing_cover` MCP call (deterministic, no
+  agent turn — matches `pullListingPhotos()`'s own pattern), Cloudinary URL extracted from the text
+  response and downloaded via `importUrlAsset()` into a real image node. New IPC round trip
+  (`chatrealty:create-cover`), `ChatRealtyCoverResult` shared type, `bridge.chatRealty.createCover`,
+  and a `createChatRealtyCover` store action following `pullChatRealtyPhotos`'s existing shape.
+  `ChatRealtyPull.tsx` now surfaces a small hook/body form for the top-matched listing after a
+  successful pull (both fields required and user-authored — cover copy is not something to
+  auto-generate blind) and renders the result as a new canvas node exactly like a pulled photo.
+- **Not run live** — no ChatRealty token is configured in this sandbox, and even with one, firing a
+  real `create_listing_cover` call autonomously would violate the standing "never make a live billed
+  call" guardrail regardless of how cheap/templated the call actually is; the button exists,
+  nothing fires until a human clicks it. The one thing worth a human's eye once a token exists: the
+  Cloudinary-URL regex extraction (`https:\/\/\S+` against the tool's text response) is a
+  best-effort parse of a documented-not-tested response shape, same caveat row 1's Yapper REST pass
+  flagged for its own regex-free but similarly untested parsing.
+- `npm run typecheck` clean (fresh `npm install`, no `node_modules` at run start).
+- Steps 2–4 are open — step 2 is the natural next slice (no new UI, just richer agent context);
+  steps 3–4 are real, separately-scoped features for future passes.
+
+---
+
 ## Node queue (priority order — the routine works top to bottom, one per run)
 
 See `../reports/node-enrichment-progress.md` for live status. Seed ordering and rationale:
@@ -428,8 +508,8 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    row updated in this commit. Nothing named is left open on row 9 from row 7's handoff; a future
    pass should treat any further row-9 work as its own gap-search (transition dialog, clip-onto-
    clip stretch goal, etc.) rather than assume more is queued here.
-10. **Listing photos (ChatRealty)** — the connector's staging/cover/carousel tools are paid-for
-    and unused; natural next tiles once the core queue is through.
+10. **Listing photos (ChatRealty)** — analyzed above; cover render shipped, carousel/staging
+    build order ready for future passes.
 
 ## What "enrichment" means per run (guardrails for the automated routine)
 

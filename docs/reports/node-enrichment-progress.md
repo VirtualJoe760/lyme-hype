@@ -20,7 +20,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
 | 8 | Storyboard / Scripting | done | Reference person gained an optional `personaTone` tag (Settings › Trained styles); a script-born Storyboard panel gets a "☺ Send to Deepfake" button that prefills the script and auto-suggests a Reference person by matching the panel's `feeling` against `personaTone` (word overlap, no agent call). |
 | 9 | Timeline / export | done | Built the local ffmpeg compositing row 7 explicitly deferred here: Combine's four remaining pairs (video+video stitch, image+video overlay, audio+video score, audio+audio mix) now produce real output via a new `combineLocal()`/`media:combine-local` IPC round trip instead of the Phase 2 placeholder node. |
-| 10 | Listing photos (ChatRealty) | pending | Staging/cover/carousel tools are paid-for and unused — candidate new tiles. |
+| 10 | Listing photos (ChatRealty) | in-progress | Cover render shipped: `create_listing_cover` wired into the Listing photos tile (hook/body form on the top-matched listing, Cloudinary URL downloaded via `importUrlAsset`, real image node). resume: strategy doc's build order has 3 items left — (2) feed `plan_listing_carousel`'s structured facts/CMA into Scripting-panel agent context (no new UI, richer prompt material), (3) carousel slide builder (`create_carousel_slide`, 4 kinds each with its own required-field shape — real staged-screen UI, closer to the Motion graphics wizard's pattern than a single call), (4) `stage_listing_with_agent` interior-photo picker (real generation spend, ~$0.04/photo — build the picker, never fire it). Any of the three is independently shippable; no ordering dependency between them. |
 
 ## Cross-cutting plumbing (build once, benefits multiple rows)
 
@@ -29,6 +29,25 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (seventeenth autonomous run) — queue was fully `done` through row 9 (confirmed via
+  the sixteenth run's collision-review entry below), so this run took row 10 (Listing photos /
+  ChatRealty), the last row and the only one that never got a flagship-style analysis — its seed
+  note was a single line. Wrote the full analysis in `node-enrichment-strategy.md` (what the user's
+  after, the four-tool creative-rendering chain, a four-step build order) and shipped step 1: a
+  "Create Instagram cover" mini-form on the Listing photos tile, appearing after a successful pull
+  for the top-matched listing. New `createListingCover()` in `chatrealty.ts` (one deterministic
+  `create_listing_cover` MCP call, matching `pullListingPhotos()`'s own no-agent-turn pattern),
+  Cloudinary URL extracted and downloaded via the existing `importUrlAsset()` path, landing as a
+  real image node. Full plumbing: `ChatRealtyCoverResult` shared type, `chatrealty:create-cover` IPC
+  channel, preload + bridge (both the real and browser-preview-mock sides), `createChatRealtyCover`
+  store action, and `pullChatRealtyPhotos` extended to hand back the top-matched listing's key/
+  address/city so the form has something to render against. `npm run typecheck` clean (fresh `npm
+  install`, no `node_modules` at run start). **Not run live** — no ChatRealty token in this sandbox,
+  and even with one, autonomously firing the call would violate the live-billed-call guardrail
+  regardless of how cheap the templated render actually is; the button exists, nothing fires
+  without a human click. `creative-nodes.md` and `capability-map.md` updated in the same commit.
+  Left in-progress: three more items in the strategy doc's build order (Scripting-panel CMA context,
+  carousel slide builder, agent-in-photo staging picker) — see this row's resume note.
 - 2026-08-09 (sixteenth autonomous run) — collided with the fifteenth run on row 9, independently;
   built a different, also-typechecked-clean implementation (reused the Cut Room export's own
   multitrack compositor via a synthetic timeline spec, vs. their four purpose-built filter graphs),

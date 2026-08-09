@@ -1,6 +1,7 @@
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyCoverResult,
   ChatRealtyPullResult,
   ClaudeAuthStatus,
   CombineLocalRequest,
@@ -104,6 +105,10 @@ export interface Bridge {
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>
     pull(query: string): Promise<ChatRealtyPullResult | null>
+    createCover(
+      listingKey: string,
+      opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+    ): Promise<ChatRealtyCoverResult | null>
   }
   connectors: {
     list(): Promise<ConnectorView[]>
@@ -271,6 +276,10 @@ function createBrowserMock(): Bridge {
         ok: false,
         images: [],
         listings: [],
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      createCover: async () => ({
+        ok: false,
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       })
     },

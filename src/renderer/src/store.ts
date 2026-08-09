@@ -336,7 +336,16 @@ interface StudioStore {
   setTheme(theme: ThemeId): void
 
   pingAgent(): Promise<void>
-  pullChatRealtyPhotos(query: string): Promise<{ ok: boolean; count: number; error?: string }>
+  pullChatRealtyPhotos(query: string): Promise<{
+    ok: boolean
+    count: number
+    error?: string
+    topListing?: { listingKey: string; address: string; city: string; detailUrl: string | null }
+  }>
+  createChatRealtyCover(
+    listingKey: string,
+    opts: { hook: string; body: string; city?: string; label: string; detailUrl?: string }
+  ): Promise<{ ok: boolean; error?: string }>
   flushPersist(): void
 }
 
@@ -1527,11 +1536,36 @@ export const useStudio = create<StudioStore>((set, get) => {
           startRendering: false
         })
       })
+      const top = result.listings[0]
       return {
         ok: true,
         count: result.images.length,
-        error: result.images.length === 0 ? (result.error ?? 'No photos found.') : undefined
+        error: result.images.length === 0 ? (result.error ?? 'No photos found.') : undefined,
+        topListing: top
+          ? { listingKey: top.listingKey, address: top.address, city: top.city, detailUrl: top.detailUrl }
+          : undefined
       }
+    },
+
+    async createChatRealtyCover(listingKey, opts) {
+      const result = await bridge.chatRealty.createCover(listingKey, {
+        hook: opts.hook,
+        body: opts.body,
+        city: opts.city
+      })
+      if (!result || !result.ok || !result.src) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      get().addNode({
+        label: opts.label,
+        mediaType: 'image',
+        source: 'generate',
+        src: result.src,
+        detailUrl: opts.detailUrl,
+        listingKey,
+        startRendering: false
+      })
+      return { ok: true }
     },
 
     flushPersist() {

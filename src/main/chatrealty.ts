@@ -1,8 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import type { ChatRealtyListing, ChatRealtyPullResult, ConnectorDef } from '@shared/types'
-import { saveImageAsset } from './asset-store'
+import type {
+  ChatRealtyCoverResult,
+  ChatRealtyListing,
+  ChatRealtyPullResult,
+  ConnectorDef
+} from '@shared/types'
+import { importUrlAsset, saveImageAsset } from './asset-store'
 import { readSecretValue } from './credential-vault'
 import { McpStdioClient, type McpContentBlock } from './mcp-client'
 
@@ -166,6 +171,49 @@ export async function pullListingPhotos(query: string): Promise<ChatRealtyPullRe
       listings: [],
       error: err instanceof Error ? err.message : String(err)
     }
+  } finally {
+    client.stop()
+  }
+}
+
+const CLOUDINARY_URL = /https:\/\/\S+/
+
+/**
+ * The first of ChatRealty's paid-for creative-render tools Lyme Hype actually
+ * calls: `create_listing_cover` templates a branded 4:5 Instagram cover
+ * (hook/price/address/specs/body/agent headshot) server-side and hands back a
+ * Cloudinary URL, not base64 — a second ingestion path from the same
+ * base64-only pull above, downloaded through `importUrlAsset` the same way
+ * every other connector's URL-returning tool already lands on the canvas.
+ * Deterministic single tool call, same shape as `pullListingPhotos` — no
+ * agent turn, and still only fires when the user presses the button.
+ */
+export async function createListingCover(
+  listingKey: string,
+  opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
+): Promise<ChatRealtyCoverResult> {
+  const client = new McpStdioClient()
+  try {
+    const token = resolveChatRealtyToken()
+    if (!token) return { ok: false, error: 'No ChatRealty token configured.' }
+    await client.start(serverSpec(token))
+
+    const args: Record<string, unknown> = { listingKey, hook: opts.hook, body: opts.body }
+    if (opts.city) args.city = opts.city
+    if (opts.accentColor) args.accentColor = opts.accentColor
+    if (typeof opts.photoIndex === 'number') args.photoIndex = opts.photoIndex
+
+    const result = await client.callTool('create_listing_cover', args)
+    if (result.isError) {
+      return { ok: false, error: textOf(result.content).slice(0, 300) }
+    }
+    const match = textOf(result.content).match(CLOUDINARY_URL)
+    if (!match) return { ok: false, error: 'No cover URL came back.' }
+
+    const saved = await importUrlAsset(match[0], 'image')
+    return { ok: true, src: saved.url }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {
     client.stop()
   }
