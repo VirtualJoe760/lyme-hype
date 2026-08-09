@@ -360,6 +360,27 @@ interface StudioStore {
   /** Inputs carried into a node by a handoff, keyed by manifest id then role. */
   nodeInputs: Record<string, Record<string, string>>
   setNodeInput(manifestId: string, role: string, src: string | undefined): void
+
+  /** Training images for nodes whose preview holds inputs rather than output. */
+  nodeDataset: Record<string, string[]>
+  toggleDatasetImage(manifestId: string, src: string): void
+  clearDataset(manifestId: string): void
+
+  /** Audio's four jobs are direct connector calls with no agent turn — they land in the
+   *  same staged-take lane so the preview, paging and Finish work identically. */
+  stageAudio(
+    manifestId: string,
+    op: 'tts' | 'music' | 'sfx' | 'clone',
+    input: { text: string; voiceName?: string; voiceId?: string; useYapper?: boolean }
+  ): void
+  /** Trains a LoRA and saves it as a reusable person/style. Returns its id. */
+  trainLora(input: {
+    name: string
+    imagePaths: string[]
+    steps: number
+    kind: 'style' | 'subject'
+    trainer?: string
+  }): Promise<{ ok: boolean; error?: string }>
   /** Active take → a real canvas node. Returns its id, or null when there is
    *  nothing ready to commit. */
   commitStage(manifestId: string): string | null
@@ -587,6 +608,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     editor: null,
     pendingNodeScreen: null,
     nodeInputs: {},
+    nodeDataset: {},
     playFrom: 'canvas',
     combine: null,
     agent: {
@@ -1383,6 +1405,70 @@ export const useStudio = create<StudioStore>((set, get) => {
       if (src) forNode[role] = src
       else delete forNode[role]
       set({ nodeInputs: { ...all, [manifestId]: forNode } })
+    },
+
+    toggleDatasetImage(manifestId, src) {
+      const all = get().nodeDataset
+      const current = all[manifestId] ?? []
+      const next = current.includes(src) ? current.filter((s) => s !== src) : [...current, src]
+      set({ nodeDataset: { ...all, [manifestId]: next } })
+    },
+
+    clearDataset(manifestId) {
+      set({ nodeDataset: { ...get().nodeDataset, [manifestId]: [] } })
+    },
+
+    stageAudio(manifestId, op, input) {
+      const take: StagedTake = {
+        id: nextId('take'),
+        mediaType: 'audio',
+        status: 'rendering',
+        label: `${op}_${Date.now().toString().slice(-4)}`,
+        prompt: input.text,
+        createdAt: Date.now()
+      }
+      writeStage(manifestId, (stage) => ({
+        ...stage,
+        takes: [...stage.takes, take],
+        activeIndex: stage.takes.length
+      }))
+
+      void (async () => {
+        let result: Awaited<ReturnType<typeof bridge.audioTools.tts>> = null
+        try {
+          if (op === 'tts') {
+            result = input.useYapper
+              ? await bridge.audioTools.yapperTts({ text: input.text, voiceId: input.voiceId })
+              : await bridge.audioTools.tts({ text: input.text, voiceName: input.voiceName })
+          } else if (op === 'music') {
+            result = await bridge.audioTools.music({ prompt: input.text })
+          } else if (op === 'sfx') {
+            result = await bridge.audioTools.sfx({ prompt: input.text })
+          } else {
+            result = await bridge.audioTools.clone({ name: input.text, filePaths: [] })
+          }
+        } catch (error) {
+          result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+        }
+        patchTake(manifestId, take.id,
+          result?.ok && result.src
+            ? { status: 'ready', src: result.src, error: undefined }
+            : { status: 'error', error: result?.error ?? 'Audio tool failed.' }
+        )
+      })()
+    },
+
+    async trainLora(input) {
+      const result = await bridge.lora.train({
+        name: input.name,
+        imagePaths: input.imagePaths,
+        steps: input.steps,
+        kind: input.kind,
+        trainer: input.trainer,
+        triggerWord: input.name
+      })
+      if (!result?.ok) return { ok: false, error: result?.error ?? 'Training failed.' }
+      return { ok: true }
     },
 
     applyHandoff(fromManifestId, to, role) {

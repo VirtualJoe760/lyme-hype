@@ -33,10 +33,27 @@ export type ToolIcon =
   | 'eye'
   | 'face'
 
+/**
+ * How a tool actually runs. Most go through the agent, but audio's four jobs are direct
+ * connector calls with no agent turn, LoRA's dataset tools only mutate panel state, and
+ * `local` is ffmpeg. The renderer dispatches on this instead of special-casing node ids.
+ */
+export type ToolExec =
+  | 'agent'
+  | 'audio-tts'
+  | 'audio-music'
+  | 'audio-sfx'
+  | 'voice-clone'
+  | 'lora-train'
+  | 'dataset-add'
+  | 'dataset-remove'
+  | 'local'
+
 export interface NodeToolDef {
   id: string
   label: string
   icon: ToolIcon
+  exec?: ToolExec
   /** The capability its model row asks the registry for. `null` runs locally (ffmpeg) —
    *  no models, no pill row, no network, no spend. */
   capability: ModelCapability | null
@@ -64,6 +81,7 @@ export type SettingKind =
   | 'steps'
   | 'caption'
   | 'language'
+  | 'trainer'
 
 export interface NodeSettingDef {
   id: string
@@ -98,6 +116,8 @@ export interface NodeManifest {
   promptPlaceholder: string
   /** Aspect the preview frame uses before an artifact exists. */
   previewAspect: string
+  /** Minimum dataset size for nodes whose preview holds inputs rather than output. */
+  datasetMin?: number
 }
 
 const TAKES: NodeSettingDef = { id: 'takes', label: 'TAKES', kind: 'takes', icon: 'images' }
@@ -166,11 +186,11 @@ export const AUDIO_NODE: NodeManifest = {
   previewHolds: 'artifact',
   previewAspect: '16 / 9',
   tools: [
-    { id: 'voice', label: 'voice', icon: 'mic', capability: 'audio-tts', verb: 'Speak', needsArtifact: false },
-    { id: 'music', label: 'music', icon: 'music', capability: 'audio-music', verb: 'Compose', needsArtifact: false },
-    { id: 'sfx', label: 'sfx', icon: 'wave', capability: 'audio-sfx', verb: 'Make sound', needsArtifact: false },
-    { id: 'clone', label: 'clone', icon: 'person', capability: 'voice-clone', verb: 'Clone voice', needsArtifact: false },
-    { id: 'isolate', label: 'isolate', icon: 'eraser', capability: null, verb: 'Isolate', needsArtifact: true }
+    { id: 'voice', label: 'voice', icon: 'mic', capability: 'audio-tts', exec: 'audio-tts', verb: 'Speak', needsArtifact: false },
+    { id: 'music', label: 'music', icon: 'music', capability: 'audio-music', exec: 'audio-music', verb: 'Compose', needsArtifact: false },
+    { id: 'sfx', label: 'sfx', icon: 'wave', capability: 'audio-sfx', exec: 'audio-sfx', verb: 'Make sound', needsArtifact: false },
+    { id: 'clone', label: 'clone', icon: 'person', capability: 'voice-clone', exec: 'voice-clone', verb: 'Clone voice', needsArtifact: false },
+    { id: 'isolate', label: 'isolate', icon: 'eraser', capability: null, exec: 'local', verb: 'Isolate', needsArtifact: true }
   ],
   settings: [
     { id: 'voice', label: 'VOICE', kind: 'voice', icon: 'person' },
@@ -193,20 +213,21 @@ export const LORA_NODE: NodeManifest = {
   previewHolds: 'dataset',
   previewAspect: '1 / 1',
   tools: [
-    { id: 'add', label: 'add images', icon: 'images', capability: null, verb: 'Train', needsArtifact: false },
-    { id: 'caption', label: 'auto-caption', icon: 'caption', capability: null, verb: 'Caption', needsArtifact: true },
-    { id: 'remove', label: 'remove', icon: 'trash', capability: null, verb: 'Remove', needsArtifact: true },
-    { id: 'preview', label: 'sample', icon: 'eye', capability: 'lora-use', verb: 'Sample', needsArtifact: true }
+    { id: 'add', label: 'add images', icon: 'images', capability: null, exec: 'dataset-add', verb: 'Add from canvas', needsArtifact: false },
+    { id: 'train', label: 'train', icon: 'generate', capability: 'lora-train', exec: 'lora-train', verb: 'Train', needsArtifact: false },
+    { id: 'remove', label: 'clear', icon: 'trash', capability: null, exec: 'dataset-remove', verb: 'Clear images', needsArtifact: false }
   ],
   settings: [
     { id: 'loraKind', label: 'KIND', kind: 'loraKind', icon: 'person' },
     { id: 'steps', label: 'STEPS', kind: 'steps', icon: 'caption' },
-    { id: 'caption', label: 'CAPTION', kind: 'caption', icon: 'caption' }
+    { id: 'trainer', label: 'TRAINER', kind: 'trainer', icon: 'images' }
   ],
   parameters: [],
   commit: 'person',
-  commitLabel: 'Finish → save as a person',
-  promptPlaceholder: 'joeyface — trigger word for this subject'
+  commitLabel: 'Finish → back to Create',
+  promptPlaceholder: 'joeyface — trigger word for this subject',
+  /** fal's trainers reject a dataset below this; surfacing it beats a server-side 4xx. */
+  datasetMin: 4
 }
 
 export const DEEPFAKE_NODE: NodeManifest = {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   handoffsFor,
   modelPickerOrder,
@@ -6,7 +6,8 @@ import {
   type CatalogModel
 } from '@shared/model-catalog'
 import type { NodeManifest, NodeToolDef, ToolIcon } from '@shared/node-manifest'
-import type { ConnectorView, MediaType, TrainedStyle } from '@shared/types'
+import type { ConnectorView, MediaType, TrainedStyle, VoiceEntry } from '@shared/types'
+import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { Button } from './ui/Button'
 
@@ -65,6 +66,10 @@ export function NodePanel(props: {
   const openEditor = useStudio((s) => s.openEditor)
   const applyHandoff = useStudio((s) => s.applyHandoff)
   const setNodeInput = useStudio((s) => s.setNodeInput)
+  const stageAudio = useStudio((s) => s.stageAudio)
+  const trainLora = useStudio((s) => s.trainLora)
+  const toggleDatasetImage = useStudio((s) => s.toggleDatasetImage)
+  const clearDataset = useStudio((s) => s.clearDataset)
   const nodeInputs = useStudio((s) => s.nodeInputs)
   const editorMask = useStudio((s) => s.editor?.mask)
 
@@ -81,28 +86,54 @@ export function NodePanel(props: {
   const [styleId, setStyleId] = useState('')
   const [refs, setRefs] = useState<string[]>([])
   const [voice, setVoice] = useState('')
+  const [voiceList, setVoiceList] = useState<VoiceEntry[]>([])
   const [loraKind, setLoraKind] = useState<'subject' | 'style'>('subject')
   const [steps, setSteps] = useState(1000)
+  const [training, setTraining] = useState(false)
+  const [trainError, setTrainError] = useState<string | null>(null)
   const [openSetting, setOpenSetting] = useState<string | null>(null)
   const [params, setParams] = useState<Record<string, string>>(() =>
     Object.fromEntries(manifest.parameters.map((p) => [p.id, p.options?.[0] ?? '']))
   )
 
   const style = props.styles?.find((s) => s.id === styleId)
+  const dataset = useStudio((s) => s.nodeDataset)[manifest.id] ?? []
+
+  // Voices come from the live connector, not a hardcoded list — opening the square is
+  // what pays for the lookup, so nodes without a voice setting never make the call.
+  useEffect(() => {
+    if (openSetting !== 'voice' || voiceList.length > 0) return
+    void bridge.audioTools.voices('').then((r) => {
+      if (r?.voices) setVoiceList(r.voices)
+    })
+  }, [openSetting, voiceList.length])
 
   const ready = useMemo(() => readyConnectorIds(props.connectors), [props.connectors])
-  const tool: NodeToolDef = useMemo(
-    () => manifest.tools.find((t) => t.id === stage.toolId) ?? manifest.tools[0],
-    [manifest, stage.toolId]
-  )
+  // Dataset tools mutate the preview and return; they are never the *active* tool, so
+  // they can't be the fallback either — LoRA would otherwise open with "add images"
+  // selected and put its verb on the primary button.
+  const tool: NodeToolDef = useMemo(() => {
+    const runnable = manifest.tools.filter(
+      (t) => t.exec !== 'dataset-add' && t.exec !== 'dataset-remove'
+    )
+    return runnable.find((t) => t.id === stage.toolId) ?? runnable[0] ?? manifest.tools[0]
+  }, [manifest, stage.toolId])
 
   const activeTake = stage.takes[stage.activeIndex]
   const hasArtifact = !!activeTake && activeTake.status === 'ready'
 
-  const picker = useMemo(
-    () => (tool.capability ? modelPickerOrder(tool.capability, ready) : []),
-    [tool.capability, ready]
-  )
+  // The same model is often resold by several connectors (eleven v3 on both ElevenLabs
+  // and Yapper). Two identically-labelled pills that route differently is exactly the
+  // ambiguity the pill row exists to remove, so collisions carry their connector.
+  const picker = useMemo(() => {
+    const rows = tool.capability ? modelPickerOrder(tool.capability, ready) : []
+    const seen = new Map<string, number>()
+    for (const r of rows) seen.set(r.label, (seen.get(r.label) ?? 0) + 1)
+    return rows.map((r) => ({
+      ...r,
+      pillLabel: (seen.get(r.label) ?? 0) > 1 ? `${r.label} · ${r.connectorId}` : r.label
+    }))
+  }, [tool.capability, ready])
 
   // The model row is re-framed by the tool, so a selection that can't run the new tool is
   // replaced rather than silently rerouted — the panel names what it left.
@@ -113,12 +144,28 @@ export function NodePanel(props: {
   const model: CatalogModel | null = reconciled.model
   const canRun = tool.capability === null || !!model
 
+  // A handoff moves the artifact to a DIFFERENT node, so self-targets are dropped —
+  // "deepfake · as the source performance" offered inside Deepfake is noise. Nodes whose
+  // commit target isn't the canvas (a LoRA saves a person) have no artifact to hand off.
   const handoffs = useMemo(
-    () => (hasArtifact ? handoffsFor(manifest.media, ready) : []),
-    [hasArtifact, manifest.media, ready]
+    () =>
+      hasArtifact && manifest.commit === 'canvas'
+        ? handoffsFor(manifest.media, ready).filter((h) => h.to !== manifest.id)
+        : [],
+    [hasArtifact, manifest.media, manifest.commit, manifest.id, ready]
   )
 
   function pickTool(next: NodeToolDef): void {
+    // Dataset tools act immediately instead of arming the primary button — "clear" that
+    // needs a second click on Generate would read as broken.
+    if (next.exec === 'dataset-remove') {
+      clearDataset(manifest.id)
+      return
+    }
+    if (next.exec === 'dataset-add') {
+      setOpenSetting(openSetting === 'dataset' ? null : 'dataset')
+      return
+    }
     setNodeTool(manifest.id, next.id)
     const r = reconcileModel(stage.modelId ?? null, next.capability, ready)
     setNodeModel(manifest.id, r.model?.id)
@@ -128,7 +175,37 @@ export function NodePanel(props: {
   }
 
   function run(): void {
-    if (!canRun || !prompt.trim()) return
+    if (blockedReason || !prompt.trim()) return
+
+    const exec = tool.exec ?? 'agent'
+
+    if (exec === 'audio-tts' || exec === 'audio-music' || exec === 'audio-sfx' || exec === 'voice-clone') {
+      const op = exec === 'audio-tts' ? 'tts' : exec === 'audio-music' ? 'music' : exec === 'audio-sfx' ? 'sfx' : 'clone'
+      stageAudio(manifest.id, op, {
+        text: prompt.trim(),
+        voiceName: voice || undefined,
+        useYapper: model?.connectorId === 'yapper'
+      })
+      return
+    }
+
+    if (exec === 'lora-train') {
+      setTraining(true)
+      setTrainError(null)
+      void trainLora({
+        name: prompt.trim(),
+        imagePaths: dataset,
+        steps,
+        kind: loraKind,
+        trainer: model?.providerModelId
+      }).then((r) => {
+        setTraining(false)
+        if (!r.ok) setTrainError(r.error ?? 'Training failed.')
+        else clearDataset(manifest.id)
+      })
+      return
+    }
+
     // A trained style overrides the picked model — it can only run on the backend that
     // trained it, and saying so beats silently rerouting (the bug this redesign exists for).
     const styleHint = style
@@ -164,13 +241,19 @@ export function NodePanel(props: {
   // produced its input — an Inpaint button with no mask would generate an unmasked
   // image and silently replace the take.
   const needsMask = tool.editorMode === 'mask'
+  const shortDataset =
+    tool.exec === 'lora-train' && dataset.length < (manifest.datasetMin ?? 0)
   const blockedReason = !canRun
     ? 'Connect a tool to run'
     : needsMask && !editorMask
       ? 'Brush a mask first'
       : tool.editorMode && tool.editorMode !== 'mask'
         ? `${tool.label} isn’t built yet`
-        : null
+        : shortDataset
+          ? `Add ${(manifest.datasetMin ?? 0) - dataset.length} more image${(manifest.datasetMin ?? 0) - dataset.length === 1 ? '' : 's'}`
+          : training
+            ? 'Training…'
+            : null
 
   /** Settings whose value is a piece of media picked off the canvas. Each maps to the
    *  same handoff role name, so a pill-delivered artifact and a hand-picked one land
@@ -188,6 +271,7 @@ export function NodePanel(props: {
     if (kind === 'refs') return refs.length ? String(refs.length) : 'none'
     if (kind === 'voice') return voice ? voice.slice(0, 9) : 'default'
     if (kind === 'loraKind') return loraKind
+    if (kind === 'trainer') return model ? model.label.slice(0, 9) : 'none'
     if (kind === 'steps') return String(steps)
     if (kind === 'caption') return 'auto'
     if (kind === 'language') return 'en'
@@ -206,11 +290,27 @@ export function NodePanel(props: {
         {activeTake?.status === 'error' && (
           <span className="np-empty np-err">{activeTake.error}</span>
         )}
-        {!activeTake && (
+        {manifest.previewHolds === 'dataset' && (
+          <span className="np-grid">
+            {dataset.map((src) => (
+              <button key={src} className="np-cell on" onClick={() => toggleDatasetImage(manifest.id, src)}>
+                <img src={src} alt="" />
+              </button>
+            ))}
+            {dataset.length === 0 && (
+              <span className="np-empty">
+                no images yet
+                <br />
+                use “add images”
+              </span>
+            )}
+          </span>
+        )}
+        {manifest.previewHolds === 'artifact' && !activeTake && (
           <span className="np-empty">
-            {manifest.previewHolds === 'dataset' ? 'no images yet' : 'nothing yet'}
+            nothing yet
             <br />
-            {manifest.previewHolds === 'dataset' ? 'add some below' : 'describe it below'}
+            describe it below
           </span>
         )}
         {hasArtifact && activeTake.src && manifest.media === 'image' && (
@@ -233,11 +333,17 @@ export function NodePanel(props: {
 
       <div className="np-tools">
         {manifest.tools.map((t) => {
-          const disabled = t.needsArtifact && !hasArtifact
+          const isDataset = t.exec === 'dataset-add' || t.exec === 'dataset-remove'
+          const disabled =
+            (t.needsArtifact && !hasArtifact) ||
+            (t.exec === 'dataset-remove' && dataset.length === 0)
+          const active = isDataset
+            ? t.exec === 'dataset-add' && openSetting === 'dataset'
+            : t.id === tool.id
           return (
             <button
               key={t.id}
-              className={`np-tool${t.id === tool.id ? ' on' : ''}${disabled ? ' off' : ''}`}
+              className={`np-tool${active ? ' on' : ''}${disabled ? ' off' : ''}`}
               disabled={disabled}
               title={t.label}
               onClick={() => pickTool(t)}
@@ -339,20 +445,41 @@ export function NodePanel(props: {
           <button className={`np-pill${voice === '' ? ' on' : ''}`} onClick={() => setVoice('')}>
             default
           </button>
-          {(props.styles ?? [])
-            .filter((s) => s.voiceName)
-            .map((s) => (
-              <button
-                key={s.id}
-                className={`np-pill${voice === s.voiceName ? ' on' : ''}`}
-                onClick={() => setVoice(s.voiceName ?? '')}
-              >
-                {s.voiceName}
-              </button>
-            ))}
-          <span className="np-pop-empty">voices come from Reference people (Settings › Trained styles)</span>
+          {voiceList.map((v) => (
+            <button
+              key={v.name}
+              className={`np-pill${voice === v.name ? ' on' : ''}`}
+              title={v.tags}
+              onClick={() => setVoice(v.name)}
+            >
+              {v.name}
+            </button>
+          ))}
+          {voiceList.length === 0 && (
+            <span className="np-pop-empty">no voices — connect ElevenLabs to browse them</span>
+          )}
         </div>
       )}
+
+      {openSetting === 'dataset' && (
+        <div className="np-pop">
+          {canvasImages.length === 0 && (
+            <span className="np-pop-empty">no images on the canvas to train on</span>
+          )}
+          {canvasImages.map((n) => (
+            <button
+              key={n.id}
+              className={`np-ref${dataset.includes(n.data.src ?? '') ? ' on' : ''}`}
+              title={n.data.label}
+              onClick={() => toggleDatasetImage(manifest.id, n.data.src ?? '')}
+            >
+              <img src={n.data.src} alt={n.data.label} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {trainError && <div className="np-local np-err">{trainError}</div>}
 
       {openSetting === 'refs' && (
         <div className="np-pop">
@@ -397,7 +524,7 @@ export function NodePanel(props: {
                 title={`${m.label} · ${m.connectorId}${m.note ? ` · ${m.note}` : ''}`}
                 onClick={() => (m.ready ? setNodeModel(manifest.id, m.id) : openSettings('connectors'))}
               >
-                {m.label}
+                {m.pillLabel}
               </button>
             ))}
           </div>
