@@ -6,9 +6,9 @@ import type { CutExportResult, TimelineExportSpec } from '@shared/types'
 import { assetPathForUrl } from './asset-store'
 
 /** Reels-first default export canvas; off-ratio clips are letterboxed into it. */
-const OUT_W = 1080
-const OUT_H = 1920
-const FPS = 30
+export const OUT_W = 1080
+export const OUT_H = 1920
+export const FPS = 30
 
 export interface ResolvedFfmpeg {
   path: string

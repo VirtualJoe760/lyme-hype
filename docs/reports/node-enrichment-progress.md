@@ -19,7 +19,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 6 | Create a LoRA | done | "Train from this deepfake's reference photos" shortcut shipped: Deepfake's face-node picker gains a "Train a LoRA from this photo" button when the picked node is a still image, prefilling the Create a LoRA screen's first training image + name + kind (subject). Also fixed a real plumbing gap this depended on: `lora:train`'s IPC handler never resolved `lyme-asset://` canvas-node URLs to disk paths (only `scriptingTurn` had that resolution before), so passing a canvas image straight through would have failed `readFileSync` in both trainers. |
 | 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
 | 8 | Storyboard / Scripting | done | Reference person gained an optional `personaTone` tag (Settings › Trained styles); a script-born Storyboard panel gets a "☺ Send to Deepfake" button that prefills the script and auto-suggests a Reference person by matching the panel's `feeling` against `personaTone` (word overlap, no agent call). |
-| 9 | Timeline / export | pending | Lower priority — pipeline already deep; look for gaps only. |
+| 9 | Timeline / export | done | Built the local ffmpeg compositing row 7 explicitly deferred here: Combine's four remaining pairs (video+video stitch, image+video overlay, audio+video score, audio+audio mix) now produce real output via a new `combineLocal()`/`media:combine-local` IPC round trip instead of the Phase 2 placeholder node. |
 | 10 | Listing photos (ChatRealty) | pending | Staging/cover/carousel tools are paid-for and unused — candidate new tiles. |
 
 ## Cross-cutting plumbing (build once, benefits multiple rows)
@@ -29,6 +29,18 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (fifteenth autonomous run) — Row 9 (Timeline / export) closed: built the local ffmpeg
+  compositing row 7 explicitly scoped out ("belongs with row 9"). Four new pure args builders in
+  `media-tools.ts` (stitch/overlay/score/mix), one `combineLocal()` dispatcher, one IPC channel
+  (`media:combine-local`), and `store.ts`'s `confirmCombine` gained `localCombineFor` to route the
+  four non-generative Combine pairs through it with the same rendering-node-then-patch lifecycle
+  `generateMedia` already uses (not the old fake-timer stub). `CombineDialog.tsx`'s "Stub for now"
+  text and its generative-only ready-state guard are both gone — every pair now requires both
+  dragged nodes ready with a real `src`. `npm run typecheck` clean (fresh `npm install
+  --include=dev`, no `node_modules` at run start). Not run against real media in this sandbox (no
+  display), but unlike prior rows this has zero live-key/billed-spend risk to caveat — it's local
+  ffmpeg only, same risk category as the already-verified `buildMultitrackArgs`. Queue is now fully
+  `done` except row 10 (Listing photos / ChatRealty).
 - 2026-08-09 (fourteenth autonomous run) — Row 8 (Storyboard / Scripting) closed: `TrainedStyle`
   gained `personaTone` (`lora:set-tone` IPC, `ToneField` in `TrainedStylesTab.tsx`, same shape as
   the existing `voiceName`/`VoiceField` pair). Storyboard panels born from a script breakdown

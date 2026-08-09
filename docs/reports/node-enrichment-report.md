@@ -7,6 +7,106 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Fifteenth autonomous run: Timeline/export (row 9), Combine's last four pairs go real — row closed
+
+Row 8 was `done` going into this pass (queue confirmed fully closed through row 8), so this run
+took row 9 next. Unlike rows 1–8, row 9 never got a flagship-style analysis in the strategy doc —
+its seed note just says "lower priority; look for gaps only" — but it didn't need one, because row
+7's own writeup already named the exact gap and handed it off explicitly: "the four ffmpeg-
+compositing pairs are a distinct, larger piece of scope better left for whoever tackles row 9." So
+this pass wasn't a gap-search, it was picking up a pointer someone else already planted.
+
+**The gap, concretely:** `CombineDialog.tsx` has always covered six possible media-type pairings
+(image+image, audio+image, video+video, image+video, audio+video, audio+audio — every combination
+of the app's three `MediaType`s). Row 7 made the first two real generations. The other four —
+"Stitch clips," "Composite overlay," "Score the clip," "Mix tracks" — still spawned Phase 2's
+placeholder "combined" node on a fake `setTimeout`, which is worth being precise about: it never
+touched a real file at all, just flipped a node's status to `ready` after 2.5 seconds with no `src`
+set, ever. That's a materially different kind of stub than most of this queue's "wiring exists,
+UI doesn't expose it" gaps — there was no real output on the other end of that button for four of
+six draggable pairs.
+
+**What I built:** the whole thing stays local — no connector, no agent turn, which made this the
+first row where I didn't have to reason about steering an LLM's tool choice at all. Four new pure
+ffmpeg-args builders in `media-tools.ts` (`buildStitchArgs`, `buildOverlayImageArgs`,
+`buildScoreArgs`, `buildMixAudioArgs`), matching the shape `buildAlphaKeyArgs` already established
+in that file — a plain function from inputs to an argv array, so the filter graph is inspectable
+and testable without spawning a process. One dispatcher, `combineLocal()`, keyed on a new
+`CombineLocalKind` union (`shared/types.ts`) so the IPC boundary carries one typed request shape
+instead of four separate channels. One new IPC round trip, `media:combine-local`, threaded through
+the usual four files (`ipc-channels.ts` → `ipc.ts` → `preload/index.ts` → `bridge.ts`, including
+the browser-preview mock). On the renderer side, `store.ts` gained `localCombineFor` — a pure
+function mapping a dragged pair's two `MediaType`s onto the right `CombineLocalKind` plus which
+node's `src` is which ffmpeg input (order matters for overlay-image and score-video, not for
+stitch/mix) — and `confirmCombine`'s old placeholder branch now creates a `rendering` node
+synchronously, fires the ffmpeg call, and patches the node to `ready`+`src` or `error` on
+completion. That's the exact node-lifecycle pattern `generateMedia` already uses for real
+generations, deliberately reused rather than inventing a second one — the only difference is what
+resolves it (a local `combineLocal` call vs. an agent turn).
+
+**The actual filter-graph decisions, one per pair:**
+
+- **video+video ("Stitch clips")** normalizes both clips to the shared 1080×1920/30fps export
+  canvas before `concat` — two independently generated clips can differ in resolution or frame
+  rate, the same problem `ffmpeg.ts`'s multitrack export already solved for its own base track,
+  reused here via the same scale/pad/setsar/fps chain. The one real judgment call: `concat`'s
+  `a=1` mode requires every segment to carry an audio stream, and there's no ffprobe in this
+  codebase (only banner-parsing, per `timeline.md`'s own `probeMediaInfo`) to measure a missing
+  track's duration for a matching silent filler. Rather than fake a duration, the honest v1
+  behavior is video-only output when either clip is silent — a real, stated decision, not a
+  silently-dropped case.
+- **image+video ("Composite overlay")** draws the still centered and scaled-to-fit over the clip's
+  full duration (`overlay=...:shortest=1` plus `-shortest` on the output), the same "scale-to-fit,
+  center" treatment `ffmpeg.ts` already gives a non-base overlay track in the real multitrack
+  export — reused, not reinvented. The clip's own audio passes through unmixed via the optional
+  `0:a?` map (no-op if the clip is silent).
+- **audio+video ("Score the clip")** mixes the new audio with the clip's own audio when it has one,
+  rather than silently discarding whichever the user didn't drag — a voiceover over an
+  already-talking clip should still be audible under it, not replace it outright. `-c:v copy`
+  since the video stream itself never changes; only the audio does. Output runs to the shorter of
+  the two (`-shortest`) as the deliberate v1 default, the same posture `timeline.md`'s own "Open
+  questions" section takes toward its unresolved tuning knobs — revisit if it proves wrong in
+  practice, don't guess a fix now.
+- **audio+audio ("Mix tracks")** reuses `ffmpeg.ts`'s exact `amix=inputs=...:duration=longest:
+  normalize=0` convention rather than inventing a second one — consistency with the one other place
+  in this codebase that already mixes audio down.
+
+**UI side:** `CombineDialog.tsx` previously only required both dragged nodes to be `ready` with a
+real `src` for the two generative pairs (`missingSrc = generative && ...`); now every pair requires
+it, since all six now touch real files. The prompt textarea stays exclusive to the two generative
+pairs — the four local pairs are fully determined by which two media types were dragged together,
+so there's nothing left for a prompt to disambiguate, and the "Stub for now — the real combined
+generation lands in a future pass" placeholder text is gone for good. Two of the six pairs' dialog
+blurbs got small accuracy edits (video+video's used to promise a Cut-Room-only transitions payoff
+that read oddly next to a real stitch now happening; audio+video's now mentions the mix-not-replace
+behavior).
+
+**Verification:** fresh `npm install --include=dev` (no `node_modules` present at run start), then
+`npm run typecheck` (`tsconfig.node.json` + `tsconfig.web.json`) — clean, zero errors, including
+the exhaustive `switch` over `CombineLocalKind` in `combineLocal()` type-checking with no default
+case needed. **Not run against real media** — this sandbox has no display and no sample video/audio
+files staged in the app's own asset store to click "Combine" against. But this is a genuinely
+different confidence position than every prior row in this queue: there is no live API key, no
+billed connector call, and no agent-tool-choice uncertainty to flag here at all — it's local ffmpeg
+running a fully-specified filter graph, the same category of risk `buildMultitrackArgs` already
+carries and was verified for real (synthetic clips, actually executed) back at Phase 7. The
+remaining risk is narrower and more mechanical: does this exact argv run clean against real files,
+which is worth a human's one pass through the app before trusting it blind, but it's a "does the
+command run" question, not an "does the agent behave" or "is this API shape real" question.
+`creative-nodes.md`'s Combine section and `capability-map.md`'s §3 table row were updated in this
+commit to describe the four pairs as real rather than unbuilt.
+
+**Queue state:** rows 1–9 are now all `done`. Only row 10 (Listing photos / ChatRealty) remains —
+per the strategy doc, ChatRealty's staging/cover/carousel tools are paid-for and currently unused,
+candidate new tiles. Like row 9 was, row 10 has no ready-made build order in the strategy doc yet;
+the next run should expect to spend real time reading `docs/connectors/reference/chatrealty.md`
+and `docs/ui/creative-nodes.md`'s Listing photos section from scratch rather than following a plan
+someone already wrote. Once row 10 closes, every run after that should go straight to the
+guardrail's "queue is fully done" path — a dated Recommendations section in this report, not
+invented new rows.
+
+---
+
 ## 2026-08-09 — Fourteenth autonomous run: Storyboard/Scripting → Deepfake tone handoff (row 8) — row closed
 
 Rows 1–7 were all `done` going into this pass, so this run took row 8 next per the queue's

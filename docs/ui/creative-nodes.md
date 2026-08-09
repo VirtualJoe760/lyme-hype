@@ -178,10 +178,24 @@ dragged nodes to already be `ready` (the Combine button disables otherwise) sinc
 real files on disk, not an in-flight render. The dialog gained a prompt textarea for these two
 pairs to carry the "how should these combine" instruction the stub never had anywhere to put.
 
-The other four pairs (video+video, image+video, audio+video, audio+audio) still spawn the
-placeholder "combined" node — those are ffmpeg-level compositing (stitch/score/mix), not agent
-generations, and belong with the Cut Room's export pipeline rather than this dialog. Real
-semantics for those remain an open item.
+The other four pairs (video+video, image+video, audio+video, audio+audio) closed the placeholder
+gap too (2026-08-09 enrichment run, row 9): each is a deterministic local ffmpeg composite, not an
+agent generation, so none of them show the prompt textarea or route through `generateMedia` — no
+agent judgment is needed since which filter graph applies follows directly from the two media
+types (`localCombineFor` in `store.ts`). **video+video** ("Stitch clips") concats both clips after
+normalizing to the shared 1080×1920/30fps export canvas, keeping audio only when both sides have a
+stream (no ffprobe here to pad a missing track to the right length, so the honest v1 behavior is
+video-only output rather than a guessed-length dub). **image+video** ("Composite overlay") draws
+the still centered and scaled-to-fit over the clip's full duration, passing the clip's own audio
+through untouched. **audio+video** ("Score the clip") lays the new audio under the clip, mixed
+with the clip's own audio when it has one; output runs to the shorter of the two (`-shortest`) as
+the deliberate v1 default. **audio+audio** ("Mix tracks") blends both into one stream
+(`amix`/`normalize=0`, matching the Cut Room export's own mix). All four go through one new IPC
+round trip, `media:combine-local` (`combineLocal()` in `media-tools.ts`), and produce a real node
+exactly like `IsolateScreen`'s ffmpeg output does — `source: 'upload'`, not `'generate'`, since no
+connector or agent turn is spent. Every pair now requires both dragged nodes to be `ready` with a
+real `src` (the Combine button disables otherwise), the same guard the two generative pairs
+already had.
 
 ---
 

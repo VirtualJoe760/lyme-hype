@@ -106,7 +106,7 @@ $0.03 vs. $0.06/image).
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
 | Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |
 | Combine · audio+image | `lipsync` or `video-gen-i2v` | agent-pick (unrestricted) | prompt tells the agent to branch on whether the image shows a face |
-| Combine · other pairs | *(local, unbuilt)* | placeholder node | real ffmpeg compositing not yet designed |
+| Combine · video+video / image+video / audio+video / audio+audio | *(local)* | ffmpeg (`combineLocal` in `media-tools.ts`) | never a connector — deterministic per pair, no agent turn |
 
 The Create tiles' readiness (`TILE_NEEDS` in `AsidePanel.tsx`) is this table's "requires"
 column flattened to connector ids — when the matrix changes, change the table here, then the

@@ -23,6 +23,7 @@ export const IPC = {
   mediaSaveDataUrl: 'media:save-data-url',
   mediaIsolateAudio: 'media:isolate-audio',
   mediaKeyAlpha: 'media:key-alpha',
+  mediaCombineLocal: 'media:combine-local',
 
   audioVoices: 'audio:voices',
   audioPreview: 'audio:preview',

@@ -3,6 +3,7 @@ import type {
   AgentStreamEvent,
   ChatRealtyPullResult,
   ClaudeAuthStatus,
+  CombineLocalRequest,
   ConnectorDef,
   ConnectorSuggestion,
   ConnectorTestResult,
@@ -69,6 +70,7 @@ export interface Bridge {
       similarity?: number
       blend?: number
     }): Promise<LocalToolResult | null>
+    combineLocal(input: CombineLocalRequest): Promise<LocalToolResult | null>
   }
   audioTools: {
     voices(query: string): Promise<AudioToolResult | null>
@@ -202,6 +204,10 @@ function createBrowserMock(): Bridge {
         error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
       }),
       keyAlpha: async () => ({
+        ok: false,
+        error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
+      }),
+      combineLocal: async () => ({
         ok: false,
         error: 'ffmpeg runs in the Electron main process — unavailable in browser preview.'
       })

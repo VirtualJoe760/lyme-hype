@@ -385,6 +385,49 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    doc's own seed note, so a future pass should treat it as a gap-search rather than assume there's
    a ready-made build order waiting the way rows 1–8 had.
 9. **Timeline overlay / export** — lower priority; the ffmpeg pipeline is already deep.
+
+   **Status (2026-08-09 enrichment run — the gap row 7 explicitly left open closed):** row 7's own
+   writeup named the concrete gap here: Combine's four non-generative pairs (video+video,
+   image+video, audio+video, audio+audio) still spawned the Phase 2 placeholder "combined" node
+   because giving them real semantics meant designing local ffmpeg compositing this codebase didn't
+   have yet — scoped out of row 7 as "belongs with row 9." This pass built exactly that, as a
+   self-contained addition alongside the existing multitrack export code rather than a rewrite of
+   it: four new pure args builders in `media-tools.ts` (`buildStitchArgs`, `buildOverlayImageArgs`,
+   `buildScoreArgs`, `buildMixAudioArgs`, following `buildAlphaKeyArgs`'s existing shape exactly —
+   a pure function returning an argv array, unit-testable without spawning ffmpeg), one dispatcher
+   (`combineLocal`, keyed on a new `CombineLocalKind` union), one IPC round trip
+   (`media:combine-local`), and `store.ts`'s `confirmCombine` gained a `localCombineFor` helper that
+   maps a dragged pair's two `MediaType`s onto the right kind — mirroring the store's own
+   `generateMedia` node-lifecycle pattern (add a `rendering` node synchronously, patch it to
+   `ready`+`src` or `error` when the async ffmpeg call resolves) rather than `addNode`'s old
+   fake-timer stub, which never touched a real file at all. video+video normalizes both clips to
+   the shared 1080×1920/30fps export canvas before `concat` (two independently generated clips can
+   differ in resolution/fps); its one real judgment call is what happens when only one clip has
+   audio — concat's `a=1` requires every segment to carry a stream, and there's no ffprobe here to
+   measure a missing track's duration for a matching silent filler, so the honest choice was
+   video-only output when either side is silent, documented as a real decision rather than a silent
+   gap. image+video draws the still centered/scaled-to-fit over the clip's full duration
+   (`overlay=...:shortest=1`), passing the clip's own audio through unmixed via `0:a?`.
+   audio+video mixes the new audio with the clip's own (when it has one) rather than silently
+   replacing it, `-c:v copy` since the video stream itself is untouched. audio+audio reuses the
+   *exact* `amix=...:normalize=0` convention `ffmpeg.ts`'s own multitrack export already
+   established, deliberately not inventing a second mixing convention. `CombineDialog.tsx` now
+   requires both dragged nodes to be `ready` with a real `src` for every pair (previously only the
+   two generative pairs enforced this), and only shows the prompt textarea for the two pairs that
+   still need one — the four local pairs are deterministic per the media-type pair, so there's
+   nothing for a prompt to disambiguate; the "Stub for now" placeholder text is gone. `npm run
+   typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install
+   --include=dev` in this sandbox — no `node_modules` at run start). **Not run live** — but unlike
+   every other row, "live" here just means "against a real ffmpeg binary with real media," not a
+   billed connector call at all, so this is the lowest-risk kind of unverified code this queue has
+   shipped: no API key, no spend, no agent-tool-choice uncertainty to flag, only "does this exact
+   filter graph run clean," the same category of risk `buildMultitrackArgs` already carries and was
+   verified for real at Phase 7. A human should still run one of each pair once in the app to
+   confirm — this sandbox has no display and no sample media to hand-run ffmpeg against outside the
+   app's own asset store. `creative-nodes.md`'s Combine section and `capability-map.md`'s §3 table
+   row updated in this commit. Nothing named is left open on row 9 from row 7's handoff; a future
+   pass should treat any further row-9 work as its own gap-search (transition dialog, clip-onto-
+   clip stretch goal, etc.) rather than assume more is queued here.
 10. **Listing photos (ChatRealty)** — the connector's staging/cover/carousel tools are paid-for
     and unused; natural next tiles once the core queue is through.
 

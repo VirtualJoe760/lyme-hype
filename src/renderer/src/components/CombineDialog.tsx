@@ -4,10 +4,10 @@ import { useStudio } from '../store'
 import { Button } from './ui/Button'
 
 /** image+image and audio+image are real generation chains (reference-
- *  conditioning, lipsync/animate-with-audio); every other pair still spawns
- *  the placeholder "combined" node until the Cut Room's compositing grows a
- *  generation-free path for it (stitch/score/mix are ffmpeg jobs, not agent
- *  generations). */
+ *  conditioning, lipsync/animate-with-audio) needing a prompt describing how
+ *  they should mix. Every other pair composites via local ffmpeg instead
+ *  (store.ts's localCombineFor) — deterministic given the two media types,
+ *  so there's nothing for a prompt to disambiguate. */
 function isGenerativeCombine(a: MediaType, b: MediaType): boolean {
   const pair = [a, b].sort().join('+')
   return pair === 'image+image' || pair === 'audio+image'
@@ -30,12 +30,12 @@ function describeCombine(a: MediaType, b: MediaType): { title: string; blurb: st
     case 'video+video':
       return {
         title: 'Stitch clips',
-        blurb: 'Cut between the two takes — transitions get real on the Cut Room timeline (Phase 7).'
+        blurb: 'Cut straight from one take into the other — real transitions (crossfade, wipe) belong on the Cut Room timeline instead.'
       }
     case 'audio+video':
       return {
         title: 'Score the clip',
-        blurb: 'Lay the audio track under the video.'
+        blurb: 'Lay the audio track under the video, mixed with the clip’s own audio if it has any.'
       }
     case 'audio+image':
       return {
@@ -67,7 +67,7 @@ export function CombineDialog(): React.JSX.Element | null {
 
   const { title, blurb, placeholder } = describeCombine(source.data.mediaType, target.data.mediaType)
   const generative = isGenerativeCombine(source.data.mediaType, target.data.mediaType)
-  const missingSrc = generative && (!source.data.src || !target.data.src)
+  const missingSrc = !source.data.src || !target.data.src
 
   return (
     <div className="dialog-backdrop" onClick={closeCombine}>
@@ -79,20 +79,16 @@ export function CombineDialog(): React.JSX.Element | null {
           <span className="arrow">→</span>
           <div className={`mini sw${target.data.swatch}`}>{target.data.label}</div>
         </div>
-        {generative ? (
-          <>
-            <textarea
-              className="prompt-area"
-              placeholder={placeholder}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-            {missingSrc && (
-              <p className="sub">Both nodes need to finish rendering before they can be combined.</p>
-            )}
-          </>
-        ) : (
-          <p className="sub">Stub for now — the real combined generation lands in a future pass.</p>
+        {generative && (
+          <textarea
+            className="prompt-area"
+            placeholder={placeholder}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        )}
+        {missingSrc && (
+          <p className="sub">Both nodes need to finish rendering before they can be combined.</p>
         )}
         <div className="btn-row">
           <Button variant="dialog" onClick={closeCombine}>

@@ -5,6 +5,7 @@ import type {
   AgentStreamEvent,
   ChatRealtyPullResult,
   ClaudeAuthStatus,
+  CombineLocalRequest,
   ConnectorDef,
   ConnectorSuggestion,
   ConnectorTestResult,
@@ -95,7 +96,9 @@ const api = {
       color?: string
       similarity?: number
       blend?: number
-    }): Promise<LocalToolResult | null> => ipcRenderer.invoke(IPC.mediaKeyAlpha, input)
+    }): Promise<LocalToolResult | null> => ipcRenderer.invoke(IPC.mediaKeyAlpha, input),
+    combineLocal: (input: CombineLocalRequest): Promise<LocalToolResult | null> =>
+      ipcRenderer.invoke(IPC.mediaCombineLocal, input)
   },
   audioTools: {
     voices: (query: string): Promise<AudioToolResult | null> =>

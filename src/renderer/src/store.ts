@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import type {
   AgentStreamEvent,
   CanvasNodeState,
+  CombineLocalKind,
   CutExportResult,
   ExportClip,
   MediaNodeData,
@@ -38,6 +39,37 @@ function toNodeState(node: MediaFlowNode): CanvasNodeState {
 
 function pickSwatch(): number {
   return 1 + Math.floor(Math.random() * 6)
+}
+
+/** Combine dialog's four ffmpeg-only pairs (video+video, image+video,
+ *  audio+video, audio+audio) — deterministic filter graphs, no agent
+ *  judgment needed, unlike image+image/audio+image which route through
+ *  generateMedia instead. Returns null for the two generative pairs (handled
+ *  earlier in confirmCombine) or if either node has no src yet. */
+function localCombineFor(
+  source: MediaFlowNode,
+  target: MediaFlowNode
+): { kind: CombineLocalKind; aUrl: string; bUrl: string } | null {
+  if (!source.data.src || !target.data.src) return null
+  const pair = [source.data.mediaType, target.data.mediaType].sort().join('+')
+  switch (pair) {
+    case 'video+video':
+      return { kind: 'stitch-video', aUrl: source.data.src, bUrl: target.data.src }
+    case 'image+video': {
+      const video = source.data.mediaType === 'video' ? source : target
+      const image = source.data.mediaType === 'image' ? source : target
+      return { kind: 'overlay-image', aUrl: video.data.src!, bUrl: image.data.src! }
+    }
+    case 'audio+video': {
+      const video = source.data.mediaType === 'video' ? source : target
+      const audio = source.data.mediaType === 'audio' ? source : target
+      return { kind: 'score-video', aUrl: video.data.src!, bUrl: audio.data.src! }
+    }
+    case 'audio+audio':
+      return { kind: 'mix-audio', aUrl: source.data.src, bUrl: target.data.src }
+    default:
+      return null
+  }
 }
 
 /** Stub-generation latency so the Rendering… state is visible (real jobs land in Phase 4). */
@@ -879,10 +911,10 @@ export const useStudio = create<StudioStore>((set, get) => {
       // image+image and audio+image are real generation chains — reference-
       // conditioning and lipsync/animate-with-audio respectively — reusing
       // the same GenerationParams fields Deepfake's Stage 2 and Motion
-      // graphics' References stage already established. Every other pair
-      // (video+video, image+video, audio+video, audio+audio) still needs
-      // ffmpeg-level compositing this node doesn't have yet, so those keep
-      // the placeholder "combined" node lifecycle.
+      // graphics' References stage already established, because "how should
+      // these mix" needs the agent's judgment. Every other pair (video+video,
+      // image+video, audio+video, audio+audio) is deterministic instead —
+      // see localCombineFor — and composites via local ffmpeg, no agent turn.
       if (pair === 'image+image' && source.data.src && target.data.src) {
         get().generateMedia({
           label,
@@ -916,6 +948,40 @@ export const useStudio = create<StudioStore>((set, get) => {
         }
       }
 
+      const local = localCombineFor(source, target)
+      if (local) {
+        const outMediaType: MediaType = local.kind === 'mix-audio' ? 'audio' : 'video'
+        const id = nextId('node')
+        const node: MediaFlowNode = {
+          id,
+          type: 'media',
+          position,
+          data: {
+            label,
+            mediaType: outMediaType,
+            // Local ffmpeg composite, not an agent generation — same
+            // provenance IsolateScreen already uses for its ffmpeg output.
+            source: 'upload',
+            status: 'rendering',
+            swatch: pickSwatch()
+          }
+        }
+        set({ nodes: [...get().nodes, node] })
+        persist()
+        void (async () => {
+          const result = await bridge.media.combineLocal(local)
+          if (result?.ok && result.src) {
+            patchNodeAnywhere(id, { src: result.src, status: 'ready', error: undefined })
+          } else {
+            patchNodeAnywhere(id, { status: 'error', error: result?.error ?? 'Local combine failed.' })
+          }
+        })()
+        return
+      }
+
+      // Unreachable for MediaType's current three values (every pairing is
+      // either generative above or local here) — kept as a safety net rather
+      // than assuming a future MediaType addition is covered automatically.
       const types = new Set<MediaType>([source.data.mediaType, target.data.mediaType])
       const mediaType: MediaType = types.has('video')
         ? 'video'

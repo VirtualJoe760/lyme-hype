@@ -137,6 +137,21 @@ export interface LocalToolResult {
   error?: string
 }
 
+/** Combine dialog's four non-generative pairs — real local ffmpeg compositing,
+ *  no connector/agent call. video+video and image+video/audio+video/audio+audio
+ *  each map to one deterministic filter graph, unlike image+image/audio+image
+ *  which need the agent's judgment and go through GenerationParams instead. */
+export type CombineLocalKind = 'stitch-video' | 'overlay-image' | 'score-video' | 'mix-audio'
+
+export interface CombineLocalRequest {
+  kind: CombineLocalKind
+  /** lyme-asset:// URLs. Meaning depends on kind: stitch-video/mix-audio are
+   *  order-preserving pairs; overlay-image is {video, image}; score-video is
+   *  {video, audio}. */
+  aUrl: string
+  bUrl: string
+}
+
 export interface VoiceEntry {
   name: string
   /** Compact descriptor line: category · labels. */

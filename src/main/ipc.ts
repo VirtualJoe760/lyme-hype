@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type {
+  CombineLocalKind,
   ConnectorDef,
   GenerationParams,
   ConversationTurnRequest,
@@ -22,7 +23,7 @@ import {
   setTrainedStyleVoice,
   trainStyle
 } from './fal-training'
-import { isolateAudio, keyAlpha } from './media-tools'
+import { combineLocal, isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
@@ -200,6 +201,14 @@ export function registerIpc(window: BrowserWindow): void {
     (e, input: { assetUrl: string; color?: string; similarity?: number; blend?: number }) => {
       if (!isMainSender(e)) return null
       return keyAlpha(input)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.mediaCombineLocal,
+    (e, input: { kind: CombineLocalKind; aUrl: string; bUrl: string }) => {
+      if (!isMainSender(e)) return null
+      return combineLocal(input)
     }
   )
 
