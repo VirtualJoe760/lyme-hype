@@ -324,8 +324,11 @@ function ImageScreen(props: {
   const style = props.styles.find((s) => s.id === styleId)
   const muapiReady = connectorReady(props.connectors, 'muapi')
 
+  const kreaTier = tier === 'production' ? 'krea/krea-2/large (highest quality)' : 'krea/krea-2/medium'
   const runLabel = style
-    ? `fal · ${style.trainer === 'flux-krea' ? 'flux-krea-lora' : 'krea 2 lora'} · "${style.name}"`
+    ? style.connectorId === 'krea'
+      ? `krea · styles:[{id}] · "${style.name}" · ${tier === 'production' ? 'K2 large' : 'K2 medium'}`
+      : `fal · ${style.trainer === 'flux-krea' ? 'flux-krea-lora' : 'krea 2 lora'} · "${style.name}"`
     : tier === 'production'
       ? muapiReady
         ? 'midjourney via muapi'
@@ -333,16 +336,31 @@ function ImageScreen(props: {
       : storyboardConnector
         ? `${storyboardConnector} · storyboard tier`
         : 'no storyboard connector'
-  const runOk = style ? connectorReady(props.connectors, 'fal') : tier === 'production' ? muapiReady : !!storyboardConnector
+  const runOk = style
+    ? connectorReady(props.connectors, style.connectorId)
+    : tier === 'production'
+      ? muapiReady
+      : !!storyboardConnector
 
   function handleGenerate(): void {
     // The tier choice drives GenerationParams.connectorId — the routing gap
-    // closed in Phase 13. A trained LoRA routes through fal with the weights
-    // URL in the hint so the agent passes it to the model's lora parameter.
+    // closed in Phase 13. A trained LoRA routes through the backend it was
+    // trained on: fal (weights URL, tier-agnostic) or Krea (styles:[{id}],
+    // where tier now genuinely picks K2 medium vs. K2 large — the production-
+    // tier LoRA route fal has no equivalent for; docs/ui/node-enrichment-
+    // strategy.md row 4).
     const connectorId =
-      style !== undefined ? 'fal' : tier === 'production' ? (muapiReady ? 'muapi' : undefined) : storyboardConnector || undefined
+      style !== undefined
+        ? style.connectorId
+        : tier === 'production'
+          ? muapiReady
+            ? 'muapi'
+            : undefined
+          : storyboardConnector || undefined
     const styleHint = style
-      ? `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
+      ? style.connectorId === 'krea'
+        ? `the Krea 2 ${kreaTier} with my trained style (call krea's generate tool with styles: [{id: "${style.id}", strength: 1}])`
+        : `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
       : undefined
     setResultId(
       generateMedia({
@@ -765,7 +783,13 @@ function IsolateScreen(): React.JSX.Element {
 
 const TRAINERS = [
   { id: 'krea-2', label: 'Krea 2 — best Krea look ($0.003/step)', steps: ['100', '300', '1000'], defaultSteps: '300' },
-  { id: 'flux-krea', label: 'FLUX.1 Krea [dev] (~$2/run)', steps: ['500', '1000', '2000'], defaultSteps: '1000' }
+  { id: 'flux-krea', label: 'FLUX.1 Krea [dev] (~$2/run)', steps: ['500', '1000', '2000'], defaultSteps: '1000' },
+  {
+    id: 'krea-k2',
+    label: 'Krea 2 direct — production styles route (Krea API balance)',
+    steps: ['500', '1000', '1500'],
+    defaultSteps: '1000'
+  }
 ]
 
 function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
@@ -777,7 +801,8 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const [triggerWord, setTriggerWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
-  const ready = connectorReady(props.connectors, 'fal')
+  const trainerConnectorId = trainer === 'krea-k2' ? 'krea' : 'fal'
+  const ready = connectorReady(props.connectors, trainerConnectorId)
 
   const trainerDef = TRAINERS.find((t) => t.id === trainer) ?? TRAINERS[0]
 
@@ -812,8 +837,14 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
     <>
       <RunLine
         ok={ready}
-        label={ready ? `fal · ${trainerDef.id} trainer` : 'fal not connected'}
-        cost={trainerDef.id === 'krea-2' ? '$0.003/step' : '~$2/run'}
+        label={ready ? `${trainerConnectorId} · ${trainerDef.id} trainer` : `${trainerConnectorId} not connected`}
+        cost={
+          trainerDef.id === 'krea-2'
+            ? '$0.003/step'
+            : trainerDef.id === 'krea-k2'
+              ? '$$ Krea API balance (unpublished per-job rate)'
+              : '~$2/run'
+        }
       />
       <p className="aside-help">Use 4+ example images; more is better.</p>
       <select

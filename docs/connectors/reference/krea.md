@@ -4,7 +4,7 @@
 
 ## What Lyme Hype uses it for
 
-General-generation aggregator: image + video + 3D + enhancement across ~71 models over one key, via hosted MCP. It is **not** the LoRA-training path anymore — training moved to fal's Krea trainers (`fal-ai/krea-2-trainer`, user call 2026-08-09); `src/main/krea-training.ts` remains as the deliberate REST exception but is unrouted. Krea IS the routed connector when a trained Krea style is selected in Create › Generate image (`connectorId: 'krea'`), because only Krea 2 endpoints accept `styles:[{id,strength}]` [verified]. Per routing philosophy (catalog.md): aggregators cost more than going direct — use Krea for model breadth (3D, enhance, Krea 2 + styles), not as a default.
+General-generation aggregator: image + video + 3D + enhancement across ~71 models over one key, via hosted MCP. The *default* LoRA-training path is fal's Krea trainers (`fal-ai/krea-2-trainer`, user call 2026-08-09), for published per-step pricing. `src/main/krea-training.ts` (2026-08-09 enrichment run, row 4) is a second, opt-in trainer — "Krea 2 direct" in Create › Create a LoRA — that calls Krea's own `POST /styles/train` instead, producing a style with `connectorId: 'krea'`. Krea IS the routed connector when such a style is selected in Create › Generate image (`connectorId: 'krea'`), because only Krea 2 endpoints accept `styles:[{id,strength}]` [verified] — and because it's the only route to Krea 2 Large, the one genuine production-tier LoRA path (fal's weights-URL route is tier-agnostic). Per routing philosophy (catalog.md): aggregators cost more than going direct — use Krea for model breadth (3D, enhance, Krea 2 + styles), not as a default.
 
 ## Connection
 

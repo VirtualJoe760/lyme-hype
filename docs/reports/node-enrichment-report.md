@@ -7,6 +7,91 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Seventh autonomous run: Generate image (row 4), a routing bug fix + Krea's LoRA trainer resurrected
+
+Checked rows 1–3 first: row 1 (Deepfake) and row 2 (Motion graphics) both have only real,
+joint-session-scope items left per their own resume notes; row 3 (Generate video) is `done`. So
+moved to row 4, Generate image, next `pending` in the queue.
+
+**What I found wasn't quite what the queue item described.** The queue said "extend `lora-use` to
+production tier" and "consider Krea 2 direct as a second LoRA route" as if they were two separate,
+smaller asks. Reading `ImageScreen` (`AsidePanel.tsx`) turned up something sharper: a picked
+`TrainedStyle` always forced `connectorId: 'fal'`, full stop — `style !== undefined ? 'fal' : ...`.
+That's not a missing feature, that's a bug. `TrainedStyle.connectorId` is typed as `'krea' | 'fal'`
+in `shared/types.ts` specifically so a style knows which backend trained it and should serve it —
+the field has existed since before fal became the default trainer, and generation-time routing
+had simply stopped reading it. Any legacy `connectorId: 'krea'` style sitting in a user's
+`trained-styles.json` would silently and incorrectly route through fal, which has no idea what to
+do with a Krea style id.
+
+**Why nobody could hit this yet:** there was no live path to actually create a `connectorId:
+'krea'` style anymore. `git log` on `krea-training.ts` told the real story — it existed once
+(`4f93dc3`), implementing exactly this: `POST /styles/train` against Krea's own REST API,
+producing a style usable via Krea 2's `styles:[{id,strength}]` generation param. It was
+deliberately removed a commit later (`4e96389`, "LoRA training: both fal Krea trainers replace the
+Krea-native client") when fal's published per-step pricing beat Krea's unpublished per-job
+API-balance billing as the *default* — the commit message says outright "Krea-native client lives
+in git history if that route ever comes back." It's back, on purpose, narrower than before: an
+opt-in second trainer, not fal's replacement.
+
+**What I built:**
+- `src/main/krea-training.ts`, resurrected from `4f93dc3` and adapted to the current codebase: same
+  `POST /assets` (multipart) → `POST /styles/train` → `GET /jobs/{id}` poll flow, now importing the
+  shared `TrainedStyle`/`TrainStyleResult` types instead of duplicating them, and no longer owning
+  its own JSON store (that responsibility stayed put in `fal-training.ts`, which now dispatches to
+  it). One improvement over the original draft: the training-submit body now sets `model: 'k2'` and
+  `type` (Style/Object from the kind toggle) explicitly — the newer, more complete reference doc
+  (`docs/connectors/reference/krea.md`) documents both fields where the original draft omitted
+  them and likely relied on undocumented defaults.
+- `fal-training.ts`'s `trainStyle()` gained a one-line dispatch: `trainer === 'krea-k2'` routes to
+  `trainKreaStyle()` instead of the fal path, then persists the result through the same
+  `writeTrainedStyles` the fal path already uses. This meant zero new IPC surface — the existing
+  `lora:train` channel, preload bridge, and renderer call all already thread an arbitrary
+  `trainer` string through untouched.
+- `AsidePanel.tsx`: `TRAINERS` gained a third entry ("Krea 2 direct — production styles route"),
+  and `LoraScreen`'s readiness/run-line now check whichever connector the selected trainer actually
+  needs (`fal` or `krea`) instead of hardcoding `fal`. `ImageScreen`'s `handleGenerate`/`runLabel`/
+  `runOk` now dispatch on `style.connectorId` — the actual bug fix — with a Krea-specific hint that
+  names the tier-appropriate model (`krea/krea-2/large` for Production, `krea/krea-2/medium` for
+  Storyboard) and the `styles:[{id,strength}]` param to pass, mirroring the existing fal-style hint
+  pattern (`modelHint` → `buildPrompt`'s "Model preference: use a ‹hint› model..." line).
+
+**Why this closes both queue items in one fix, not two:** fal's route applies a style via a fixed
+weights URL — there's no "higher-quality fal rendering" of the same LoRA to swap in for Production
+tier, so tier was always going to stay meaningless for fal styles. Krea 2 Large ($0.06, "highest
+quality K2" per the reference doc) vs. Krea 2 Medium ($0.03) is a real quality delta reachable only
+through Krea's own endpoints — so making Krea styles tier-aware *is* "extending lora-use to
+production tier," and it only exists because the Krea route (item two) got built. They were never
+independent; the queue just read that way.
+
+**Verified:** fresh `npm install` (no `node_modules` in this sandbox, 168 packages, clean), then
+`npm run typecheck` (`tsconfig.node.json` + `tsconfig.web.json`): clean, zero errors. **Not run
+live** — no Krea key configured in this sandbox, and live spend is out of scope for the autonomous
+routine regardless. Being specific about where the risk actually sits: the `/styles/train` request
+shape and the `GET /jobs/{id}` poll are unchanged from the original 2026-08 draft, which was
+written against Krea's official API reference — reasonably trustworthy. The one piece that was
+*always* a guess, in both the original draft and today's revival, is what field name `POST /assets`
+returns the uploaded image's URL under; the doc never says. The code tries three candidates
+(`url`, `asset_url`, `file_url`) before falling back to a base64 data URI the training endpoint
+also documents accepting, so a wrong guess degrades to "slower, still-correct" rather than
+"silently broken" — but it's still unverified against a real response body.
+
+**Docs updated in this commit** (doc-drift-is-a-bug, `AGENTS.md` §1.3): this was the one that
+actually mattered most this run. `docs/connectors/catalog.md`'s Krea section had drifted badly —
+it described `krea-training.ts` as already implementing "exactly this shape" and Generate image as
+already routing Krea styles via `connectorId: 'krea'`, neither of which was true until this commit;
+now both are. `docs/connectors/reference/krea.md`'s opening paragraph had the same problem, phrased
+as settled fact about unbuilt code. Also updated: `capability-map.md` (`lora-train`'s Krea cell,
+the Generate-image-with-style routing row, and a new §4 correction note), `creative-nodes.md`
+(Generate image and Create a LoRA rows), and the strategy doc's row 4 status block.
+
+**Left for later:** nothing named on row 4 — both queue items are closed. Live verification of the
+whole Krea training→use chain (and confirming the `/assets` response field name for real) is
+joint-session scope, same category as rows 1–3's open items. Next run should move to row 5
+(Generate audio) unless another run gets there first.
+
+---
+
 ## 2026-08-09 — Sixth autonomous run: Generate video (row 3), i2v starting frame + Yapper model routing
 
 Checked rows 1 and 2 first, per the queue's own resume notes: row 1 (Deepfake) has nothing left

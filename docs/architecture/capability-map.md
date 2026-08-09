@@ -55,7 +55,7 @@ way around.
 | `voice-library` | — | ✓ search_voices (+▶ preview) | — | — | — | — | ○ /audio/voices | — |
 | `lipsync` | ○ edit-lipsync tool | — | — | ○ | — | — | ✓ Max (auto-trains, returns reusable trainingId) | — |
 | `face-swap` | ○ **muapi_enhance_face_swap (image + video)** | — | — | — | — | — | — (absent from OpenAPI, re-verified) | — |
-| `lora-train` | — | — | ○ REST (unpublished price) | ✓ krea-2 + flux-krea trainers (flux-krea delisted from catalog but endpoint live — route by exact id) | — | — | — | — |
+| `lora-train` | — | — | ✓ `/styles/train` REST (unpublished price) | ✓ krea-2 + flux-krea trainers (flux-krea delisted from catalog but endpoint live — route by exact id) | — | — | — | — |
 | `lora-use` | — | — | ✓ styles:[{id,strength}] | ✓ loras param (weights URL) | — | — | — | — |
 | `upscale` / `bg-remove` | ✓ enhance tools | — | ○ | ○ | — | — | ○ image/video-upscale processes | — |
 | `asset-upload` | ✓ upload_file (stdio only) | n/a (local files in) | ○ get_upload_url | ✓ upload_file / storage REST | n/a (inline bytes) | n/a (multipart) | ✓ import-by-URL / REST signed upload | — |
@@ -74,6 +74,14 @@ listing covers, and carousel slides return Cloudinary URLs — a second ingestio
 local colorkey pipeline is the only alpha path, by design. ElevenLabs cannot make video, and
 its server ships side-effect tools (`make_outbound_call`, `create_agent`) that generation runs
 deny-list alongside muapi's Stripe/keys tools.
+**`lora-use` on Krea is now wired, not just possible** (2026-08-09 enrichment run, row 4): a
+second "Create a LoRA" trainer option (`krea-training.ts`, `POST /styles/train`) produces a style
+with `connectorId: 'krea'`; Generate image routes a picked style through whichever backend
+trained it instead of always forcing `fal` — the fix closes a real bug where a legacy
+`connectorId: 'krea'` `TrainedStyle` would have silently been routed through fal anyway. This is
+also the first genuine production-tier LoRA path: fal's weights-URL route ignores the
+storyboard/production tier entirely, but a Krea-trained style honors it (K2 medium vs. K2 large,
+$0.03 vs. $0.06/image).
 
 ## 3. Creative node → capabilities (drives readiness + routing)
 
@@ -82,7 +90,7 @@ deny-list alongside muapi's Stripe/keys tools.
 | Generate video | `video-gen-t2v` | muapi (Seedance) | connector select incl. agent-pick; picking a canvas image as a starting frame routes `video-gen-i2v` through gemini; a Yapper model pick routes through yapper with that model as `modelHint` |
 | Generate image · storyboard | `image-gen` | gemini/openai pick | — |
 | Generate image · production | `image-production` | muapi + hint "Midjourney" | tier toggle |
-| Generate image · with style | `lora-use` | fal + weights-URL hint | — |
+| Generate image · with style | `lora-use` | routes by the style's own `connectorId` — fal (weights-URL hint) or krea (`styles:[{id}]` hint, tier picks K2 medium/large) | — |
 | Audio · voice | `audio-tts` (+`voice-library`) | ElevenLabs direct call | — |
 | Audio · music | `audio-music` | ElevenLabs | muapi/Suno unwired ○ |
 | Audio · SFX | `audio-sfx` | ElevenLabs | — |

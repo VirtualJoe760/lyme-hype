@@ -2,6 +2,7 @@ import { readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { app, net } from 'electron'
 import { readSecretValue } from './credential-vault'
+import { trainKreaStyle } from './krea-training'
 
 /**
  * LoRA training via fal's hosted Krea-family trainers — chosen over Krea's own
@@ -284,6 +285,13 @@ export async function trainStyle(input: {
   trainer?: string
   kind?: TrainerKind
 }): Promise<TrainResult> {
+  if (input.trainer === 'krea-k2') {
+    const result = await trainKreaStyle(input)
+    if (result.ok && result.style) {
+      writeTrainedStyles([...listTrainedStyles().filter((s) => s.id !== result.style!.id), result.style])
+    }
+    return result
+  }
   const auth = falAuth()
   if (!auth) {
     return { ok: false, error: 'fal is not connected — install it and set a key in Settings › Connectors.' }

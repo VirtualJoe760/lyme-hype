@@ -155,10 +155,15 @@ export interface AudioToolResult {
 export interface TrainedStyle {
   id: string
   name: string
-  /** 'fal' for the fal-hosted Krea trainers (current path); 'krea' survives on
-   *  legacy entries from the short-lived Krea-native client. */
+  /** 'fal' for the fal-hosted Krea trainers (the default); 'krea' for styles
+   *  trained via Krea's own `/styles/train` (`krea-training.ts`) — the only
+   *  ones usable via `styles:[{id,strength}]` at generation time. Drives
+   *  Generate image's routing: a style always generates through the backend
+   *  that trained it. */
   connectorId: 'krea' | 'fal'
-  /** Which fal trainer produced it ('krea-2' | 'flux-krea'). */
+  /** Which trainer produced it: fal's ('krea-2' | 'flux-krea') or Krea's own
+   *  ('krea-k2') — see `connectorId` for which backend the style lives on
+   *  (a 'krea-k2' style always has `connectorId: 'krea'`). */
   trainer?: string
   /** URL of the trained LoRA weights (safetensors) — the generation input. */
   loraUrl?: string

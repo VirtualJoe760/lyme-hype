@@ -187,6 +187,37 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
 4. **Generate image** — LoRA integration exists for storyboard tier; extend the same
    `lora-use` path to production tier, and consider Krea 2 direct (`styles:[{id,strength}]`) as
    a second LoRA-application route alongside fal.
+
+   **Status (2026-08-09 enrichment run — both items shipped):** on inspection, `ImageScreen`
+   (`AsidePanel.tsx`) had a real bug, not just a missing feature: a picked `TrainedStyle` always
+   forced `connectorId: 'fal'`, ignoring the style's own `connectorId` field entirely (`'krea' |
+   'fal'`, per `shared/types.ts` — a field that's existed since before fal became the default
+   trainer, for exactly this routing purpose, and was simply never read). Fixed the routing to
+   dispatch on `style.connectorId` instead of hardcoding `fal`. To make that reachable, resurrected
+   `src/main/krea-training.ts` (removed at `4e96389` when fal's published per-step pricing became
+   the default trainer, kept in git history for "if that route ever comes back" — it has, as a
+   second, opt-in trainer, not fal's replacement): `POST /styles/train` (Krea's own REST-only
+   training endpoint, `model: 'k2'`), asset upload for local training images (`POST /assets`,
+   multipart, response field name undocumented so several candidates are tried before falling back
+   to a base64 data URI), then `GET /jobs/{id}` polling for the resulting `style_id`. `fal-
+   training.ts`'s `trainStyle()` dispatches to it when `trainer === 'krea-k2'`, so the existing
+   `lora:train` IPC channel/preload/bridge needed zero new plumbing — the Create › Create a LoRA
+   screen just gained a third trainer option ("Krea 2 direct — production styles route") beside
+   the existing fal krea-2/flux-krea picks. **This closes both queue items in one fix**: it's the
+   second LoRA-application route (Krea's `styles:[{id,strength}]`, which only Krea 2 endpoints
+   accept), and it's the first genuine *production-tier* LoRA path — a Krea-trained style now
+   honors the Storyboard/Production tier toggle (K2 medium $0.03 vs. K2 large $0.06, "highest
+   quality K2"), where fal's weights-URL route is and remains tier-agnostic (a fal-trained style
+   always uses the same weights regardless of tier — there's no fal equivalent to swap in for
+   "production quality," so that half of the gap can't close without Krea). `npm run typecheck`
+   clean (`tsconfig.node.json` + `tsconfig.web.json`). **Not run live** — no Krea key configured in
+   this sandbox, and live spend is out of scope for the autonomous routine either way; the
+   `/styles/train` request shape and `GET /jobs/{id}` poll match the prior (verified-against-docs,
+   never live-tested) implementation exactly, so risk is concentrated in the one part that was
+   always undocumented — the `POST /assets` upload response's field name — which is why that call
+   defensively tries three candidate field names before falling back to a data URI rather than
+   assuming any single shape. `catalog.md`'s Krea section and `capability-map.md` updated in this
+   commit to stop describing this as a removed/unrouted path.
 5. **Generate audio** — voice library is solid; add Yapper's free daily-tier TTS as a zero-cost
    fallback route, and Suno-via-muapi as a music alternative when ElevenLabs isn't connected.
 6. **Create a LoRA** — already dual-trainer (Krea 2 / FLUX Krea); enrich with a "train from

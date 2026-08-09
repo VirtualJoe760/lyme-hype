@@ -66,14 +66,14 @@ what does it cost. Readiness derives from the capability map's node→capability
 | Tile | In | Out | Capabilities consumed |
 |---|---|---|---|
 | **Generate video** | prompt + aspect/duration/res (+ connector override, optional canvas-image starting frame, optional Yapper model pick) | video node | `video-gen-t2v` (any provider of it — muapi default when present); `video-gen-i2v` via a starting-frame image node (Gemini/Veo only — forces that connector, since it's the only wired i2v path today) |
-| **Generate image** | prompt + aspect + tier toggle (+ trained style) | image node | `image-gen` (storyboard tier) or `image-production` (Midjourney-class); `lora-use` when a trained style is picked |
+| **Generate image** | prompt + aspect + tier toggle (+ trained style) | image node | `image-gen` (storyboard tier) or `image-production` (Midjourney-class); `lora-use` when a trained style is picked — routes through whichever backend trained it (fal weights-URL, or Krea `styles:[{id}]`; tier only changes which Krea 2 quality tier is hinted for a Krea-trained style, since fal's route is tier-agnostic) |
 | **Generate audio · Voice** | voice pick (browse/preview) + line | audio node | `audio-tts` (+ `voice-library`) |
 | **Generate audio · Music** | prompt + length | audio node | `audio-music` |
 | **Generate audio · SFX** | prompt + duration (0.5–5s) | audio node | `audio-sfx` |
 | **Generate audio · Clone** | name + sample files (+ optional Reference person to attach to) | a reusable voice (not a node) | `voice-clone` |
 | **Motion graphics** | references + instruction (wizard below) | image nodes + video node + alpha webm node | `image-gen`, `image-ref-conditioning`, `video-frame-conditioning`, local ffmpeg alpha |
 | **Isolate audio** | video node / file / direct URL | audio node | none — local ffmpeg (standing principle: local beats paid) |
-| **Create a LoRA** | trainer pick + style/subject + images + steps + trigger | trained style (Settings › Trained styles; `loraUrl`) | `lora-train` |
+| **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
 | **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
 | **Listing photos** | listing query | image nodes (with MLS provenance) | `data-mls` |

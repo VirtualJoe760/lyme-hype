@@ -14,7 +14,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. Clone-and-attach (former resume item c) shipped: the Create panel's Clone-voice job can attach its result to a Reference person in one step. Yapper REST signed-upload (former resume item a) shipped: `src/main/yapper-rest.ts` + a synthetic-id credential (`yapper-rest`, riding the existing generic secret vault) + a Settings › Connectors row to set it; `generation.ts` pre-uploads local source media to Yapper and hands the agent asset ids directly when Yapper is the only attached connector. resume: (b) is the only item left — live-verify the whole chain (muapi upload→lipsync, and the new Yapper REST fallback) once real keys exist; needs a joint session, nothing further is safely buildable blind. |
 | 2 | Motion graphics | in-progress | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. resume: muapi image-edit as a second batch source is the only item left — a genuinely different generation path (not a parameter wire-up), needs its own design pass before implementing. |
 | 3 | Generate video | done | i2v starting-frame picker (routes to gemini via `startFramePath`) + Yapper model picker (`modelHint` + `connectorId: 'yapper'`) shipped in `VideoScreen`; both named items closed. |
-| 4 | Generate image | pending | Extend lora-use to production tier; add Krea 2 direct styles param as a second LoRA route. |
+| 4 | Generate image | done | Fixed a real bug (picked style always forced `connectorId: 'fal'`, ignoring `style.connectorId`); resurrected `krea-training.ts` (git-history revival) as a second, opt-in "Krea 2 direct" trainer producing `connectorId: 'krea'` styles, applied via `styles:[{id,strength}]` and honoring the tier toggle (K2 medium/large) — the first genuine production-tier LoRA path. Both named items closed in one fix. |
 | 5 | Generate audio | pending | Yapper free-tier TTS fallback; Suno-via-muapi as a music alternative. |
 | 6 | Create a LoRA | pending | "Train from this deepfake's reference photos" shortcut once Reference-person exists (needs #1). |
 | 7 | Combine (canvas) | pending | Give the stub real semantics: image+image → ref-conditioning mix; image+audio(face) → i2v + lipsync. |
@@ -29,6 +29,20 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (seventh autonomous run) — Rows 1–3 confirmed to have nothing left buildable blind
+  (unchanged from prior runs' notes), so moved to row 4, Generate image. Found and fixed a real
+  bug along the way: a picked trained style always forced `connectorId: 'fal'`, silently ignoring
+  `TrainedStyle.connectorId` (a field that's existed for exactly this dispatch since before fal
+  became the default trainer). Resurrected `src/main/krea-training.ts` from git history
+  (`4f93dc3`, removed at `4e96389`) as a second, opt-in "Krea 2 direct" trainer alongside fal's
+  two — `POST /styles/train`, asset upload, job polling, all reusing the existing `lora:train` IPC
+  channel via a one-line dispatch in `fal-training.ts`'s `trainStyle()`. Both of row 4's named
+  items (production-tier LoRA, Krea-direct styles route) closed by the same fix: a Krea-trained
+  style now routes through `connectorId: 'krea'` with a `styles:[{id,strength}]` hint, and the
+  tier toggle picks K2 medium vs. K2 large — the first LoRA path that's actually tier-sensitive,
+  since fal's weights-URL route always uses the same weights regardless of tier. Row 4 marked
+  done. `catalog.md`'s Krea section and `capability-map.md` updated to match (both had drifted —
+  `catalog.md` still described `krea-training.ts` as removed/anticipated-but-unbuilt).
 - 2026-08-09 (sixth autonomous run) — Rows 1 and 2 have nothing left to build blind this pass (row
   1 is live-verification-only; row 2's remaining item is a genuinely new generation path, not a
   wire-up), so moved to row 3 (Generate video) per the strategy doc's priority order. Shipped both
