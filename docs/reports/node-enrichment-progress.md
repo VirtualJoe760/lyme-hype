@@ -29,6 +29,25 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (thirty-first autonomous run) — queue confirmed fully `done`/blocked (row 1 still
+  live-verification-only, joint-session scope; all other rows `done`), and Recommendations items
+  1–5 all struck except item 1's own still-open "Yapper-slice re-check" sub-note. Took that: found
+  `yapper-rest.ts` was the only main-process REST module using global Node `fetch` instead of
+  Electron's `net.fetch` (`fal-training.ts`/`krea-training.ts`/`mcp-http.ts`/`mcp-oauth.ts`/
+  `asset-store.ts` all already used `net.fetch`, which rides Chromium's network stack and picks up
+  the user's system proxy/CA config — global `fetch` doesn't). Fixed all four call sites (upload
+  init, upload PUT, upload complete, `/audio/speech`, `/audio/voices` — 5 call sites total across 3
+  functions) to use `net.fetch`, matching the PUT body's `Uint8Array` wrapping convention from
+  `fal-training.ts`'s own upload flow. Also fixed a real doc-drift bug found while in
+  `yapper.md`: "Result handling" still said the signed-upload wiring was "deferred to the joint
+  session" three runs after it actually shipped (third autonomous run) — corrected, plus a new
+  Gotchas entry flagging the `net.fetch` convention so future REST modules don't reintroduce
+  global `fetch`. `npm run typecheck` clean (fresh `npm install`, no `node_modules` at run start).
+  Not run live — no Yapper REST key in this sandbox, so the proxy-respecting behavior itself is
+  unverified end to end, but the change is a pure transport-layer swap with no request/response
+  shape change, same low-risk category as the fifteenth run's local-ffmpeg work. Recommendations
+  item 1 is now fully closed (every sub-note struck). `capability-map.md`/`creative-nodes.md` left
+  untouched — nothing user-visible changed, this was an internal-consistency fix only.
 - 2026-08-09 (thirtieth autonomous run) — queue confirmed fully `done`/blocked (row 1 still
   live-verification-only, joint-session scope; all other rows `done`). Recommendations items 1–5
   were all struck except item 2's own "still open" sub-note (`create_landing_page`, deliberately

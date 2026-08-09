@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
+import { net } from 'electron'
 import type { AudioToolResult, YapperVoiceEntry } from '@shared/types'
 import { importUrlAsset } from './asset-store'
 import { readSecretValue } from './credential-vault'
@@ -70,7 +71,7 @@ export async function uploadLocalMediaToYapper(path: string): Promise<YapperUplo
     return { ok: false, error: `Could not read ${path}: ${error instanceof Error ? error.message : String(error)}` }
   }
 
-  const initRes = await fetch(`${YAPPER_REST_BASE}/assets/uploads`, {
+  const initRes = await net.fetch(`${YAPPER_REST_BASE}/assets/uploads`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ mimeType, sizeBytes: bytes.length })
@@ -80,14 +81,14 @@ export async function uploadLocalMediaToYapper(path: string): Promise<YapperUplo
   }
   const init = (await initRes.json()) as YapperUploadInit
 
-  const putRes = await fetch(init.uploadUrl, {
+  const putRes = await net.fetch(init.uploadUrl, {
     method: init.method ?? 'PUT',
     headers: { ...(init.headers ?? {}), 'Content-Type': mimeType },
-    body: bytes
+    body: new Uint8Array(bytes)
   })
   if (!putRes.ok) return { ok: false, error: `Yapper upload PUT failed: ${putRes.status}` }
 
-  const completeRes = await fetch(init.completeUrl, {
+  const completeRes = await net.fetch(init.completeUrl, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}` }
   })
@@ -131,7 +132,7 @@ export async function synthesizeYapperSpeech(input: { text: string; voiceId?: st
   const body: Record<string, unknown> = { script }
   if (input.voiceId?.trim()) body.voiceId = input.voiceId.trim()
 
-  const res = await fetch(`${YAPPER_REST_BASE}/audio/speech`, {
+  const res = await net.fetch(`${YAPPER_REST_BASE}/audio/speech`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -176,7 +177,7 @@ export async function listYapperVoices(input: {
   const params = new URLSearchParams({ modelId })
   if (input.search?.trim()) params.set('search', input.search.trim())
 
-  const res = await fetch(`${YAPPER_REST_BASE}/audio/voices?${params.toString()}`, {
+  const res = await net.fetch(`${YAPPER_REST_BASE}/audio/voices?${params.toString()}`, {
     headers: { Authorization: `Bearer ${key}` }
   })
   if (!res.ok) return { ok: false, error: `Yapper voice list failed: ${res.status} ${await res.text()}` }

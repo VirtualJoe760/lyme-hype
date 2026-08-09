@@ -102,7 +102,7 @@ Full catalog per `llms-full.txt` [docs]; credit ranges vary with duration/resolu
 - `Process.outputs[]` = `{type, assetId, url, thumbnailUrl, width, height, duration, mimeType}` — **both** an asset id and a direct URL [verified — OpenAPI]. No documented URL expiry; assets persist in the team library and stay fetchable via `GET /assets/{assetId}` [docs; expiry behavior unverified].
 - Optional `webhookUrl`: one-shot, at-most-once `{event, processId, status, creditsUsed, error?, metadata?, links}` notification on completed/failed — treat `GET /processes/{id}` as authoritative [docs]. Lyme Hype polls; it runs no inbound webhook listener.
 - Hosted MCP process/asset reads return native media content blocks and video resource links with poster images [docs]; Lyme Hype ingests by downloading the output URL through `asset-store.ts` into `userData/assets` (`lyme-asset://`).
-- **Getting local media INTO Yapper** (the Deepfake screen's reference upload): the hosted connector cannot read local paths [verified] — either `yapper_import_asset` with a URL, or the REST signed-upload flow with a `yap_live_` key. Wiring one of those is deferred to the joint session (`docs/connectors/catalog.md`).
+- **Getting local media INTO Yapper** (the Deepfake screen's reference upload): the hosted connector cannot read local paths [verified] — either `yapper_import_asset` with a URL, or the REST signed-upload flow with a `yap_live_` key. The signed-upload flow is wired (`uploadLocalMediaToYapper` in `src/main/yapper-rest.ts`, `net.fetch` throughout — see Gotchas); live verification against a real key is still joint-session scope.
 
 ## Pricing & limits
 
@@ -123,6 +123,7 @@ Full catalog per `llms-full.txt` [docs]; credit ranges vary with duration/resolu
 - `yapper_upload_asset` only exists on a local stdio MCP server whose distribution is unclear [verified as absent from the hosted connector]; from the hosted connector, local files must round-trip via URL import or REST signed upload.
 - `GET /assets` requires `type` — an untyped "list everything" call is rejected [verified — OpenAPI].
 - Idempotency: reusing an `Idempotency-Key` with a different body returns `idempotency_conflict` (409) [docs].
+- `src/main/yapper-rest.ts`'s three REST calls (`uploadLocalMediaToYapper`, `synthesizeYapperSpeech`, `listYapperVoices`) use Electron's `net.fetch`, not the global Node `fetch` — every other main-process REST caller (`fal-training.ts`, `krea-training.ts`, `mcp-http.ts`, `mcp-oauth.ts`) already did; global `fetch` (Node's `undici`) doesn't pick up the user's system proxy/CA config the way Chromium's network stack does, so it was a real latent gap on any machine behind a corporate proxy. Fixed 2026-08-09 (thirty-first autonomous enrichment run) — keep new REST modules on `net.fetch` too.
 
 ## Sources
 

@@ -7,6 +7,68 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Thirty-first autonomous run: Yapper's REST client moved onto `net.fetch`, closing Recommendations item 1 for good
+
+Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only, unchanged for
+thirty runs straight). Recommendations items 1 through 5 were all struck except one leftover
+sub-note under item 1: "a general Yapper-slice re-check (its own REST signed-upload path predates
+fal's and wasn't re-verified against it)." Took that.
+
+**What the re-check found.** `src/main/yapper-rest.ts` has three functions that talk directly to
+Yapper's REST API (`uploadLocalMediaToYapper`, `synthesizeYapperSpeech`, `listYapperVoices`) —
+five `fetch()` call sites total. All five used the global Node `fetch` (Node's built-in `undici`).
+Every other main-process module that makes its own REST calls — `fal-training.ts`,
+`krea-training.ts`, `mcp-http.ts`, `mcp-oauth.ts`, `asset-store.ts`, `selftest.ts` — uses
+Electron's `net.fetch` instead, and a grep across `src/main/*.ts` turned up Yapper's module as the
+sole holdout. That's not a stylistic accident: Electron's `net` module rides Chromium's own network
+stack, which means it picks up whatever proxy configuration and system/enterprise CA certificates
+the user's OS is already configured with (relevant since Lyme Hype is a personal desktop tool that
+could easily be run behind a corporate proxy) — Node's global `fetch` doesn't participate in that
+at all, it's a fully separate HTTP client with its own TLS trust store. So on a machine where the
+system proxy is required to reach the internet, every other connector in this app would work and
+Yapper's REST calls specifically would silently fail to resolve DNS or complete TLS, with an error
+that gives no hint why "everything else works but Yapper doesn't."
+
+**What I built.** A pure transport-layer swap: `import { net } from 'electron'`, and all five
+`fetch(...)` calls became `net.fetch(...)`. One follow-on: the signed-upload PUT sends raw file
+bytes as the body, and `fal-training.ts`'s equivalent PUT already wraps its buffer as
+`new Uint8Array(data)` before handing it to `net.fetch` — matched that convention here too rather
+than passing the `Buffer` directly, even though `Buffer` technically satisfies `Uint8Array`'s
+interface; consistency with the one other codepath that already exercises `net.fetch` PUT-with-body
+seemed worth more than saving a wrapper call. No request bodies, headers, or response parsing
+changed — every existing behavior (error message shapes, defensive field-name guessing in
+`listYapperVoices`, the free-tier character cap) is untouched.
+
+**A doc-drift bug found along the way, fixed in the same commit.** `docs/connectors/reference/
+yapper.md`'s "Result handling" section still read: "Wiring one of those [upload paths] is deferred
+to the joint session" — stale since the third autonomous run shipped `uploadLocalMediaToYapper` in
+full, twenty-eight runs ago. Corrected the line to describe what's actually there, and added a new
+Gotchas entry naming the `net.fetch` convention explicitly so a future pass adding a new REST-backed
+connector module doesn't reintroduce plain `fetch` by not knowing the convention exists.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and
+`tsconfig.web.json` (fresh `npm install`, no `node_modules` at run start). **Not run live** — no
+Yapper REST key configured in this sandbox, so the actual proxy-respecting behavior this fix buys
+is unverified end to end (there's no proxy in this sandbox to test against either way). This is
+about as low-risk a change as this queue has shipped, though: it's a drop-in replacement of one
+fetch implementation for another with an already-proven-compatible call shape (`fal-training.ts`
+already exercises `net.fetch` for an auth-header GET, a JSON-body POST, and a binary-body PUT — the
+exact three shapes Yapper's module needed), no behavior change on a machine without a proxy, and a
+plausible real fix on one that has one.
+
+**Where this leaves things.** Recommendations item 1 is now fully closed — both its fal slice and
+its Yapper slice are shipped, and the "via: fal" picker sub-note was already explicitly declined
+(not forgotten) by the thirtieth run's own writeup. That leaves the queue `done` on every row except
+row 1 (Deepfake, unchanged, joint-session scope), and Recommendations items 1–5 all fully struck.
+Nothing left on the list except item 6, which was never a buildable item — it's the standing note
+that this whole queue's output is real, typechecked, doc-consistent wiring that has never been
+exercised against a live API key, and Phase 8–9 live verification is explicitly a human's job with
+real credentials, not this routine's. Unless a human adds new rows or Recommendations items, expect
+the next several runs to keep finding nothing further safely buildable blind — same honest-empty-
+queue state the twenty-ninth and thirtieth runs already described, not a sign anything is stuck.
+
+---
+
 ## 2026-08-09 — Thirtieth autonomous run: ChatRealty landing-page drafts wired (Recommendations item 2's deferred second half, closing it fully)
 
 Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only, unchanged for
@@ -1919,11 +1981,17 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    wrapper tool). It's been flagged since the first run (see "Cross-cutting plumbing" above) as
    blocking real muapi/fal i2v paths on rows 1, 3, and 7. muapi's slice was never really a gap (its
    stdio `muapi_upload_file` tool is agent-callable directly — Deepfake's Stage 2 chain already
-   relies on exactly that). **Still open, smaller scope now:** a general Yapper-slice re-check (its
-   own REST signed-upload path predates fal's and wasn't re-verified against it), and no other tile
-   besides Generate video forces `connectorId: 'fal'` yet — Motion graphics' and Combine's
-   image-conditioning paths could get the same "via: fal" treatment if a design pass wants it, but
-   neither was flagged as urgent the way Generate video's i2v case was.
+   relies on exactly that). **Yapper-slice re-check done** (2026-08-09, thirty-first autonomous
+   run): found and fixed a real transport-layer inconsistency — `yapper-rest.ts` was the only
+   main-process REST module using global Node `fetch` instead of Electron's `net.fetch`, which is
+   what every sibling REST module uses specifically because it respects the user's system proxy/CA
+   config; global `fetch` doesn't. All five of its REST call sites now use `net.fetch`. Also fixed a
+   doc-drift bug in `yapper.md` found along the way (a stale "deferred to the joint session" line
+   for wiring that actually shipped three runs earlier). Item 1 is now fully closed. **The
+   "via: fal" picker for Motion graphics/Combine's image-conditioning paths was considered and
+   explicitly declined** (thirtieth autonomous run, see that entry below) — `fal.md`'s own gotchas
+   flag nano-banana as Gemini resold at a markup, so building that picker would ship an attractive
+   nuisance rather than a real capability; left as a human's conscious call, not routine scope.
 
 2. ~~**ChatRealty's CMS tools are completely untouched and low-risk.**~~ — **`create_article`'s
    slice shipped** (2026-08-09, twenty-seventh autonomous run): a category/title/excerpt/content
