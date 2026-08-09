@@ -83,6 +83,8 @@ export interface Bridge {
       imagePaths: string[]
       steps?: number
       triggerWord?: string
+      trainer?: string
+      kind?: 'style' | 'subject'
     }): Promise<TrainStyleResult | null>
     list(): Promise<TrainedStyle[]>
     delete(id: string): Promise<void>

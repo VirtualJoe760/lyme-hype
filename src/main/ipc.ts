@@ -14,7 +14,7 @@ import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { cloneVoice, composeMusic, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
 import { exportTimeline } from './ffmpeg'
-import { deleteTrainedStyle, listTrainedStyles, trainStyle } from './krea-training'
+import { deleteTrainedStyle, listTrainedStyles, trainStyle } from './fal-training'
 import { isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
@@ -219,7 +219,17 @@ export function registerIpc(window: BrowserWindow): void {
 
   ipcMain.handle(
     IPC.loraTrain,
-    (e, input: { name: string; imagePaths: string[]; steps?: number; triggerWord?: string }) => {
+    (
+      e,
+      input: {
+        name: string
+        imagePaths: string[]
+        steps?: number
+        triggerWord?: string
+        trainer?: string
+        kind?: 'style' | 'subject'
+      }
+    ) => {
       if (!isMainSender(e)) return null
       return trainStyle(input)
     }

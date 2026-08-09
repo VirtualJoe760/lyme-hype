@@ -135,7 +135,13 @@ export interface AudioToolResult {
 export interface TrainedStyle {
   id: string
   name: string
-  connectorId: 'krea'
+  /** 'fal' for the fal-hosted Krea trainers (current path); 'krea' survives on
+   *  legacy entries from the short-lived Krea-native client. */
+  connectorId: 'krea' | 'fal'
+  /** Which fal trainer produced it ('krea-2' | 'flux-krea'). */
+  trainer?: string
+  /** URL of the trained LoRA weights (safetensors) — the generation input. */
+  loraUrl?: string
   trainedAt: string
   referenceImageCount: number
 }

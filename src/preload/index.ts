@@ -115,6 +115,8 @@ const api = {
       imagePaths: string[]
       steps?: number
       triggerWord?: string
+      trainer?: string
+      kind?: 'style' | 'subject'
     }): Promise<TrainStyleResult | null> => ipcRenderer.invoke(IPC.loraTrain, input),
     list: (): Promise<TrainedStyle[]> => ipcRenderer.invoke(IPC.loraList),
     delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.loraDelete, id)

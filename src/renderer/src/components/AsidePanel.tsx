@@ -151,22 +151,27 @@ function ImageScreen(props: {
 
   function handleGenerate(): void {
     // The tier choice is what finally drives GenerationParams.connectorId from
-    // the UI — the routing gap catalog.md carried since Phase 4.
+    // the UI — the routing gap catalog.md carried since Phase 4. A trained
+    // LoRA routes through fal (where the trainers live) with the weights URL
+    // in the hint so the agent passes it to the model's lora parameter.
     const connectorId =
       style !== undefined
-        ? 'krea'
+        ? 'fal'
         : tier === 'production'
           ? props.installedIds.includes('muapi')
             ? 'muapi'
             : undefined
           : storyboardConnector || undefined
+    const styleHint = style
+      ? `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
+      : undefined
     void generateMedia({
       label: labelFromPrompt(prompt, 'img'),
       mediaType: 'image',
       prompt: prompt.trim(),
       aspectRatio: aspect,
       connectorId,
-      modelHint: style ? `the trained style "${style.name}"` : tier === 'production' ? 'Midjourney' : undefined
+      modelHint: styleHint ?? (tier === 'production' ? 'Midjourney' : undefined)
     })
     props.done()
   }
@@ -459,13 +464,22 @@ function IsolateScreen(props: { done: () => void }): React.JSX.Element {
   )
 }
 
+const TRAINERS = [
+  { id: 'krea-2', label: 'Krea 2 — best Krea look ($0.003/step)', steps: ['100', '300', '1000'], defaultSteps: '300' },
+  { id: 'flux-krea', label: 'FLUX.1 Krea [dev] (~$2/run)', steps: ['500', '1000', '2000'], defaultSteps: '1000' }
+]
+
 function LoraScreen(): React.JSX.Element {
   const [name, setName] = useState('')
   const [files, setFiles] = useState<string[]>([])
-  const [steps, setSteps] = useState('300')
+  const [trainer, setTrainer] = useState(TRAINERS[0].id)
+  const [steps, setSteps] = useState(TRAINERS[0].defaultSteps)
+  const [kind, setKind] = useState<'style' | 'subject'>('style')
   const [triggerWord, setTriggerWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  const trainerDef = TRAINERS.find((t) => t.id === trainer) ?? TRAINERS[0]
 
   async function train(): Promise<void> {
     setBusy(true)
@@ -475,7 +489,9 @@ function LoraScreen(): React.JSX.Element {
         name,
         imagePaths: files,
         steps: parseInt(steps, 10),
-        triggerWord: triggerWord.trim() || undefined
+        triggerWord: triggerWord.trim() || undefined,
+        trainer,
+        kind
       })
       if (result?.ok && result.style) {
         setStatus({
@@ -495,9 +511,32 @@ function LoraScreen(): React.JSX.Element {
   return (
     <>
       <p className="aside-help">
-        Teach Krea a reusable style/subject from example images. Billed to your Krea API balance
-        per job (Krea doesn't publish a per-step price); a short balance errors clearly.
+        Train a reusable LoRA from example images on fal's Krea trainers — published per-step
+        pricing, billed to your fal account. Use 4+ images; more is better.
       </p>
+      <select
+        className="cr-input create-select"
+        value={trainer}
+        onChange={(e) => {
+          setTrainer(e.target.value)
+          const def = TRAINERS.find((t) => t.id === e.target.value)
+          if (def) setSteps(def.defaultSteps)
+        }}
+      >
+        {TRAINERS.map((t) => (
+          <option key={t.id} value={t.id}>
+            Trainer: {t.label}
+          </option>
+        ))}
+      </select>
+      <div className="tab-row">
+        <button className={kind === 'style' ? 'active' : ''} onClick={() => setKind('style')}>
+          Style
+        </button>
+        <button className={kind === 'subject' ? 'active' : ''} onClick={() => setKind('subject')}>
+          Subject / character
+        </button>
+      </div>
       <input
         className="cr-input create-select"
         placeholder="Style name"
@@ -516,13 +555,13 @@ function LoraScreen(): React.JSX.Element {
       >
         {files.length > 0 ? `${files.length} training image(s) picked` : '↑ Pick training images'}
       </button>
-      <ChipRow options={['100', '300', '1000']} value={steps} onChange={setSteps} />
+      <ChipRow options={trainerDef.steps} value={steps} onChange={setSteps} />
       <button
         className="generate-btn"
         disabled={busy || !name.trim() || files.length === 0}
         onClick={() => void train()}
       >
-        {busy ? 'Training… (can take minutes)' : '◈ Train style'}
+        {busy ? 'Training… (can take minutes)' : '◈ Train LoRA'}
       </button>
       {status && <p className={`cr-msg ${status.kind === 'ok' ? 'done' : 'error'}`}>{status.text}</p>}
     </>

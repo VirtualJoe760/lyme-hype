@@ -42,8 +42,9 @@ export function TrainedStylesTab(): React.JSX.Element {
               </button>
             </div>
             <div className="meta">
-              krea · {style.referenceImageCount} training image(s) ·{' '}
+              {style.trainer ?? style.connectorId} · {style.referenceImageCount} training image(s) ·{' '}
               {new Date(style.trainedAt).toLocaleDateString()}
+              {style.loraUrl ? ' · weights saved' : ''}
             </div>
           </div>
         ))}
