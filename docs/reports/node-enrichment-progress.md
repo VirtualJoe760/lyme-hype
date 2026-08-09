@@ -29,6 +29,12 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (eighth autonomous run) — collided with the seventh run on row 4, independently;
+  read the Krea-direct dead end differently (out-of-scope revival vs. their opt-in-trainer
+  reading of the removal commit's own wording), reviewed their already-pushed fix, found their
+  reading defensible, reset to their commit rather than fight the merge, and re-verified
+  `npm run typecheck` clean myself. No code changes; see the report for the full judgment-call
+  writeup, flagged for a human glance. Row 4 stays `done` from the seventh run. Next: row 5.
 - 2026-08-09 (seventh autonomous run) — Rows 1–3 confirmed to have nothing left buildable blind
   (unchanged from prior runs' notes), so moved to row 4, Generate image. Found and fixed a real
   bug along the way: a picked trained style always forced `connectorId: 'fal'`, silently ignoring

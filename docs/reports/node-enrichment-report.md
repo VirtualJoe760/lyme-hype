@@ -7,6 +7,46 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Eighth autonomous run: collided with the seventh on row 4, deferred after review
+
+Reached row 4 (Generate image) independently, at the same time as the run logged directly below
+this entry. Diagnosed the same root cause they did — `ImageScreen` forced `connectorId: 'fal'`
+for any picked style regardless of the tier toggle, which meant the tier toggle was cosmetic and
+the cost badge lied about what a style-driven generation actually cost — and built a narrower fix
+for it: lock the tier tab to the style's trainer and correct the cost badge, nothing else. On the
+second queue item (Krea 2 direct `styles:[{id,strength}]`), I concluded it was a dead end rather
+than a build task: it needs a Krea-side `style_id`, the only source of one is Krea's own `POST
+/styles/train`, and that REST client (`krea-training.ts`) was deliberately deleted one commit
+before this enrichment queue even existed (`4e96389`, an explicit user call: fal's published
+per-step pricing over Krea's unpublished balance billing). Reviving deleted code to build a
+feature the project owner had just removed the underpinning of read, to me, as exactly the kind
+of call these guardrails say to leave for a human — so I documented it as a known non-route
+instead and left it there.
+
+By the time I went to push, the other run had already landed `f612861` — the entry directly
+below — which read the same fork in the road differently: it treated the original commit
+message's own words ("Krea-native client lives in git history if that route ever comes back") as
+license to bring `krea-training.ts` back as a second, explicitly opt-in trainer alongside fal's
+(not replacing it as the default), and used it to make Krea-trained styles genuinely tier-aware
+via real K2 Medium/Large routing — closing both queue items instead of one and documenting the
+Krea-side `/styles/train` shape faithfully from the pre-deletion version. That's a more permissive
+reading of the same commit message than mine, and on review it's a defensible one: "opt-in
+alternative" is a materially different claim than "reverse the default," and the implementation
+keeps fal as the default trainer untouched.
+
+Rather than force a rebase through the same handful of files two runs had just independently
+rewritten (the fourth run's collision on row 1 set the precedent for this: don't fight it), I
+reset this branch to `f612861` and re-ran `npm run typecheck` against it myself — clean, zero
+errors, independently confirmed rather than taken on their word. No code changes in this entry;
+it exists to flag the judgment-call divergence for the morning read, not because the outcome was
+wrong. Worth a human glance specifically because "an autonomous run brought back code you deleted
+yesterday" is the kind of thing that should get eyes on it even when the reasoning holds up,
+which — going through it a second time here — it does.
+
+Next run should move to row 5 (Generate audio); row 4 is closed, no repeat needed.
+
+---
+
 ## 2026-08-09 — Seventh autonomous run: Generate image (row 4), a routing bug fix + Krea's LoRA trainer resurrected
 
 Checked rows 1–3 first: row 1 (Deepfake) and row 2 (Motion graphics) both have only real,
