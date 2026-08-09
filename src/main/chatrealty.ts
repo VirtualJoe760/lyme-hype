@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type {
+  ChatRealtyCarouselSlideInput,
   ChatRealtyCoverResult,
   ChatRealtyListing,
   ChatRealtyListingContextResult,
@@ -244,6 +245,56 @@ export async function planListingCarousel(listingKey: string): Promise<ChatRealt
     const text = textOf(result.content).slice(0, LISTING_CONTEXT_MAX_CHARS)
     if (!text.trim()) return { ok: false, error: 'No carousel material came back.' }
     return { ok: true, text }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    client.stop()
+  }
+}
+
+/**
+ * Build order item 3: `create_carousel_slide` renders one non-cover 4:5 slide
+ * — banner/cma/text/cta, each with its own required-field shape per the
+ * reference doc. Unlike `create_listing_cover`/`stage_listing_with_agent`,
+ * this tool takes no `listingKey` — every kind's content is literal fields
+ * the caller already has (from `plan_listing_carousel`'s material, or the
+ * user's own copy), not a server-side lookup. Same Cloudinary-URL-then-
+ * `importUrlAsset` ingestion as the cover, same deterministic single call.
+ */
+export async function createCarouselSlide(
+  input: ChatRealtyCarouselSlideInput
+): Promise<ChatRealtyCoverResult> {
+  const client = new McpStdioClient()
+  try {
+    const token = resolveChatRealtyToken()
+    if (!token) return { ok: false, error: 'No ChatRealty token configured.' }
+    await client.start(serverSpec(token))
+
+    const args: Record<string, unknown> = { kind: input.kind }
+    if (input.kind === 'banner') {
+      args.label = input.label
+      args.caption = input.caption
+      args.imageUrl = input.imageUrl
+    } else if (input.kind === 'cma') {
+      args.stats = input.stats
+      args.listingPrice = input.listingPrice
+      args.scope = input.scope
+      args.period = input.period
+      args.pitch = input.pitch
+    } else {
+      args.paragraphs = input.paragraphs
+      if (input.kind === 'text') args.italicLast = input.italicLast
+    }
+
+    const result = await client.callTool('create_carousel_slide', args)
+    if (result.isError) {
+      return { ok: false, error: textOf(result.content).slice(0, 300) }
+    }
+    const match = textOf(result.content).match(CLOUDINARY_URL)
+    if (!match) return { ok: false, error: 'No slide URL came back.' }
+
+    const saved = await importUrlAsset(match[0], 'image')
+    return { ok: true, src: saved.url }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {

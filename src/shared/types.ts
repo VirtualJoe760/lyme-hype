@@ -504,6 +504,28 @@ export interface ChatRealtyListingContextResult {
   error?: string
 }
 
+export interface ChatRealtyCarouselStat {
+  label: string
+  value: string
+}
+
+/** `create_carousel_slide`'s per-kind field shapes. Not tied to a listingKey —
+ *  unlike cover/staging, the tool takes literal content the caller already has
+ *  (from `plan_listing_carousel`'s material or the user's own copy), not a
+ *  server-side lookup. */
+export type ChatRealtyCarouselSlideInput =
+  | { kind: 'banner'; label: string; caption: string; imageUrl: string }
+  | {
+      kind: 'cma'
+      stats: ChatRealtyCarouselStat[]
+      listingPrice: string
+      scope: string
+      period: string
+      pitch: string
+    }
+  | { kind: 'text'; paragraphs: string[]; italicLast: boolean }
+  | { kind: 'cta'; paragraphs: [string, string] }
+
 /** The only credential facts the agent or renderer ever sees — never the value. */
 export interface SecretReport {
   connectorId: string

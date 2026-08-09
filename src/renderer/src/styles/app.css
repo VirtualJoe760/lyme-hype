@@ -1720,6 +1720,35 @@
   border-top: 1px solid var(--border);
 }
 
+.cr-slide-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cr-slide-form {
+  margin-bottom: 8px;
+}
+
+.cr-stat-row {
+  display: flex;
+  gap: 6px;
+}
+
+.cr-stat-row .cr-input {
+  flex: 1;
+}
+
+.cr-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
 .cr-textarea {
   resize: vertical;
   min-height: 54px;

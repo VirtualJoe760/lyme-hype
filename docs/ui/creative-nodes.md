@@ -93,7 +93,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images (local files, or a canvas node's `lyme-asset://` URL — e.g. Deepfake's "train a LoRA from this photo" shortcut) + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
 | **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
-| **Listing photos** | listing query (+ optional hook/body once photos are pulled) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render | `data-mls`; cover render via ChatRealty's own `create_listing_cover` tool (templated server-side layout, not a generation model — still a real API call, only fires on button press) |
+| **Listing photos** | listing query (+ optional hook/body once photos are pulled, or a carousel-slide kind + per-kind form) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render and a carousel slide render (cma/text/cta/banner) | `data-mls`; cover + slide renders via ChatRealty's `create_listing_cover`/`create_carousel_slide` tools (templated server-side layout, not a generation model — still a real API call, only fires on button press) |
 
 ## Reference person (Deepfake's identity + voice pairing)
 
@@ -224,9 +224,26 @@ path `docs/architecture/capability-map.md` already flagged as the right mechanis
 Cloudinary-returning tools) into a new image node. Same guardrail as every generation button in the
 app: nothing fires until the user presses it — this is wiring, not an autonomous call.
 `plan_listing_carousel` also now feeds the Scripting panel's agent context (see "Scripting
-conversation" above) — its own deterministic call, no UI of its own. `create_carousel_slide` and
-`stage_listing_with_agent` remain unwired; see `node-enrichment-strategy.md`'s Listing photos
-analysis for the fuller chain and why cover-first, then CMA-context, were the right slices so far.
+conversation" above) — its own deterministic call, no UI of its own.
+
+As of the same run's follow-up pass, `create_carousel_slide` is wired too: a kind picker (CMA
+stats / Text / Call to action / Banner) beneath the cover form, each kind rendering its own
+per-kind form (`cma` needs exactly 4 label/value stat pairs plus `listingPrice`/`scope`/`period`/
+`pitch`; `text` takes 1–3 paragraphs ≤220 chars each plus an italicize-last-paragraph toggle;
+`cta` needs exactly 2 paragraphs, agent name/DRE/headshot/logo injected server-side; `banner`
+needs a room label, caption, and an image URL). Unlike the cover and staging tools, this one
+tool takes no `listingKey` — every kind's content is literal fields the caller already has, not a
+server-side lookup, so `createCarouselSlide()` in `chatrealty.ts` calls it without one. Same
+Cloudinary-URL-then-`importUrlAsset` ingestion as the cover, same never-fires-until-clicked
+guardrail. The `banner` kind structurally depends on `stage_listing_with_agent` (unbuilt — see
+below) for its `imageUrl`; until that exists, the field takes a manually pasted URL, which the
+form's help text says plainly rather than pretending the dependency isn't there.
+
+`stage_listing_with_agent` (the interior-photo agent-staging picker, real generation spend) remains
+unwired — the last item in `node-enrichment-strategy.md`'s Listing photos build order. The exact
+per-stat/per-paragraph field shape used by `create_carousel_slide` above is inferred from the
+reference doc's prose description (no field-level schema was captured), same confidence category
+as the Krea asset-upload field-name guesswork — worth a live check once a ChatRealty token exists.
 
 ## Where routing happens
 

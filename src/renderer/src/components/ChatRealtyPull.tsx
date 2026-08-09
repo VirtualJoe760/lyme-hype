@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
+import { Button } from './ui/Button'
+import type { ChatRealtyCarouselSlideInput } from '@shared/types'
 
 type PullState = 'idle' | 'pulling' | 'done' | 'error'
 type CoverState = 'idle' | 'working' | 'done' | 'error'
+type SlideKind = ChatRealtyCarouselSlideInput['kind']
+type SlideState = 'idle' | 'working' | 'done' | 'error'
 
 interface TopListing {
   listingKey: string
@@ -12,9 +16,49 @@ interface TopListing {
   detailUrl: string | null
 }
 
+const SLIDE_KINDS: { id: SlideKind; label: string }[] = [
+  { id: 'cma', label: 'CMA stats' },
+  { id: 'text', label: 'Text' },
+  { id: 'cta', label: 'Call to action' },
+  { id: 'banner', label: 'Banner (staged photo)' }
+]
+
+function emptyCarouselForm(): {
+  statLabels: string[]
+  statValues: string[]
+  listingPrice: string
+  scope: string
+  period: string
+  pitch: string
+  paragraph1: string
+  paragraph2: string
+  paragraph3: string
+  italicLast: boolean
+  bannerLabel: string
+  bannerCaption: string
+  bannerImageUrl: string
+} {
+  return {
+    statLabels: ['', '', '', ''],
+    statValues: ['', '', '', ''],
+    listingPrice: '',
+    scope: '',
+    period: '',
+    pitch: '',
+    paragraph1: '',
+    paragraph2: '',
+    paragraph3: '',
+    italicLast: false,
+    bannerLabel: '',
+    bannerCaption: '',
+    bannerImageUrl: ''
+  }
+}
+
 export function ChatRealtyPull(): React.JSX.Element | null {
   const pull = useStudio((s) => s.pullChatRealtyPhotos)
   const createCover = useStudio((s) => s.createChatRealtyCover)
+  const createSlide = useStudio((s) => s.createChatRealtyCarouselSlide)
   const [connected, setConnected] = useState<boolean | null>(null)
   const [query, setQuery] = useState('')
   const [state, setState] = useState<PullState>('idle')
@@ -24,6 +68,10 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   const [body, setBody] = useState('')
   const [coverState, setCoverState] = useState<CoverState>('idle')
   const [coverMessage, setCoverMessage] = useState('')
+  const [slideKind, setSlideKind] = useState<SlideKind>('cma')
+  const [slideForm, setSlideForm] = useState(emptyCarouselForm())
+  const [slideState, setSlideState] = useState<SlideState>('idle')
+  const [slideMessage, setSlideMessage] = useState('')
 
   useEffect(() => {
     let active = true
@@ -50,6 +98,9 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     setTopListing(null)
     setCoverState('idle')
     setCoverMessage('')
+    setSlideState('idle')
+    setSlideMessage('')
+    setSlideForm(emptyCarouselForm())
     try {
       const result = await pull(query)
       if (result.ok && result.count > 0) {
@@ -90,6 +141,59 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     } catch (err) {
       setCoverState('error')
       setCoverMessage(err instanceof Error ? err.message : 'The cover render failed.')
+    }
+  }
+
+  function buildSlideInput(): ChatRealtyCarouselSlideInput | null {
+    const f = slideForm
+    if (slideKind === 'cma') {
+      const stats = f.statLabels.map((label, i) => ({ label: label.trim(), value: f.statValues[i].trim() }))
+      if (stats.some((s) => !s.label || !s.value)) return null
+      if (!f.listingPrice.trim() || !f.scope.trim() || !f.period.trim() || !f.pitch.trim()) return null
+      return {
+        kind: 'cma',
+        stats,
+        listingPrice: f.listingPrice.trim(),
+        scope: f.scope.trim(),
+        period: f.period.trim(),
+        pitch: f.pitch.trim()
+      }
+    }
+    if (slideKind === 'text') {
+      if (!f.paragraph1.trim()) return null
+      const paragraphs = [f.paragraph1, f.paragraph2, f.paragraph3].map((p) => p.trim()).filter(Boolean)
+      return { kind: 'text', paragraphs, italicLast: f.italicLast }
+    }
+    if (slideKind === 'cta') {
+      if (!f.paragraph1.trim() || !f.paragraph2.trim()) return null
+      return { kind: 'cta', paragraphs: [f.paragraph1.trim(), f.paragraph2.trim()] }
+    }
+    if (!f.bannerLabel.trim() || !f.bannerCaption.trim() || !f.bannerImageUrl.trim()) return null
+    return { kind: 'banner', label: f.bannerLabel.trim(), caption: f.bannerCaption.trim(), imageUrl: f.bannerImageUrl.trim() }
+  }
+
+  const slideInput = buildSlideInput()
+
+  async function handleCreateSlide(): Promise<void> {
+    if (!slideInput || !topListing) return
+    setSlideState('working')
+    setSlideMessage('')
+    try {
+      const result = await createSlide(slideInput, {
+        label: `${topListing.address} · ${SLIDE_KINDS.find((k) => k.id === slideKind)?.label ?? 'Slide'}`,
+        listingKey: topListing.listingKey,
+        detailUrl: topListing.detailUrl ?? undefined
+      })
+      if (result.ok) {
+        setSlideState('done')
+        setSlideMessage('Added the slide to the canvas.')
+      } else {
+        setSlideState('error')
+        setSlideMessage(result.error ?? 'The slide render failed.')
+      }
+    } catch (err) {
+      setSlideState('error')
+      setSlideMessage(err instanceof Error ? err.message : 'The slide render failed.')
     }
   }
 
@@ -141,6 +245,177 @@ export function ChatRealtyPull(): React.JSX.Element | null {
             {coverState === 'working' ? 'Rendering…' : '▣ Create Instagram cover'}
           </button>
           {coverMessage && <div className={`cr-msg ${coverState}`}>{coverMessage}</div>}
+        </div>
+      )}
+      {topListing && (
+        <div className="cr-cover">
+          <p className="cr-help">Build a carousel slide for {topListing.address || 'this listing'}.</p>
+          <div className="cr-slide-kinds">
+            {SLIDE_KINDS.map((k) => (
+              <Button
+                key={k.id}
+                type="button"
+                variant={slideKind === k.id ? 'mini-primary' : 'mini'}
+                onClick={() => {
+                  setSlideKind(k.id)
+                  setSlideState('idle')
+                  setSlideMessage('')
+                }}
+              >
+                {k.label}
+              </Button>
+            ))}
+          </div>
+          {slideKind === 'cma' && (
+            <div className="cr-slide-form">
+              {[0, 1, 2, 3].map((i) => (
+                <div className="cr-stat-row" key={i}>
+                  <input
+                    className="link-input cr-input"
+                    placeholder={`Stat ${i + 1} label (e.g. Homes sold)`}
+                    value={slideForm.statLabels[i]}
+                    onChange={(e) =>
+                      setSlideForm((f) => {
+                        const statLabels = [...f.statLabels]
+                        statLabels[i] = e.target.value
+                        return { ...f, statLabels }
+                      })
+                    }
+                  />
+                  <input
+                    className="link-input cr-input"
+                    placeholder="Value (e.g. 6)"
+                    value={slideForm.statValues[i]}
+                    onChange={(e) =>
+                      setSlideForm((f) => {
+                        const statValues = [...f.statValues]
+                        statValues[i] = e.target.value
+                        return { ...f, statValues }
+                      })
+                    }
+                  />
+                </div>
+              ))}
+              <input
+                className="link-input cr-input"
+                placeholder="Listing price (e.g. $2,360,000)"
+                value={slideForm.listingPrice}
+                onChange={(e) => setSlideForm((f) => ({ ...f, listingPrice: e.target.value }))}
+              />
+              <input
+                className="link-input cr-input"
+                placeholder="Scope (e.g. PGA West)"
+                value={slideForm.scope}
+                onChange={(e) => setSlideForm((f) => ({ ...f, scope: e.target.value }))}
+              />
+              <input
+                className="link-input cr-input"
+                placeholder="Period (e.g. Last 12 months)"
+                value={slideForm.period}
+                onChange={(e) => setSlideForm((f) => ({ ...f, period: e.target.value }))}
+              />
+              <input
+                className="link-input cr-input"
+                placeholder="Pitch (one line)"
+                value={slideForm.pitch}
+                onChange={(e) => setSlideForm((f) => ({ ...f, pitch: e.target.value }))}
+              />
+            </div>
+          )}
+          {slideKind === 'text' && (
+            <div className="cr-slide-form">
+              <textarea
+                className="link-input cr-input cr-textarea"
+                placeholder="Paragraph 1 (required, up to 220 characters)"
+                value={slideForm.paragraph1}
+                maxLength={220}
+                rows={2}
+                onChange={(e) => setSlideForm((f) => ({ ...f, paragraph1: e.target.value }))}
+              />
+              <textarea
+                className="link-input cr-input cr-textarea"
+                placeholder="Paragraph 2 (optional)"
+                value={slideForm.paragraph2}
+                maxLength={220}
+                rows={2}
+                onChange={(e) => setSlideForm((f) => ({ ...f, paragraph2: e.target.value }))}
+              />
+              <textarea
+                className="link-input cr-input cr-textarea"
+                placeholder="Paragraph 3 (optional)"
+                value={slideForm.paragraph3}
+                maxLength={220}
+                rows={2}
+                onChange={(e) => setSlideForm((f) => ({ ...f, paragraph3: e.target.value }))}
+              />
+              <label className="cr-checkbox">
+                <input
+                  type="checkbox"
+                  checked={slideForm.italicLast}
+                  onChange={(e) => setSlideForm((f) => ({ ...f, italicLast: e.target.checked }))}
+                />
+                Italicize the last paragraph
+              </label>
+            </div>
+          )}
+          {slideKind === 'cta' && (
+            <div className="cr-slide-form">
+              <textarea
+                className="link-input cr-input cr-textarea"
+                placeholder="Paragraph 1 (required, up to 220 characters)"
+                value={slideForm.paragraph1}
+                maxLength={220}
+                rows={2}
+                onChange={(e) => setSlideForm((f) => ({ ...f, paragraph1: e.target.value }))}
+              />
+              <textarea
+                className="link-input cr-input cr-textarea"
+                placeholder="Paragraph 2 (required)"
+                value={slideForm.paragraph2}
+                maxLength={220}
+                rows={2}
+                onChange={(e) => setSlideForm((f) => ({ ...f, paragraph2: e.target.value }))}
+              />
+              <p className="cr-help">
+                Agent name, DRE, headshot, and logo are injected server-side — nothing else to fill in.
+              </p>
+            </div>
+          )}
+          {slideKind === 'banner' && (
+            <div className="cr-slide-form">
+              <p className="cr-help">
+                Needs a staged-photo URL from Agent-in-photo staging (not yet built) — paste one manually,
+                or use a cover/carousel Cloudinary URL you already have.
+              </p>
+              <input
+                className="link-input cr-input"
+                placeholder="Room label (e.g. Primary Suite)"
+                value={slideForm.bannerLabel}
+                onChange={(e) => setSlideForm((f) => ({ ...f, bannerLabel: e.target.value }))}
+              />
+              <input
+                className="link-input cr-input"
+                placeholder="Caption band text"
+                value={slideForm.bannerCaption}
+                onChange={(e) => setSlideForm((f) => ({ ...f, bannerCaption: e.target.value }))}
+              />
+              <input
+                className="link-input cr-input"
+                placeholder="Image URL (https://…)"
+                value={slideForm.bannerImageUrl}
+                onChange={(e) => setSlideForm((f) => ({ ...f, bannerImageUrl: e.target.value }))}
+              />
+            </div>
+          )}
+          <Button
+            variant="block"
+            className="cr-btn"
+            disabled={slideState === 'working' || !slideInput}
+            onClick={() => void handleCreateSlide()}
+          >
+            {slideState === 'working' ? 'Rendering…' : '▤ Create carousel slide'}
+          </Button>
+          {slideMessage && <div className={`cr-msg ${slideState}`}>{slideMessage}</div>}
         </div>
       )}
     </div>

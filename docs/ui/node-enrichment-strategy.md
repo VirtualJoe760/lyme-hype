@@ -229,6 +229,38 @@ as paid-for and unused since the map was first written.
 - Steps 3–4 remain open, real, separately-scoped features for future passes — no ordering
   dependency between them.
 
+**Status (2026-08-09 enrichment run, step 3 shipped — row 10 stays in-progress):**
+
+- `createCarouselSlide()` in `chatrealty.ts`: one `create_carousel_slide` MCP call (deterministic,
+  no agent turn, same shape as the other three ChatRealty creative calls) dispatching on a new
+  `ChatRealtyCarouselSlideInput` discriminated union (`shared/types.ts`) — `banner`/`cma`/`text`/
+  `cta`, each carrying only its own kind's required fields per the reference doc's field list.
+  Unlike `create_listing_cover`/`stage_listing_with_agent`, this tool takes **no `listingKey`** —
+  the reference doc's own param column omits it, and every kind's content is literal fields the
+  caller already supplies (stats/paragraphs/an image URL), not a server-side lookup — so the main-
+  process call doesn't send one, only the resulting canvas node tags itself with the top listing's
+  key for provenance, same as the cover.
+- Full plumbing: new `chatrealty:create-carousel-slide` IPC channel end-to-end, `bridge.chatRealty
+  .createCarouselSlide`, a `createChatRealtyCarouselSlide` store action (reuses `addNode` the same
+  way `createChatRealtyCover` does), and a kind-picker + four per-kind forms on `ChatRealtyPull.tsx`
+  beneath the cover form — first UI in this file to use the shared `Button` component
+  (`src/renderer/src/components/ui/Button.tsx`) instead of hand-picked classes, per `AGENTS.md`'s
+  buttons-are-components rule; the pre-existing cover buttons in the same file were left as-is
+  (not a regression to fix mid-feature, but worth a follow-up pass noting them for consistency).
+- The `banner` kind structurally depends on `stage_listing_with_agent` (step 4, unbuilt) for a real
+  `imageUrl`; rather than disable the kind, its form takes a manually pasted URL with help text
+  saying exactly that — an honest partial rather than a fake-looking full build.
+- `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install`, no
+  `node_modules` at run start). **Not run live** — no ChatRealty token configured in this sandbox;
+  the request shape is inferred from the reference doc's prose field list (`stats`, `listingPrice`/
+  `scope`/`period`/`pitch` for `cma`; `paragraphs`/`italicLast` for `text`; exactly 2 `paragraphs`
+  for `cta`; `label`/`caption`/`imageUrl` for `banner`) since no field-level JSON schema was
+  captured when the reference doc was written — same confidence tier as the Krea asset-upload
+  field-name guesswork from row 4, worth a live check once a token exists (does each `cma` stat
+  really take `{label, value}`, does `text` really accept 1–3 paragraphs or a fixed count).
+- Step 4 (agent-in-photo staging picker — real generation spend, build the picker, never fire it)
+  is the only item left in the row 10 build order.
+
 ---
 
 ## Node queue (priority order — the routine works top to bottom, one per run)
@@ -529,8 +561,8 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    row updated in this commit. Nothing named is left open on row 9 from row 7's handoff; a future
    pass should treat any further row-9 work as its own gap-search (transition dialog, clip-onto-
    clip stretch goal, etc.) rather than assume more is queued here.
-10. **Listing photos (ChatRealty)** — analyzed above; cover render and Scripting-panel CMA context
-    shipped, carousel slide builder / agent-in-photo staging build order ready for future passes.
+10. **Listing photos (ChatRealty)** — analyzed above; cover render, Scripting-panel CMA context,
+    and the carousel slide builder shipped. Agent-in-photo staging is the one item left.
 
 ## What "enrichment" means per run (guardrails for the automated routine)
 

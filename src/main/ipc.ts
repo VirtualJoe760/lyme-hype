@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type {
+  ChatRealtyCarouselSlideInput,
   CombineLocalKind,
   ConnectorDef,
   GenerationParams,
@@ -28,6 +29,7 @@ import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
 import {
+  createCarouselSlide,
   createListingCover,
   hasChatRealtyToken,
   planListingCarousel,
@@ -321,6 +323,10 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.chatRealtyListingContext, (e, listingKey: string) => {
     if (!isMainSender(e)) return null
     return planListingCarousel(typeof listingKey === 'string' ? listingKey : '')
+  })
+  ipcMain.handle(IPC.chatRealtyCarouselSlide, (e, input: ChatRealtyCarouselSlideInput) => {
+    if (!isMainSender(e)) return null
+    return createCarouselSlide(input)
   })
 
   ipcMain.handle(IPC.connectorsList, (e) => {

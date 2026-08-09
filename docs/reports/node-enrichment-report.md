@@ -7,6 +7,86 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Nineteenth autonomous run: Listing photos (row 10, step 3) — the carousel slide builder is real
+
+Queue state going in: row 10 `in-progress`, steps 1–2 (cover render, Scripting-panel CMA context)
+shipped by the seventeenth and eighteenth runs, steps 3–4 left with no ordering dependency between
+them. This pass took step 3, the carousel slide builder — the strategy doc called it "closer to the
+Motion graphics wizard's pattern than a single call," which held up: this needed real per-kind UI,
+not a parameter wire-up.
+
+**What I researched.** Re-read `create_carousel_slide`'s row in
+`docs/connectors/reference/chatrealty.md` closely rather than skimming it the way step 1/2 could —
+it's the densest single row in the tool table (four kinds, each with its own required-field shape
+packed into one cell). One thing I almost missed on a first pass and caught on a second: the
+`Key params` column for this tool never lists `listingKey`, unlike every other creative-render tool
+in the chain (`create_listing_cover`, `stage_listing_with_agent` both require it explicitly). That's
+not an omission — it makes sense once you separate what each tool actually does: cover and staging
+both need to *look up* a listing server-side (photos, price, specs), where a carousel slide's
+content is *already* fully specified by the caller (four stats, or some paragraphs, or an image
+URL) — there's nothing left for the server to look up. Getting this wrong would have meant sending
+a parameter the tool doesn't expect on every single call, so it was worth double-checking against
+the doc's own column list rather than assuming symmetry with its sibling tools. No web search this
+pass, same reasoning as steps 1–2: the gap is fully specified by our own connector reference, not
+an external best-practice question.
+
+**What I built.** `createCarouselSlide()` in `chatrealty.ts` — one `create_carousel_slide` MCP call
+(deterministic, no agent turn, matching the other three ChatRealty creative calls' shape exactly),
+dispatching on a new `ChatRealtyCarouselSlideInput` discriminated union in `shared/types.ts`
+(`banner` / `cma` / `text` / `cta`, each carrying only its own kind's fields — TypeScript itself
+enforces you can't accidentally send a `cma` payload's `stats` array on a `text` call). Same
+Cloudinary-URL-then-`importUrlAsset` ingestion path the cover established. Full plumbing thread: a
+new `chatrealty:create-carousel-slide` IPC channel end-to-end (`ipc-channels.ts` → `ipc.ts` →
+`preload/index.ts` → `bridge.ts`, mock included), a `createChatRealtyCarouselSlide` store action
+(reuses `addNode` the same way `createChatRealtyCover` does, tagging the resulting node with the
+top listing's key for provenance even though the API call itself doesn't need it), and the UI: a
+kind-picker row plus four per-kind forms on `ChatRealtyPull.tsx`, appearing beneath the existing
+cover form once a pull has surfaced a top-matched listing.
+
+One deliberate departure from the existing file's own style, done on purpose rather than by
+accident: the new buttons use the shared `Button` component
+(`src/renderer/src/components/ui/Button.tsx`) instead of the hand-picked `action-btn cr-btn`
+classes the pre-existing cover buttons in the same file use — `AGENTS.md` §5 is explicit that new
+surfaces should use the component, not hand-pick classes, and this is genuinely new surface. I did
+not go back and convert the cover's own buttons to match; that would have been scope creep on a
+row this queue didn't ask me to touch, but it's worth a human's eye as a small consistency gap in a
+file that now has both styles side by side.
+
+The `banner` kind is the one honest partial in this build: it composes with `stage_listing_with_agent`
+(step 4, not yet built) for a real `imageUrl`, and since that doesn't exist yet, disabling the kind
+entirely felt like hiding a real capability the tool already has. Instead the form takes a manually
+pasted URL, with help text that says exactly that — "needs a staged-photo URL from Agent-in-photo
+staging (not yet built) — paste one manually" — rather than presenting a full-looking form that
+would silently fail against an empty string.
+
+**What I verified.** `npm run typecheck` clean — fresh `npm install` in this sandbox (no
+`node_modules` at run start), both `tsconfig.node.json` and `tsconfig.web.json`. **Not run live** —
+no ChatRealty token configured here, same ceiling as every ChatRealty pass before this one. The one
+thing worth flagging harder than usual for a human glance: the per-kind field *names* (`stats` as
+`{label, value}` pairs, `listingPrice`/`scope`/`period`/`pitch` as plain strings, `paragraphs` as a
+string array, `italicLast` as a boolean) are inferred from the reference doc's prose description,
+not a captured JSON schema — this tool's reference-doc row is a compressed English sentence, not an
+enumerated param table the way `search_listings`' row is. That's a genuinely different confidence
+tier than steps 1–2, which called tools whose params matched the doc's table columns exactly. The
+closest precedent in this queue is row 4's Krea `POST /assets` upload, where an undocumented
+response field name got handled by trying several candidates — here there's no equivalent fallback
+because MCP tool calls are typed request-response, not a response to pattern-match against, so a
+wrong field name would surface as a tool error the first time someone with a real token clicks the
+button, not silently misbehave. Worth being the first thing tried once a token exists.
+
+**What I could not do.** Step 4 — the agent-in-photo staging picker (`stage_listing_with_agent`,
+real generation spend, ~$0.04/photo) — is the one item left in row 10's build order. It's also the
+only item in this whole ten-row queue that's a real paid generation call rather than templated
+server-side layout, so the picker itself (interior-photo selection, since the app has no room
+classifier to auto-filter aerials/exteriors) is buildable blind, but nothing about it should ever
+fire without a human pressing Generate — same posture as every other billed connector call in the
+app.
+
+**Queue state:** row 10 stays `in-progress`; one item left (step 4), everything else stays `done`
+per the prior runs' own entries below.
+
+---
+
 ## 2026-08-09 — Eighteenth autonomous run: Listing photos (row 10, step 2) — real CMA numbers now reach the Scripting panel
 
 Queue state going in: row 10 `in-progress`, cover render (step 1) shipped by the seventeenth run,

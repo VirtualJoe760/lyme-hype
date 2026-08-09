@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import type {
   AgentStreamEvent,
   CanvasNodeState,
+  ChatRealtyCarouselSlideInput,
   CombineLocalKind,
   CutExportResult,
   ExportClip,
@@ -345,6 +346,10 @@ interface StudioStore {
   createChatRealtyCover(
     listingKey: string,
     opts: { hook: string; body: string; city?: string; label: string; detailUrl?: string }
+  ): Promise<{ ok: boolean; error?: string }>
+  createChatRealtyCarouselSlide(
+    input: ChatRealtyCarouselSlideInput,
+    opts: { label: string; listingKey?: string; detailUrl?: string }
   ): Promise<{ ok: boolean; error?: string }>
   flushPersist(): void
 }
@@ -1584,6 +1589,23 @@ export const useStudio = create<StudioStore>((set, get) => {
         src: result.src,
         detailUrl: opts.detailUrl,
         listingKey,
+        startRendering: false
+      })
+      return { ok: true }
+    },
+
+    async createChatRealtyCarouselSlide(input, opts) {
+      const result = await bridge.chatRealty.createCarouselSlide(input)
+      if (!result || !result.ok || !result.src) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      get().addNode({
+        label: opts.label,
+        mediaType: 'image',
+        source: 'generate',
+        src: result.src,
+        detailUrl: opts.detailUrl,
+        listingKey: opts.listingKey,
         startRendering: false
       })
       return { ok: true }
