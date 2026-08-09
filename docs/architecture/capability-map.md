@@ -47,7 +47,7 @@ way around.
 | `video-extension` | — | — | ○ Seedance 1.0 Pro `start_video` | — | ✓ Veo 3.1 wrapper tool + canvas "Extend +7s" picker (720p; client-probed `videoDurationSec` enforces the 148s cap client-side, wire shape unverified) | — | — | — |
 | `image-gen` | ✓ flux/nano-banana/imagen4 | — | ✓ K2 family (1K only) | ○ (nano-banana here = resold Gemini — prefer direct) | ✓ Nano Banana 2 | ✓ gpt-image-2 (quality = price lever) | ○ 11 models | ○ covers/carousel/staging (templated, Cloudinary URLs) |
 | `image-production` | ✓ Midjourney V7/V8/Niji (muapi-exclusive: MJ/Suno/Sora have ZERO fal endpoints) | — | ○ K2 Large | — | — | — | — | — |
-| `image-ref-conditioning` | ○ image-edit tool | — | ○ | ○ | ✓ ≤10 obj +4 char +3 style refs (NB2) | ✓ edits ≤16 refs | — | ○ staging composites agent headshots |
+| `image-ref-conditioning` | ✓ image-edit tool, single ref only — Motion graphics' "Batch via muapi image-edit" toggle (wire unverified, no key) | — | ○ | ○ | ✓ ≤10 obj +4 char +3 style refs (NB2) | ✓ edits ≤16 refs | — | ○ staging composites agent headshots |
 | `audio-tts` | — | ✓ text_to_speech | — | ○ | — | — | ✓ /audio/speech — **sync + free daily tier** (ElevenLabs/Cartesia under the hood), direct REST call from the Generate audio · Voice job when ElevenLabs isn't connected | — |
 | `audio-music` | ✓ Suno | ✓ compose_music | — | ○ | — | — | — | — |
 | `audio-sfx` | ○ MMAudio (from video) | ✓ text_to_sound_effects | — | — | — | — | — | — |
@@ -115,11 +115,19 @@ several connectors can satisfy one node.
 
 ## 4. Known unwired paths worth planning around (the ○ cells)
 
-- **muapi image-edit / video-from-image / upscale / bg-remove tools** — the installed connector
-  already exposes them; no creative node drives them by name yet, though Combine's image+image
-  and audio+image pairs (2026-08-09 enrichment run, row 7) now leave the connector unrestricted,
-  so muapi's image-edit tool is reachable there if the agent picks it — just not steered toward
-  it specifically the way Deepfake's chain note steers muapi/Yapper. `muapi_edit_lipsync` /
+- **muapi image-edit** is now steered toward by name in one place: Motion graphics' Batch stage
+  (2026-08-09 enrichment run, Recommendations item 5) gained a "Batch via muapi image-edit"
+  checkbox that forces `connectorId: 'muapi'` and `referenceImagePaths: [<first ref>]` — since
+  `muapi_image_edit` takes exactly one `image_url`, not a reference list, each variation prompt
+  becomes an edit instruction against that one photo instead of a fresh text-to-image call.
+  `generation.ts`'s upload-tool prompt hint (previously only fired for `sourceMediaPath`/
+  `referenceAudioPaths`) now also fires for `referenceImagePaths`, so the agent knows to call
+  muapi's own `muapi_upload_file` before handing a local path to `image_url`. **Unverified live**
+  — no muapi key configured to exercise the chain. `video-from-image` / `upscale` / `bg-remove`
+  remain unsteered — the installed connector already exposes them; no creative node drives them by
+  name yet, though Combine's image+image and audio+image pairs (2026-08-09 enrichment run, row 7)
+  leave the connector unrestricted, so they're reachable there if the agent picks them — just not
+  steered toward specifically the way Deepfake's chain note steers muapi/Yapper. `muapi_edit_lipsync` /
   `muapi_enhance_face_swap` are now wired into the Deepfake tile's
   Stage 2 prompt (2026-08-09 enrichment run) — `GenerationParams.connectorIds` restricts the
   agent to exactly the connected `yapper`/`muapi` pair so it can chain muapi's own upload tool

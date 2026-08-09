@@ -349,6 +349,41 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    ceiling as every other pass. Third item (muapi image-edit as a second batch source) is real
    scope — a genuinely different generation path, not a parameter wire-up — and is left for a
    future pass rather than rushed in the same run as the two smaller fixes above.
+
+   **Status (2026-08-09 enrichment run — third item shipped, muapi image-edit as a second batch
+   source):** the design question this needed answering first: `muapi_image_edit` (see
+   `docs/connectors/reference/muapi.md`) isn't a drop-in replacement for the existing batch call —
+   it's a prompt-guided *edit* of exactly one existing `image_url`, not text-to-image, and it
+   can't take the multi-image reference list Gemini/OpenAI's t2i tools accept. So it can't just
+   join `STORYBOARD_IMAGE_CONNECTORS` as a third pick in the existing connector `<select>` — that
+   picker assumes every option does the same kind of generation (prompt → N fresh images). Instead
+   it needed its own control: `MotionGraphicsWizard.tsx` gained a **"Batch via muapi image-edit"**
+   checkbox (shown only when muapi is installed and at least one reference image is picked),
+   mutually exclusive with the existing connector `<select>`. Checked, `runBatch` forces
+   `connectorId: 'muapi'` and passes `referenceImagePaths: [refSrcs[0]]` — the *first* picked
+   reference photo, since muapi's tool can only hold one — so each of the N variation prompts
+   becomes an edit instruction applied to that same source photo instead of a fresh generation
+   from nothing; `runFinalPass` mirrors the same single-reference routing for the reinforced final
+   pass rather than the multi-image `refSrcs` it sends to gemini/openai. This produces genuinely
+   different creative output from the existing t2i batch path — variations that stay visually
+   anchored to a real reference photo (useful when the user wants "iterations ON this photo," not
+   "new designs inspired by these photos") — which is the actual product reason this was worth
+   its own control rather than a silent parameter swap.
+
+   Found and fixed a real gap in shared plumbing along the way: `generation.ts`'s `buildPrompt`
+   only told the agent to look for a `*_upload_file` tool (needed before muapi_image_edit can take
+   a local path — it wants a hosted `image_url`) when `sourceMediaPath` or `referenceAudioPaths`
+   were set, never when only `referenceImagePaths` was — so this exact new path would have silently
+   asked the agent to hand a local disk path to an `image_url` parameter with no upload step
+   mentioned. Extended that hint's condition to include `referenceImagePaths`, and added a line
+   clarifying that a single-image tool like `muapi_image_edit` should take just the first
+   reference path and treat the description as an edit instruction, not try to pass every path to
+   a parameter built for one. `npm run typecheck` clean (fresh `npm install`, no `node_modules` at
+   run start beyond a stale partial install missing `@types/node`). **Not run live** — no muapi key
+   configured in this sandbox; the `muapi_image_edit` request/response shape and the
+   upload-then-edit chain are unverified end to end, same ceiling as every prior pass in this
+   queue. Recommendations item 5 in the report is now closed — nothing else is currently flagged as
+   real, safely-buildable-blind scope for this node.
 3. **Generate video** — currently single-shot t2v; enrich with i2v (a canvas image node as the
    starting frame — Gemini already supports this structurally, just not surfaced on this tile)
    and per-model routing beyond muapi (Yapper's ~20-model catalog is currently invisible here).

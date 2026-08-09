@@ -12,7 +12,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | # | Node | Status | Notes |
 |---|---|---|---|
 | 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. Clone-and-attach (former resume item c) shipped: the Create panel's Clone-voice job can attach its result to a Reference person in one step. Yapper REST signed-upload (former resume item a) shipped: `src/main/yapper-rest.ts` + a synthetic-id credential (`yapper-rest`, riding the existing generic secret vault) + a Settings › Connectors row to set it; `generation.ts` pre-uploads local source media to Yapper and hands the agent asset ids directly when Yapper is the only attached connector. resume: (b) is the only item left — live-verify the whole chain (muapi upload→lipsync, and the new Yapper REST fallback) once real keys exist; needs a joint session, nothing further is safely buildable blind. |
-| 2 | Motion graphics | in-progress | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. resume: muapi image-edit as a second batch source is the only item left — a genuinely different generation path (not a parameter wire-up), needs its own design pass before implementing. |
+| 2 | Motion graphics | done | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. muapi image-edit as a second batch source shipped (this run, closing Recommendations item 5): a "Batch via muapi image-edit" checkbox forces `connectorId: 'muapi'` + a single-image `referenceImagePaths`, since `muapi_image_edit` can only hold one reference — each variation prompt becomes an edit of that photo instead of a fresh text-to-image call; `generation.ts`'s upload-tool hint (previously only fired for `sourceMediaPath`/`referenceAudioPaths`) now also fires for `referenceImagePaths` so the agent knows to upload before handing muapi a local path. Not run live — no muapi key in this sandbox. All three named items closed; nothing else flagged as buildable blind. |
 | 3 | Generate video | done | i2v starting-frame picker (routes to gemini via `startFramePath`) + Yapper model picker (`modelHint` + `connectorId: 'yapper'`) shipped in `VideoScreen`; both named items closed. |
 | 4 | Generate image | done | Fixed a real bug (picked style always forced `connectorId: 'fal'`, ignoring `style.connectorId`); resurrected `krea-training.ts` (git-history revival) as a second, opt-in "Krea 2 direct" trainer producing `connectorId: 'krea'` styles, applied via `styles:[{id,strength}]` and honoring the tier toggle (K2 medium/large) — the first genuine production-tier LoRA path. Both named items closed in one fix. |
 | 5 | Generate audio | done | Yapper free-tier TTS fallback (Voice job) shipped first pass; Suno-via-muapi music fallback (agent-routed `generateMedia`/`ResultRow`, `connectorId: 'muapi'`, `modelHint: 'suno'`, instrumental-only toggle) shipped second pass. Both named items closed. Yapper voice browsing (`GET /audio/voices`, a Cartesia/ElevenLabs provider toggle + picker) shipped later, closing Recommendations item 4. |
@@ -29,6 +29,18 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-ninth autonomous run) — took Recommendations item 5, the last open item on
+  the list: muapi's image-edit tool as a second batch source for row 2 (Motion graphics). Did the
+  design pass the item had been waiting on since row 2's very first pass — `muapi_image_edit`
+  can't join the existing gemini/openai connector picker as a third option because it's a
+  single-image edit tool, not multi-reference t2i — then shipped it as its own "Batch via muapi
+  image-edit" checkbox in `MotionGraphicsWizard.tsx`, plus a real gap fix in `generation.ts`'s
+  shared upload-tool prompt hint (previously blind to `referenceImagePaths`). Row 2 marked `done`;
+  full account in the report and `node-enrichment-strategy.md`. `npm run typecheck` clean (fresh
+  `npm install`, no `node_modules` at run start). Not run live — no muapi key in this sandbox.
+  Queue is now `done` on every row except row 1 (Deepfake, live-verification-only, joint-session
+  scope) and Recommendations is fully struck through item 5 — item 6 (live billed verification +
+  Instagram publish port) is Phase 8–9 scope, not something this routine should attempt.
 - 2026-08-09 (twenty-eighth autonomous run) — collided with the twenty-seventh run on Recommendations
   item 2, independently; both built a near-identical `createArticleDraft()` backend for
   `create_article` (same types, same IPC channel name), differing only in UI placement — this run

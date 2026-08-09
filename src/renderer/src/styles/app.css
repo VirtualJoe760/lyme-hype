@@ -1414,6 +1414,21 @@
   font-size: 11.5px;
 }
 
+.mgfx-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-soft);
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.mgfx-checkbox input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
 .mgfx-variation {
   min-height: 56px;
   width: 100%;

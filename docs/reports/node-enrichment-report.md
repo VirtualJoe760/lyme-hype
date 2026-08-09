@@ -7,6 +7,78 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-ninth autonomous run: muapi image-edit wired into Motion graphics' batch stage (Recommendations item 5, closing it and the queue)
+
+Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only) and row 2
+(Motion graphics, one open item). Recommendations items 1–4 already struck; item 5 — "muapi's
+image-edit tool as Motion graphics' second batch source" — had been sitting unpicked since row 2's
+very first pass, every later pass explicitly declining it as "a genuinely different generation
+path, not a parameter wire-up... needs its own design pass." This run did that design pass and
+implemented it.
+
+**The design question.** `MotionGraphicsWizard.tsx`'s Batch stage currently does one thing: fire
+N×M `generateMedia` calls with `mediaType: 'image'` and a bare variation-prompt string, routed
+through whichever connector the References-stage picker chose (agent's own choice, or forced
+gemini/openai). The obvious move — add `muapi` as a third option in that same `<select>` — doesn't
+work, because muapi doesn't have a t2i-from-scratch tool that fits the same shape. Its relevant
+tool, `muapi_image_edit` (`docs/connectors/reference/muapi.md`), takes a prompt *and* exactly one
+existing `image_url` — it edits a photo, it doesn't invent one from nothing, and it can't take the
+multi-image reference list Gemini/OpenAI's own tools accept. Slotting it into the existing picker
+would have meant either lying about what it does or silently changing what "batch" means depending
+on which option was selected. Instead it earned its own control: a **"Batch via muapi image-edit"**
+checkbox, shown only when muapi is installed and at least one reference photo is picked, mutually
+exclusive with the connector `<select>`.
+
+**What it does differently, on purpose.** Checked, `runBatch` forces `connectorId: 'muapi'` and
+sends `referenceImagePaths: [refSrcs[0]]` — the *first* picked reference, since muapi's tool can
+only hold one. Each of the N variation prompts becomes an edit instruction applied to that same
+source photo rather than a fresh generation from text alone. `runFinalPass` mirrors the same
+single-reference routing for the reference-reinforced final pass. This is a genuinely different
+creative mode from the existing batch path, not a re-skin of it: the existing gemini/openai batch
+generates N fresh takes *inspired by* the references (no reference images sent to the batch calls
+at all today — only the final pass reinforces with them); muapi's edit mode generates N variations
+that stay visually anchored to one specific photo the user picked. Worth having as an explicit
+choice, not a hidden behavior swap depending on which connector happens to be installed.
+
+**A real gap this surfaced, fixed in the same commit.** Reading `generation.ts`'s `buildPrompt` to
+wire the new path turned up a genuine bug, the same shape as the twenty-sixth run's
+`start_frame_path` finding: the "upload local files to a hosted URL first" prompt hint only fired
+when `sourceMediaPath` or `referenceAudioPaths` were set — never for `referenceImagePaths`, even
+though muapi's `muapi_image_edit` needs exactly the same upload-then-use chain (`muapi_upload_file`
+→ hosted URL → `image_url`) that the existing hint already steers the agent through for source
+media and audio. Without the fix, this new path would have silently told the agent "reference
+images on disk, pass these paths" with no mention that `muapi_image_edit` wants a URL, not a local
+path. Extended the hint's condition to include `referenceImagePaths`, and added an explicit line:
+some reference tools (named `muapi_image_edit` directly) take only one image, not a list — use the
+first path and treat the prompt as an edit instruction, don't try to hand every reference to a
+single-image parameter.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and
+`tsconfig.web.json` — `node_modules` was present but stale (missing `@types/node`, likely a
+partial install from an interrupted prior run), so ran a fresh `npm install` first. **Not run
+live** — no muapi key configured in this sandbox; the `muapi_image_edit` request/response shape,
+the upload-then-edit chain, and the single-reference-per-batch-item cost implication (N variations
+= N separate edit calls, same billing shape as the existing batch path, just against
+`muapi_image_edit`'s per-call price instead of a t2i model's) are all unverified end to end, same
+ceiling as every prior pass in this queue. `creative-nodes.md` (Motion graphics wizard's Batch/
+Final stage entries) and `capability-map.md` (the `image-ref-conditioning` × muapi cell, plus the
+"known unwired paths" note) updated in this commit; `node-enrichment-strategy.md`'s Motion
+graphics section got a new status entry.
+
+**Where this leaves things.** Row 2 (Motion graphics) marked `done` — all three of its named
+enrichment items are now shipped. Recommendations item 5 is struck. That leaves the queue `done`
+on every row except row 1 (Deepfake), which has been live-verification-only, joint-session scope,
+for twenty-eight runs straight — and the Recommendations list's own item 6, which isn't a buildable
+item at all: it's the standing note that everything this routine has built across twenty-nine runs
+is real, typechecked, doc-consistent wiring that has never been exercised against a live API key,
+and that verification is explicitly Phase 8–9 scope for a human with real credentials, not
+something an unattended routine should attempt. Unless a human adds new rows or new
+Recommendations items, the next several runs should expect to find nothing further safely
+buildable blind — that's the correct, honest outcome of this queue, not a sign the routine is
+stuck.
+
+---
+
 ## 2026-08-09 — Twenty-eighth autonomous run: collision on Recommendations item 2, deferred after review
 
 Picked the same item the twenty-seventh run below had already taken — ChatRealty's `create_article`
@@ -1800,11 +1872,12 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    autonomous run): a Cartesia/ElevenLabs provider toggle on the Voice job's Yapper-fallback block
    now browses and picks a real `voiceId`. See that run's entry below.
 
-5. **muapi's image-edit tool as Motion graphics' second batch source** — flagged as real,
-   separately-scoped work back in row 2's very first pass and never picked back up since (every
-   later pass on that row found nothing else buildable blind). Still genuinely open: a different
-   generation path, not a parameter wire-up, so it needs its own design pass rather than a quick
-   slice.
+5. ~~**muapi's image-edit tool as Motion graphics' second batch source**~~ — **shipped** (2026-08-09,
+   twenty-ninth autonomous run): a "Batch via muapi image-edit" checkbox in `MotionGraphicsWizard.tsx`
+   routes batch/final generation through `muapi_image_edit` against a single reference photo
+   instead of gemini/openai's multi-reference t2i, plus a real fix to `generation.ts`'s upload-tool
+   prompt hint (previously blind to `referenceImagePaths`). See that run's entry above. **Still
+   open:** unverified live, no muapi key in this sandbox.
 
 6. **The bigger picture beyond node enrichment specifically:** `AGENTS.md`'s own status line still
    marks Phases 8–9 (live *billed* generation verification across every connector this queue has

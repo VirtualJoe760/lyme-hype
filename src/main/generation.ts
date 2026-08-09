@@ -165,9 +165,14 @@ function buildPrompt(params: GenerationParams): string {
       lines.push(`Pass its current length, ${params.extendVideoDurationSec} seconds, as previous_duration_seconds.`)
     }
   }
-  if (params.sourceMediaPath || params.referenceAudioPaths?.length) {
+  if (params.sourceMediaPath || params.referenceAudioPaths?.length || params.referenceImagePaths?.length) {
     lines.push(
       "If the target generation tool needs a hosted URL rather than a local path, and one of your attached connectors exposes its own file-upload tool (e.g. a *_upload_file tool), call that first to get a URL, then pass the returned URL to the generation tool."
+    )
+  }
+  if (params.referenceImagePaths?.length) {
+    lines.push(
+      "Some reference-driven tools (e.g. muapi's muapi_image_edit) accept only a single input image via image_url, not a list — if the tool you pick has that shape, upload and use just the first reference path and treat the description as the edit instruction; do not try to pass multiple images to a single-image parameter."
     )
   }
   lines.push(

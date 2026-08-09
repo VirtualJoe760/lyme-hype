@@ -75,6 +75,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
 
   // Stage 3 — batch
   const [connectorChoice, setConnectorChoice] = useState('')
+  const [muapiEditMode, setMuapiEditMode] = useState(false)
   const [installedIds, setInstalledIds] = useState<string[]>([])
   const [batch, setBatch] = useState<BatchItem[]>([])
   const [pickedId, setPickedId] = useState<string | null>(null)
@@ -97,6 +98,8 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     void bridge.connectors.list().then((list) => setInstalledIds(list.map((c) => c.id)))
   }, [])
   const imageConnectors = STORYBOARD_IMAGE_CONNECTORS.filter((c) => installedIds.includes(c.id))
+  const muapiAvailable = installedIds.includes('muapi')
+  const useMuapiEdit = muapiEditMode && muapiAvailable
 
   const imageNodes = nodes.filter(
     (n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src && !n.data.panel
@@ -203,6 +206,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     }
     setBatch(items)
     setStage('batch')
+    const editingRef = useMuapiEdit && refSrcs.length > 0 ? refSrcs[0] : undefined
     await Promise.all(
       items.map(async (item, index) => {
         const variation = variations[Math.floor(index / IMAGES_PER_VARIATION)]
@@ -210,7 +214,8 @@ export function MotionGraphicsWizard(): React.JSX.Element {
           .run({
             mediaType: 'image',
             prompt: variation,
-            connectorId: connectorChoice || undefined
+            connectorId: editingRef ? 'muapi' : connectorChoice || undefined,
+            referenceImagePaths: editingRef ? [editingRef] : undefined
           })
           .catch((err) => ({ ok: false as const, mediaType: 'image' as const, error: String(err), src: undefined }))
         setBatch((prev) =>
@@ -237,12 +242,16 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     setFinalSrc(null)
     try {
       // Reference-reinforced: the winning prompt regenerated WITH the original
-      // reference images as input — the workflow's key quality step.
+      // reference images as input — the workflow's key quality step. muapi's
+      // edit mode can only take one image (muapi_image_edit's single image_url
+      // param), so it reuses the same first reference the batch pass edited
+      // rather than all of refSrcs.
+      const editingRef = useMuapiEdit && refSrcs.length > 0 ? refSrcs[0] : undefined
       const result = await bridge.generate.run({
         mediaType: 'image',
         prompt: variation,
-        connectorId: connectorChoice || undefined,
-        referenceImagePaths: refSrcs
+        connectorId: editingRef ? 'muapi' : connectorChoice || undefined,
+        referenceImagePaths: editingRef ? [editingRef] : refSrcs
       })
       if (result?.ok && result.src) {
         setFinalSrc(result.src)
@@ -404,6 +413,7 @@ export function MotionGraphicsWizard(): React.JSX.Element {
             <select
               className="cr-input mgfx-select"
               value={connectorChoice}
+              disabled={useMuapiEdit}
               onChange={(e) => setConnectorChoice(e.target.value)}
             >
               <option value="">Image model: agent picks</option>
@@ -411,6 +421,18 @@ export function MotionGraphicsWizard(): React.JSX.Element {
                 <option key={c.id} value={c.id}>Image model: {c.label}</option>
               ))}
             </select>
+          )}
+          {muapiAvailable && (
+            <label className="mgfx-checkbox">
+              <input
+                type="checkbox"
+                checked={muapiEditMode}
+                disabled={refIds.length === 0}
+                onChange={(e) => setMuapiEditMode(e.target.checked)}
+              />
+              Batch via muapi image-edit — edits your first picked reference photo per variation,
+              instead of generating from text alone
+            </label>
           )}
           <button
             className="generate-btn"

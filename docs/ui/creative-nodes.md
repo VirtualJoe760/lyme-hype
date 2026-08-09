@@ -153,8 +153,17 @@ trip through the OS dialog.
    UI-side cap of 5 in the 2026-08-09 enrichment run — the wrapper had already supported 10 since
    the "Connector reality check" pass, the UI just never let the user reach it).
 2. **Prompt variations** — agent turn with vision input (no generation spend).
-3. **Batch review** — N×M cheap generations → `BatchResultsGrid` pick. `image-gen`.
-4. **Final pass** — winning prompt + references. `image-ref-conditioning`.
+3. **Batch review** — N×M cheap generations → `BatchResultsGrid` pick. `image-gen`. A "Batch via
+   muapi image-edit" checkbox (shown when muapi is installed and ≥1 reference picked, 2026-08-09
+   enrichment run) swaps this to `image-ref-conditioning` against a single source photo instead:
+   `muapi_image_edit` takes exactly one `image_url`, not a reference list, so each variation
+   prompt becomes an edit instruction applied to the first picked reference rather than a fresh
+   text-to-image generation — genuinely different output (iterations ON a photo, not designs
+   inspired by several), which is why it's its own toggle rather than a third entry in the
+   gemini/openai connector picker.
+4. **Final pass** — winning prompt + references. `image-ref-conditioning`. When the muapi edit
+   toggle is on, this reinforces against that same single reference photo instead of the full
+   `refSrcs` list, since muapi's tool still can't take more than one.
 5. **Animate** — locally-drawn solid start frame (or loop = final frame both ends) + final
    image as end frame → reveal video. `video-frame-conditioning` (8s duration rule rides the
    wrapper). A quality-tier picker (default `veo-3.1-generate-preview` / fast / lite, shown
