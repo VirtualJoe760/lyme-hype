@@ -102,6 +102,31 @@ sequence, each step independently shippable):
   call the button already made before this change; only the *what happens after success* path is
   new. `npm run typecheck` clean. Resume items (a) and (b) are still open — see the progress
   queue's row 1 resume note.
+- **2026-08-09, third pass — resume item (a) closed:** built the Yapper REST signed-upload path.
+  New `src/main/yapper-rest.ts`: `hasYapperRestKey()` + `uploadLocalMediaToYapper(path)` implement
+  the flow from `docs/connectors/reference/yapper.md` (`POST /assets/uploads` → PUT the bytes →
+  `POST completeUrl` → Asset), reading the `yap_live_…` key from the *same generic secret vault*
+  (`credential-vault.ts`) every other connector credential uses, keyed by a synthetic id
+  (`yapper-rest`) rather than a real `ConnectorDef` — a fake MCP ConnectorDef would make
+  `testConnector` try to MCP-handshake a REST base URL and fail, so this rides the vault directly
+  instead of forcing the credential through the MCP connector model it doesn't actually fit.
+  `generation.ts` now calls it: when `yapper` is attached and `muapi` is not (the case the hosted
+  MCP connector alone can't handle, since it has no upload tool of its own), it pre-uploads
+  `sourceMediaPath`/`referenceAudioPaths` before the agent turn starts and hands the agent the
+  resulting Yapper asset ids directly in the prompt (`sourceVideoAssetId`/`audioAssetId`), instead
+  of asking the agent to discover an upload tool that isn't there. `ConnectorsTab.tsx` gained a
+  small "REST upload key" row under the Yapper card (same `bridge.secrets.request`/`list`
+  mechanism, no new IPC channel needed — it was already generic over connector id).
+  `docs/architecture/capability-map.md` and `docs/ui/creative-nodes.md` updated in this commit.
+  `npm run typecheck` clean (fresh `npm install` in this sandbox, no prior `node_modules`). **Not
+  run live** — same as every prior pass, no Yapper REST key is configured in this sandbox, and
+  live spend is out of scope for the autonomous routine; the actual request/response shapes for
+  `POST /assets/uploads` (exact body field names, `completeUrl`'s exact response shape) are
+  best-effort from the reference doc's [verified — live OpenAPI enumeration] summary, not
+  hand-verified against a real response body — flagging this explicitly since it's the one part
+  of this pass that's a documented shape, not a tested one. Resume item (b) — live-verify the
+  whole chain (muapi upload→lipsync AND this Yapper REST fallback) — is the only thing left on
+  row 1, and it needs real keys, i.e. a joint session.
 
 ---
 

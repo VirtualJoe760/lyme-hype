@@ -106,10 +106,15 @@ several connectors can satisfy one node.
   Stage 2 prompt (2026-08-09 enrichment run) — `GenerationParams.connectorIds` restricts the
   agent to exactly the connected `yapper`/`muapi` pair so it can chain muapi's own upload tool
   into either tool, or fall back to Yapper's `video-lipsync` process when only Yapper is
-  connected. **Unverified live** — no keys configured to fire it yet.
+  connected. When Yapper is the *only* attached connector, `generation.ts` pre-uploads
+  `sourceMediaPath`/`referenceAudioPaths` itself via `yapper-rest.ts`'s REST signed-upload
+  (`yap_live_…` key, second run 2026-08-09) and hands the agent the resulting Yapper asset ids
+  directly, rather than asking the agent to find an upload tool that doesn't exist on the
+  hosted MCP connector. **Unverified live** — no keys configured to fire it yet.
 - **i2v everywhere except Gemini** needs `asset-upload` first (muapi has it stdio-side; fal has
-  it; Yapper imports by URL) — the missing plumbing is "give a local node a provider-visible
-  URL", one mechanism reusable across all three.
+  it; Yapper imports by URL, or now the Deepfake-scoped REST signed-upload above for local
+  files) — a general-purpose `asset-upload` helper spanning all three connectors and every
+  node (not just Deepfake's local-media case) is still the open plumbing item.
 - **muapi frame conditioning is REST-only** — the MCP tool takes a single image_url even
   though the model enum lists first-last-frame models; if muapi-side interpolation ever
   matters, it's a REST call, not a tool call. (Gemini's wrapper covers this need today, and

@@ -7,6 +7,71 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Third autonomous run: Deepfake (row 1), Yapper REST upload path built
+
+Resumed row 1 again — resume note left two items, (a) build the Yapper REST signed-upload path
+and (b) live-verify the muapi upload→lipsync chain. (b) needs real credentials and is explicitly
+joint-session scope; (a) was buildable blind, so that's what this pass did.
+
+**The gap:** the Deepfake screen's Stage 2 already restricts the agent to exactly the connected
+`yapper`/`muapi` pair and prefers muapi's own upload tool when both are present. But when *only*
+Yapper is connected, there was no answer — Yapper's hosted MCP connector has no upload tool of its
+own (confirmed in `docs/connectors/reference/yapper.md`: `yapper_upload_asset` "only exists on an
+elusive local stdio server", not the hosted one this app installs), so the agent had nothing to
+call for a local source video or audio file. The only documented way in is the REST signed-upload
+flow, gated behind a *second* credential Yapper itself keeps separate from the OAuth MCP login — a
+`yap_live_…` Bearer key, mintable at yapper.so/account/developer. Lyme Hype's connector model
+(`ConnectorDef`) had nowhere to put that: it's built entirely around "one connector = one MCP
+server", and this REST endpoint isn't an MCP server at all, so wrapping it in a fake `ConnectorDef`
+would make Settings' "Test" button try to MCP-handshake a plain REST base URL and fail.
+
+**What I built instead:** the generic secret vault (`credential-vault.ts` + `secure-credential.ts`)
+turns out to already be decoupled from `ConnectorDef` — `storeSecret`/`readSecretValue` take a bare
+string id, and the existing `secret:request`/`secret:list` IPC channels (already wired end-to-end
+to `bridge.secrets.*`) work for any id, not just real connectors. So the REST key rides that
+mechanism directly under a synthetic id (`yapper-rest`) rather than forcing a shape it doesn't fit.
+New `src/main/yapper-rest.ts`: `hasYapperRestKey()` and `uploadLocalMediaToYapper(path)`, the
+latter implementing the documented three-step flow — `POST /assets/uploads` (mimeType + size) →
+PUT the raw bytes to the returned `uploadUrl` → `POST` the returned `completeUrl` → back comes an
+Asset with an `assetId`. `generation.ts` calls it automatically: when `yapper` is attached and
+`muapi` is not, and the request carries a local `sourceMediaPath` (video) or a single
+`referenceAudioPaths` entry, it pre-uploads before the agent turn even starts and appends a line to
+the prompt telling the agent the asset id is already known — "pass it directly as
+sourceVideoAssetId/audioAssetId, don't try to upload this yourself" — closing the exact hole the
+strategy doc flagged. `ConnectorsTab.tsx` gained a small row under the Yapper card ("REST upload
+key — separate from the account above…") reusing the same `bridge.secrets.request` call every
+other credential field already uses, so there's no new UI pattern, just the existing one pointed at
+a second id.
+
+**What I did *not* build:** a general-purpose `asset-upload` helper spanning muapi/fal/Yapper for
+every node (i2v, Combine, etc.) — that's still open and explicitly out of this pass's scope; this
+is the Deepfake-specific slice the resume note asked for, not the cross-cutting plumbing item.
+
+**Honesty about the one soft spot:** `POST /assets/uploads`'s exact request-body field names
+(`mimeType`, `sizeBytes`) and `completeUrl`'s exact response shape are my best-effort read of the
+reference doc's summary of a live OpenAPI enumeration, not something I hand-verified against an
+actual response body — I don't have a key to do that with in this sandbox. If the field names are
+slightly off, this is a one-file, low-risk fix once real verification happens; flagging it now
+rather than presenting it as more tested than it is.
+
+**Verified:** fresh `npm install` (this sandbox had no `node_modules` this run — 168 packages,
+clean), then `npm run typecheck` (`tsconfig.node.json` + `tsconfig.web.json`): clean, zero errors.
+Same ceiling as every prior pass — no display, no Electron runtime, no API keys — so this confirms
+types and conventions, not that the real HTTP calls succeed.
+
+**Docs updated in this commit** (doc-drift-is-a-bug, `AGENTS.md` §1.3): `capability-map.md` §4's
+Deepfake bullet and the `asset-upload` bullet, `creative-nodes.md`'s Deepfake Stage 3 description,
+and the strategy doc's Deepfake status block, all now describe the REST fallback instead of just
+"Yapper is the fallback path when connected" (true but no longer the whole story).
+
+**Left in-progress, but narrowly** — row 1's resume note is now down to a single item: (b) live
+verification of the whole chain (muapi upload→lipsync, and this new Yapper REST fallback), which
+needs real credentials and is a joint-session item by design, not something this routine should
+attempt blind. Everything else scoped in the flagship build order is now either shipped or
+correctly deferred.
+
+---
+
 ## 2026-08-09 — Second autonomous run: Deepfake (row 1), one resume item closed, still in-progress
 
 Per the routine's resume-in-place instruction, picked back up row 1 rather than moving to row 2 —

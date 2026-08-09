@@ -1,10 +1,11 @@
 import { app } from 'electron'
 import type { GenerationParams, GenerationResult } from '@shared/types'
-import { assetPathForUrl, importFileAsset, importUrlAsset } from './asset-store'
+import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
 import { resolveActiveProvider } from './model-providers'
+import { hasYapperRestKey, uploadLocalMediaToYapper } from './yapper-rest'
 
 type AgentSdk = typeof import('@anthropic-ai/claude-agent-sdk')
 type McpServerConfig = {
@@ -215,6 +216,32 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     )
   }
 
+  // Yapper's hosted MCP connector has no upload tool of its own (yapper.md
+  // "Getting local media INTO Yapper") — when it's the only attached
+  // connector, the agent has no way to turn a local sourceMediaPath/
+  // referenceAudioPaths into something yapper_start_process can take. Do
+  // the REST signed-upload here instead of asking the agent to, and hand it
+  // the resulting Yapper asset ids directly.
+  const yapperOnlyPromptLines: string[] = []
+  if (attached.includes('yapper') && !attached.includes('muapi') && hasYapperRestKey()) {
+    if (params.sourceMediaPath && mediaTypeForPath(params.sourceMediaPath) === 'video') {
+      const uploaded = await uploadLocalMediaToYapper(params.sourceMediaPath)
+      if (uploaded.ok && uploaded.assetId) {
+        yapperOnlyPromptLines.push(
+          `The source video is already uploaded to Yapper as assetId "${uploaded.assetId}" — pass it directly as sourceVideoAssetId (yapper_start_process, type video-lipsync). Do not try to upload ${params.sourceMediaPath} yourself.`
+        )
+      }
+    }
+    if (params.referenceAudioPaths?.length === 1) {
+      const uploaded = await uploadLocalMediaToYapper(params.referenceAudioPaths[0])
+      if (uploaded.ok && uploaded.assetId) {
+        yapperOnlyPromptLines.push(
+          `The audio is already uploaded to Yapper as assetId "${uploaded.assetId}" — pass it directly as audioAssetId. Do not try to upload ${params.referenceAudioPaths[0]} yourself.`
+        )
+      }
+    }
+  }
+
   const abort = new AbortController()
   const timeout = setTimeout(() => abort.abort(), GENERATION_TIMEOUT_MS)
   const { env: authEnv, model } = llmAuthEnv()
@@ -247,8 +274,11 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
 
   try {
     const { query } = await loadSdk()
+    const prompt = yapperOnlyPromptLines.length
+      ? `${buildPrompt(params)}\n${yapperOnlyPromptLines.join('\n')}`
+      : buildPrompt(params)
     const stream = query({
-      prompt: buildPrompt(params),
+      prompt,
       options: {
         abortController: abort,
         maxTurns: 12,

@@ -11,7 +11,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 | # | Node | Status | Notes |
 |---|---|---|---|
-| 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. Clone-and-attach (former resume item c) now shipped: the Create panel's Clone-voice job can attach its result to a Reference person in one step. resume: (a) build the Yapper REST signed-upload path (`yap_live_…` key — a second, non-OAuth credential ConnectorDef doesn't model yet) so the Yapper-only fallback can actually ingest local media, not just URL imports; (b) live-verify the muapi upload→lipsync chain once real keys exist (joint session). |
+| 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. Clone-and-attach (former resume item c) shipped: the Create panel's Clone-voice job can attach its result to a Reference person in one step. Yapper REST signed-upload (former resume item a) shipped: `src/main/yapper-rest.ts` + a synthetic-id credential (`yapper-rest`, riding the existing generic secret vault) + a Settings › Connectors row to set it; `generation.ts` pre-uploads local source media to Yapper and hands the agent asset ids directly when Yapper is the only attached connector. resume: (b) is the only item left — live-verify the whole chain (muapi upload→lipsync, and the new Yapper REST fallback) once real keys exist; needs a joint session, nothing further is safely buildable blind. |
 | 2 | Motion graphics | pending | Deepen reference conditioning (10-image cap, not 3), add Veo model choice (lite vs full), consider muapi image-edit as a second batch source. |
 | 3 | Generate video | pending | Add i2v from a canvas image node; surface Yapper's ~20-model catalog as a routing option. |
 | 4 | Generate image | pending | Extend lora-use to production tier; add Krea 2 direct styles param as a second LoRA route. |
@@ -29,6 +29,11 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (third autonomous run) — Deepfake: built the Yapper REST signed-upload path
+  (`yapper-rest.ts`, a synthetic-id vault credential, a Settings row, and `generation.ts` wiring
+  so the Yapper-only fallback can actually ingest local source media). Row 1's only remaining
+  resume item is live verification, which needs a joint session — everything safely buildable
+  blind is now done.
 - 2026-08-09 (second autonomous run) — Deepfake: wired `voice_clone` into the Reference person
   flow (former resume item c). Create panel's Clone-voice job can now attach a freshly-cloned
   voice to a `TrainedStyle` in one action instead of a manual copy/paste round-trip through

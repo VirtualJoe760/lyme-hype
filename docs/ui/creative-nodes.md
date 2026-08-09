@@ -102,8 +102,13 @@ opaque call:
    source-video/photo canvas node's path (`referenceAudioPaths`/`sourceMediaPath`). The prompt
    tells it to prefer muapi's self-contained chain (its own upload tool → `muapi_edit_lipsync`,
    or `muapi_enhance_face_swap` when only a still photo exists) since that needs no extra
-   credentials; Yapper is the fallback path when only Yapper is connected. **Unverified live** —
-   no API keys are configured to fire this chain yet; the wiring is real, the call itself isn't.
+   credentials; Yapper is the fallback path when only Yapper is connected. In the Yapper-only
+   case, `generation.ts` no longer leans on the agent to find an upload tool that doesn't exist
+   on the hosted connector — it pre-uploads the local source video/audio itself via
+   `yapper-rest.ts`'s REST signed-upload (a second, non-OAuth `yap_live_…` key set from
+   Settings › Connectors, independent of Yapper's OAuth MCP login) and hands the agent the
+   resulting `sourceVideoAssetId`/`audioAssetId` directly. **Unverified live** — no API keys are
+   configured to fire this chain yet; the wiring is real, the call itself isn't.
 
 ## Motion graphics wizard (stages as nodes)
 
