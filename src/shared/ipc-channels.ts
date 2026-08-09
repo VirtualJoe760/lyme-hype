@@ -46,6 +46,7 @@ export const IPC = {
   chatRealtyStatus: 'chatrealty:status',
   chatRealtyPull: 'chatrealty:pull',
   chatRealtyCover: 'chatrealty:create-cover',
+  chatRealtyListingContext: 'chatrealty:listing-context',
 
   connectorsList: 'connectors:list',
   connectorsSave: 'connectors:save',

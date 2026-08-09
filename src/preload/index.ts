@@ -4,6 +4,7 @@ import type {
   AgentPingResult,
   AgentStreamEvent,
   ChatRealtyCoverResult,
+  ChatRealtyListingContextResult,
   ChatRealtyPullResult,
   ClaudeAuthStatus,
   CombineLocalRequest,
@@ -149,7 +150,9 @@ const api = {
       listingKey: string,
       opts: { hook: string; body: string; city?: string; accentColor?: string; photoIndex?: number }
     ): Promise<ChatRealtyCoverResult | null> =>
-      ipcRenderer.invoke(IPC.chatRealtyCover, listingKey, opts)
+      ipcRenderer.invoke(IPC.chatRealtyCover, listingKey, opts),
+    listingContext: (listingKey: string): Promise<ChatRealtyListingContextResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyListingContext, listingKey)
   },
   connectors: {
     list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),

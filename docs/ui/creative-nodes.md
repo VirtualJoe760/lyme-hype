@@ -65,6 +65,15 @@ The chat surface (per-session, persisted). Produces: the script itself, the shot
 
 - **Capabilities consumed:** agent LLM only (no generation connectors). Its multi-turn plumbing
   (`conversations.ts`) is shared with the Motion graphics wizard.
+- **Real listing numbers, when a listing is in play.** If the session has a ChatRealty-sourced
+  canvas node (a Listing photos pull), the conversation's very first turn calls
+  `plan_listing_carousel` once (`bridge.chatRealty.listingContext`, same deterministic
+  no-agent-turn shape as the pull/cover calls) and folds the returned facts/CMA text into that
+  turn's prompt — ahead of the user's own message, not shown in the transcript — so a script
+  drafted about that listing cites real numbers ("6 homes sold, median $2.36M") instead of the
+  agent inventing them. Fetched once per conversation (gated on `history.length === 0`, the same
+  point the transcript-replay preamble is conditional on); every later turn already has it in the
+  agent's own context. 2026-08-09 enrichment run, row 10 step 2.
 
 ## Create tasks (the tiles)
 
@@ -214,9 +223,10 @@ the Cloudinary URL from the response, and downloads it via `importUrlAsset()` (t
 path `docs/architecture/capability-map.md` already flagged as the right mechanism for ChatRealty's
 Cloudinary-returning tools) into a new image node. Same guardrail as every generation button in the
 app: nothing fires until the user presses it — this is wiring, not an autonomous call.
-`plan_listing_carousel`, `create_carousel_slide`, and `stage_listing_with_agent` remain unwired; see
-`node-enrichment-strategy.md`'s Listing photos analysis for the fuller chain and why cover-first was
-the right slice.
+`plan_listing_carousel` also now feeds the Scripting panel's agent context (see "Scripting
+conversation" above) — its own deterministic call, no UI of its own. `create_carousel_slide` and
+`stage_listing_with_agent` remain unwired; see `node-enrichment-strategy.md`'s Listing photos
+analysis for the fuller chain and why cover-first, then CMA-context, were the right slices so far.
 
 ## Where routing happens
 

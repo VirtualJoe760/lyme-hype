@@ -1254,6 +1254,27 @@ export const useStudio = create<StudioStore>((set, get) => {
       })
       set({ scriptingBusy: true, scriptingStream: { sessionId, text: '' } })
 
+      // Real listing facts/CMA stats over an agent guessing them, when this
+      // conversation has a ChatRealty-sourced node in play — fetched once,
+      // on the conversation's first turn only, and folded into the prompt
+      // (not the displayed message) rather than a standalone context UI.
+      let promptForTurn = trimmed
+      if (history.length === 0) {
+        const listingNodes = session.nodes.filter((n) => Boolean(n.data.listingKey))
+        const listingKey = listingNodes[listingNodes.length - 1]?.data.listingKey
+        if (listingKey) {
+          const context = await bridge.chatRealty.listingContext(listingKey)
+          if (context?.ok && context.text) {
+            promptForTurn = [
+              "Real listing facts and CMA stats for this session's listing, from ChatRealty — use these numbers instead of inventing any:",
+              context.text,
+              '---',
+              trimmed
+            ].join('\n\n')
+          }
+        }
+      }
+
       const unsubscribe = bridge.scripting.onStream((event) => {
         if (event.conversationId === sessionId) {
           const current = get().scriptingStream
@@ -1266,7 +1287,7 @@ export const useStudio = create<StudioStore>((set, get) => {
         const result = await bridge.scripting.turn({
           conversationId: sessionId,
           resumeSessionId: scripting.agentSessionId,
-          prompt: trimmed,
+          prompt: promptForTurn,
           history
         })
         // Re-read: the turn may outlive a session switch; write to the

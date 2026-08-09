@@ -160,10 +160,12 @@ several connectors can satisfy one node.
 - **Veo video-extension** (+7s chained, 720p) — a natural "extend this clip" action on video
   nodes; extending also resets the 2-day server retention clock.
 - **ChatRealty staging/carousels** — `stage_listing_with_agent` (Nano Banana agent-headshot
-  compositing, ~$0.04/photo) and the carousel pair (`plan_listing_carousel` +
-  `create_carousel_slide`) are still unwired; natural next tiles. Covers are now wired
-  (2026-08-09 enrichment run, row 10): `create_listing_cover` renders from the Listing photos
-  tile's top-matched listing, downloaded via the `importUrlAsset` path this note already
-  predicted — first proof that path works end-to-end for a ChatRealty Cloudinary URL.
+  compositing, ~$0.04/photo) and `create_carousel_slide` are still unwired; natural next tiles.
+  Covers are now wired (2026-08-09 enrichment run, row 10): `create_listing_cover` renders from
+  the Listing photos tile's top-matched listing, downloaded via the `importUrlAsset` path this
+  note already predicted — first proof that path works end-to-end for a ChatRealty Cloudinary URL.
+  `plan_listing_carousel` is now wired too, but not as a tile — it feeds the Scripting panel's
+  agent context (real listing facts/CMA numbers, once per conversation) rather than rendering
+  anything itself; see `docs/ui/creative-nodes.md`'s Scripting conversation section.
 - **muapi sandbox keys** return instant free mock data — the cheap way to integration-test
   the whole generation loop before the joint live session.

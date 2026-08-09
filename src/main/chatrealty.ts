@@ -4,6 +4,7 @@ import { app } from 'electron'
 import type {
   ChatRealtyCoverResult,
   ChatRealtyListing,
+  ChatRealtyListingContextResult,
   ChatRealtyPullResult,
   ConnectorDef
 } from '@shared/types'
@@ -212,6 +213,37 @@ export async function createListingCover(
 
     const saved = await importUrlAsset(match[0], 'image')
     return { ok: true, src: saved.url }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    client.stop()
+  }
+}
+
+const LISTING_CONTEXT_MAX_CHARS = 6_000
+
+/**
+ * `plan_listing_carousel`'s material — listing facts, photo indices, and
+ * pre-formatted subdivision CMA stats — handed to the Scripting panel as
+ * real numbers instead of an agent inventing them. Same deterministic,
+ * no-agent-turn shape as `pullListingPhotos`/`createListingCover`; the
+ * caller decides when this is worth fetching (once per conversation, per a
+ * listing-sourced node being in play — never on every turn).
+ */
+export async function planListingCarousel(listingKey: string): Promise<ChatRealtyListingContextResult> {
+  const client = new McpStdioClient()
+  try {
+    const token = resolveChatRealtyToken()
+    if (!token) return { ok: false, error: 'No ChatRealty token configured.' }
+    await client.start(serverSpec(token))
+
+    const result = await client.callTool('plan_listing_carousel', { listingKey })
+    if (result.isError) {
+      return { ok: false, error: textOf(result.content).slice(0, 300) }
+    }
+    const text = textOf(result.content).slice(0, LISTING_CONTEXT_MAX_CHARS)
+    if (!text.trim()) return { ok: false, error: 'No carousel material came back.' }
+    return { ok: true, text }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {

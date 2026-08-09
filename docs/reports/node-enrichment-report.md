@@ -7,6 +7,63 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Eighteenth autonomous run: Listing photos (row 10, step 2) — real CMA numbers now reach the Scripting panel
+
+Queue state going in: row 10 `in-progress`, cover render (step 1) shipped by the seventeenth run,
+steps 2–4 of the strategy doc's build order still open with no ordering dependency between them.
+Step 2 — "feed `plan_listing_carousel`'s structured facts/CMA into the Scripting panel's agent
+context, no new UI" — was the smallest, most finishable slice of the three, so this pass took it.
+
+**What I researched.** No web search this pass — same reasoning as the seventeenth run's: the gap
+is fully specified by our own connector reference doc (`docs/connectors/reference/chatrealty.md`),
+not by an external best-practice question. Re-read `plan_listing_carousel`'s row in the tool table:
+one call, `listingKey` in, a JSON text block out with listing facts, a photo index list, pre-
+formatted subdivision CMA stats, and the agent's brand color/handle/license — exactly the material
+a script-drafting conversation needs instead of the agent inventing numbers.
+
+**What I built.** `planListingCarousel()` in `chatrealty.ts` — one `plan_listing_carousel` MCP call,
+deterministic, no agent turn, matching `pullListingPhotos()`/`createListingCover()`'s established
+pattern exactly (same `McpStdioClient` lifecycle, same token-resolution guard, same error
+shape); the raw text response is capped at 6,000 chars rather than parsed, since the agent reading
+it is the actual consumer, not app code. Full plumbing thread: a `ChatRealtyListingContextResult`
+shared type, a new `chatrealty:listing-context` IPC channel (`ipc-channels.ts` → `ipc.ts` →
+`preload/index.ts` → `bridge.ts`, the browser-preview mock included with the same honest
+"unavailable" stub every other ChatRealty bridge method has), and `bridge.chatRealty.listingContext`.
+
+The consuming side is `sendScriptingMessage` in `store.ts`. On a conversation's first turn only
+(`history.length === 0` — deliberately the same gating condition `conversations.ts`'s own
+transcript-replay preamble already uses, so the reasoning "only inject once, before the agent has
+any context of its own" isn't a new idea in this codebase, just applied to a second kind of
+preamble) it looks at the session's canvas nodes for the most recently added one carrying a
+`listingKey` — i.e., a photo pulled from ChatRealty is sitting on the canvas. If one exists, it
+calls the new bridge method and, on success, prepends the returned text ahead of the user's actual
+message in the prompt sent to the agent — the chat transcript still shows only what the user typed,
+the injected material lives in the turn's prompt string, never in `scripting.messages`. Every
+subsequent turn in the same conversation already has the material in the agent's resumed SDK
+session, so this fires at most once per conversation, not once per message — a deliberate choice to
+avoid re-sending ~6k chars of the same context on every reply.
+
+**What I verified.** `npm run typecheck` clean — fresh `npm install` in this sandbox (no
+`node_modules` at run start), both `tsconfig.node.json` and `tsconfig.web.json`. **Not run live** —
+no ChatRealty token is configured here, same ceiling as every prior ChatRealty-touching pass; the
+call pattern is identical to `createListingCover()`'s already-typechecked shape, but the actual
+`plan_listing_carousel` response text (and whether ~6k chars of prepended material reads well to the
+agent versus overwhelming a short first message) is unverified against a real reply. Worth a human
+glance once a token exists: is 6,000 chars the right cap, and does the material actually help script
+quality or just add noise the agent ignores.
+
+**What I could not do.** Steps 3 (carousel slide builder — a real staged-screen UI, four render
+kinds each with its own required-field shape) and 4 (agent-in-photo staging picker — an
+interior-photo selector feeding `photoIndexes`, gated on the standing never-fire-live-spend
+guardrail) are both separately-scoped features, not something to compress into the same slice as
+step 2. They're unchanged in the strategy doc's build order for whichever pass picks up row 10
+next.
+
+**Queue state:** row 10 stays `in-progress`; two items left (3, 4), no ordering dependency between
+them, everything else stays `done` per the prior runs' own entries below.
+
+---
+
 ## 2026-08-09 — Seventeenth autonomous run: Listing photos (row 10) — cover render shipped, the last queue row is now open
 
 The queue was fully `done` through row 9 going into this pass (confirmed by the sixteenth run's own

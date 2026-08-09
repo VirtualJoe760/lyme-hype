@@ -175,11 +175,11 @@ as paid-for and unused since the map was first written.
 
 **Concrete build order:**
 1. Cover render on the Listing photos tile, scoped to the top-matched listing from a pull (no new
-   listing-picker UI needed — the pull already surfaces one listing's photos at a time). **Shipped
-   this run**, see below.
+   listing-picker UI needed — the pull already surfaces one listing's photos at a time). **Shipped**,
+   see below.
 2. Feed `plan_listing_carousel`'s structured facts/CMA material into the Scripting panel's context
    when a listing-sourced node is in play — real numbers over invented ones, zero new UI (an
-   agent-context enrichment, not a new tile).
+   agent-context enrichment, not a new tile). **Shipped**, see below.
 3. Carousel slide builder — a `kind` picker + per-kind form on the Listing photos tile (or a new
    tile), each slide landing as its own image node the same way the cover does.
 4. Agent-in-photo staging — an interior-photo picker (reusing the existing pulled-photo nodes,
@@ -205,8 +205,29 @@ as paid-for and unused since the map was first written.
   best-effort parse of a documented-not-tested response shape, same caveat row 1's Yapper REST pass
   flagged for its own regex-free but similarly untested parsing.
 - `npm run typecheck` clean (fresh `npm install`, no `node_modules` at run start).
-- Steps 2–4 are open — step 2 is the natural next slice (no new UI, just richer agent context);
-  steps 3–4 are real, separately-scoped features for future passes.
+
+**Status (2026-08-09 enrichment run, step 2 shipped — row 10 stays in-progress):**
+
+- `planListingCarousel()` in `chatrealty.ts`: one `plan_listing_carousel` MCP call (deterministic,
+  no agent turn, same shape as `pullListingPhotos`/`createListingCover`), raw text response capped
+  at 6,000 chars. New `chatrealty:listing-context` IPC channel end-to-end (`ipc-channels.ts` →
+  `ipc.ts` → `preload/index.ts` → `bridge.ts`, including the browser-preview mock's honest
+  "unavailable" stub) and a `ChatRealtyListingContextResult` shared type.
+- `sendScriptingMessage` in `store.ts`: on a conversation's first turn only (`history.length === 0`
+  — the same point `conversations.ts`'s own transcript-replay preamble is conditional on), it looks
+  for the session's most recently added canvas node carrying a `listingKey` (a ChatRealty-sourced
+  Listing photos node) and, if one exists, fetches the carousel material and prepends it to the
+  prompt actually sent to the agent — not to the message shown in the chat transcript, so the user
+  still sees their own plain text. Every later turn already has the material in the agent's
+  resumed session context, so it's fetched exactly once per conversation, not on every message.
+- **Not run live** — no ChatRealty token configured in this sandbox; the wiring reuses the same
+  no-agent-turn call pattern the cover render already established and typechecked clean, but the
+  actual `plan_listing_carousel` response shape (and the value of prepending ~6k chars of it ahead
+  of a user's first message) is unverified against a real reply.
+- `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`). `creative-nodes.md` and
+  `capability-map.md` updated in the same commit.
+- Steps 3–4 remain open, real, separately-scoped features for future passes — no ordering
+  dependency between them.
 
 ---
 
@@ -508,8 +529,8 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    row updated in this commit. Nothing named is left open on row 9 from row 7's handoff; a future
    pass should treat any further row-9 work as its own gap-search (transition dialog, clip-onto-
    clip stretch goal, etc.) rather than assume more is queued here.
-10. **Listing photos (ChatRealty)** — analyzed above; cover render shipped, carousel/staging
-    build order ready for future passes.
+10. **Listing photos (ChatRealty)** — analyzed above; cover render and Scripting-panel CMA context
+    shipped, carousel slide builder / agent-in-photo staging build order ready for future passes.
 
 ## What "enrichment" means per run (guardrails for the automated routine)
 

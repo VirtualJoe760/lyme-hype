@@ -495,6 +495,15 @@ export interface ChatRealtyCoverResult {
   error?: string
 }
 
+/** `plan_listing_carousel`'s material — real facts/CMA stats for a listing,
+ *  handed to the Scripting panel as context instead of an agent guessing
+ *  numbers. Raw JSON text, not parsed: the agent reads it directly. */
+export interface ChatRealtyListingContextResult {
+  ok: boolean
+  text?: string
+  error?: string
+}
+
 /** The only credential facts the agent or renderer ever sees — never the value. */
 export interface SecretReport {
   connectorId: string

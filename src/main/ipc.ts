@@ -27,7 +27,12 @@ import { combineLocal, isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
-import { createListingCover, hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import {
+  createListingCover,
+  hasChatRealtyToken,
+  planListingCarousel,
+  pullListingPhotos
+} from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { addSuggestion, listSuggestions, openSuggestionKeyPage, reconcileInstalledConnectors } from './connector-suggestions'
 import { deleteSecret, listSecretReports } from './credential-vault'
@@ -313,6 +318,10 @@ export function registerIpc(window: BrowserWindow): void {
       return createListingCover(listingKey, opts)
     }
   )
+  ipcMain.handle(IPC.chatRealtyListingContext, (e, listingKey: string) => {
+    if (!isMainSender(e)) return null
+    return planListingCarousel(typeof listingKey === 'string' ? listingKey : '')
+  })
 
   ipcMain.handle(IPC.connectorsList, (e) => {
     if (!isMainSender(e)) return []
