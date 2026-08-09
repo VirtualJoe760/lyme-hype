@@ -52,7 +52,7 @@ way around.
 | `audio-music` | ✓ Suno | ✓ compose_music | — | ○ | — | — | — | — |
 | `audio-sfx` | ○ MMAudio (from video) | ✓ text_to_sound_effects | — | — | — | — | — | — |
 | `voice-clone` | ○ Suno singing clone ($0 + liveness check) | ✓ voice_clone | — | — | — | — | ○ | — |
-| `voice-library` | — | ✓ search_voices (+▶ preview) | — | — | — | — | ○ /audio/voices | — |
+| `voice-library` | — | ✓ search_voices (+▶ preview) | — | — | — | — | ✓ /audio/voices — wired as the Yapper-fallback Voice job's provider (Cartesia/ElevenLabs) picker | — |
 | `lipsync` | ○ edit-lipsync tool | — | — | ○ | — | — | ✓ Max (auto-trains, returns reusable trainingId) | — |
 | `face-swap` | ○ **muapi_enhance_face_swap (image + video)** | — | — | — | — | — | — (absent from OpenAPI, re-verified) | — |
 | `lora-train` | — | — | ✓ `/styles/train` REST (unpublished price) | ✓ krea-2 + flux-krea trainers (flux-krea delisted from catalog but endpoint live — route by exact id) | — | — | — | — |
@@ -91,7 +91,7 @@ $0.03 vs. $0.06/image).
 | Generate image · storyboard | `image-gen` | gemini/openai pick | — |
 | Generate image · production | `image-production` | muapi + hint "Midjourney" | tier toggle |
 | Generate image · with style | `lora-use` | routes by the style's own `connectorId` — fal (weights-URL hint) or krea (`styles:[{id}]` hint, tier picks K2 medium/large) | — |
-| Audio · voice | `audio-tts` (+`voice-library`) | ElevenLabs direct call | Yapper `/audio/speech` direct REST call (free daily tier, one default voice, no browsing) when ElevenLabs isn't connected and a Yapper REST key is set |
+| Audio · voice | `audio-tts` (+`voice-library`) | ElevenLabs direct call | Yapper `/audio/speech` direct REST call (free daily tier) when ElevenLabs isn't connected and a Yapper REST key is set — `GET /audio/voices` browsable via a Cartesia/ElevenLabs-via-Yapper toggle, defaulting to Yapper's own default voice when none is picked |
 | Audio · music | `audio-music` | ElevenLabs | muapi's Suno wrapper (agent-routed, `connectorId: 'muapi'`) when ElevenLabs isn't connected and muapi is |
 | Audio · SFX | `audio-sfx` | ElevenLabs | — |
 | Audio · clone | `voice-clone` | ElevenLabs | — |
@@ -155,8 +155,14 @@ several connectors can satisfy one node.
   row 5 first pass): `yapper-rest.ts`'s `synthesizeYapperSpeech()` calls the same
   `POST /audio/speech` endpoint documented above directly (no agent turn, no polling — the endpoint
   is synchronous), and the Generate audio · Voice job auto-routes to it when ElevenLabs isn't
-  connected and the `yapper-rest` REST key is set. One default voice, no browsing (that's Yapper's
-  `GET /audio/voices`, left for later if it turns out to matter).
+  connected and the `yapper-rest` REST key is set. **Voice browsing** shipped in a later pass:
+  `listYapperVoices()` calls `GET /audio/voices?modelId=…`, mapping a Cartesia/ElevenLabs provider
+  toggle to the two browsable TTS models in Yapper's audio catalog (`sonic-3.5`/`eleven_v3` — the
+  third, `bytedance/seed-audio-1.0`, is ref-clip voice design, nothing to browse). The response's
+  per-voice field names aren't captured in the reference doc beyond the bare `AudioVoice[]` type,
+  so parsing reads defensively across the field names the sibling `/audio/speech` response's own
+  `voice{voiceId,provider,name}` object uses — worth a live check once a REST key exists. Picking
+  no voice still falls back to Yapper's own default, same as before.
 - **Veo video-extension** (+7s chained, 720p) — a natural "extend this clip" action on video
   nodes; extending also resets the 2-day server retention clock.
 - **ChatRealty's whole creative-rendering chain is now wired** — all four tools

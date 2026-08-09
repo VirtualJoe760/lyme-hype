@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ConnectorView, TrainedStyle, VoiceEntry } from '@shared/types'
+import type { ConnectorView, TrainedStyle, VoiceEntry, YapperVoiceEntry } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { ChatRealtyPull } from './ChatRealtyPull'
@@ -471,6 +471,11 @@ function AudioScreen(props: {
   const [voicesRaw, setVoicesRaw] = useState('')
   const [voiceName, setVoiceName] = useState('')
   const [previewing, setPreviewing] = useState<string | null>(null)
+  const [yapperVoiceProvider, setYapperVoiceProvider] = useState<'cartesia' | 'elevenlabs'>('cartesia')
+  const [yapperVoiceQuery, setYapperVoiceQuery] = useState('')
+  const [yapperVoices, setYapperVoices] = useState<YapperVoiceEntry[] | null>(null)
+  const [yapperVoiceId, setYapperVoiceId] = useState('')
+  const [yapperVoiceError, setYapperVoiceError] = useState('')
   const [text, setText] = useState('')
   const [musicLength, setMusicLength] = useState('60s')
   const [sfxDuration, setSfxDuration] = useState('2s')
@@ -489,6 +494,25 @@ function AudioScreen(props: {
       } else {
         setVoices(null)
         setVoicesRaw(`⚠ ${result?.error ?? 'failed'}`)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function browseYapperVoices(): Promise<void> {
+    setBusy(true)
+    setYapperVoiceError('')
+    try {
+      const result = await bridge.audioTools.yapperVoices({
+        provider: yapperVoiceProvider,
+        search: yapperVoiceQuery || undefined
+      })
+      if (result?.ok) {
+        setYapperVoices(result.yapperVoices ?? [])
+      } else {
+        setYapperVoices(null)
+        setYapperVoiceError(result?.error ?? 'Voice list failed.')
       }
     } finally {
       setBusy(false)
@@ -539,7 +563,7 @@ function AudioScreen(props: {
       const result =
         kind === 'voice'
           ? useYapperVoiceFallback
-            ? await bridge.audioTools.yapperTts({ text })
+            ? await bridge.audioTools.yapperTts({ text, voiceId: yapperVoiceId || undefined })
             : await bridge.audioTools.tts({ text, voiceName: voiceName || undefined })
           : kind === 'music'
             ? await bridge.audioTools.music({ prompt: text, lengthMs: (parseInt(musicLength, 10) || 60) * 1000 })
@@ -623,10 +647,65 @@ function AudioScreen(props: {
       {job === 'voice' && (
         <>
           {useYapperVoiceFallback && (
-            <p className="aside-help">
-              ElevenLabs isn't connected — using Yapper's free daily-character TTS tier instead. One
-              default voice, no browsing yet; connect ElevenLabs in Settings for the full voice library.
-            </p>
+            <>
+              <p className="aside-help">
+                ElevenLabs isn't connected — using Yapper's free daily-character TTS tier instead.
+                Connect ElevenLabs in Settings for the full voice library.
+              </p>
+              <div className="tab-row">
+                {(['cartesia', 'elevenlabs'] as const).map((p) => (
+                  <button
+                    key={p}
+                    className={yapperVoiceProvider === p ? 'active' : ''}
+                    onClick={() => {
+                      setYapperVoiceProvider(p)
+                      setYapperVoices(null)
+                      setYapperVoiceId('')
+                    }}
+                  >
+                    {p === 'cartesia' ? 'Cartesia' : 'ElevenLabs (via Yapper)'}
+                  </button>
+                ))}
+              </div>
+              <div className="mgfx-row">
+                <input
+                  className="cr-input"
+                  placeholder="Search this provider's voices…"
+                  value={yapperVoiceQuery}
+                  onChange={(e) => setYapperVoiceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void browseYapperVoices()
+                  }}
+                />
+                <button className="conn-mini" disabled={busy} onClick={() => void browseYapperVoices()}>
+                  Browse
+                </button>
+              </div>
+              {yapperVoiceError && <p className="aside-help">⚠ {yapperVoiceError}</p>}
+              {yapperVoices && yapperVoices.length > 0 && (
+                <div className="voice-list">
+                  {yapperVoices.map((v) => (
+                    <div key={v.id} className={`voice-row${yapperVoiceId === v.id ? ' sel' : ''}`}>
+                      <button className="voice-name" onClick={() => setYapperVoiceId(v.id)}>
+                        {v.name}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {yapperVoices && yapperVoices.length === 0 && (
+                <p className="aside-help">No voices matched — try clearing the search.</p>
+              )}
+              {yapperVoiceId && (
+                <p className="aside-help">
+                  Using{' '}
+                  {yapperVoices?.find((v) => v.id === yapperVoiceId)?.name ?? yapperVoiceId}.{' '}
+                  <button className="voice-name" onClick={() => setYapperVoiceId('')}>
+                    Clear
+                  </button>
+                </p>
+              )}
+            </>
           )}
           {!useYapperVoiceFallback && (
             <>

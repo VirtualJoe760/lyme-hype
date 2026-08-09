@@ -118,7 +118,9 @@ const api = {
     clone: (input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioClone, input),
     yapperTts: (input: { text: string; voiceId?: string }): Promise<AudioToolResult | null> =>
-      ipcRenderer.invoke(IPC.audioYapperTts, input)
+      ipcRenderer.invoke(IPC.audioYapperTts, input),
+    yapperVoices: (input: { provider: 'cartesia' | 'elevenlabs'; search?: string }): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioYapperVoices, input)
   },
   lora: {
     train: (input: {

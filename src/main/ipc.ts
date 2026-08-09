@@ -15,7 +15,7 @@ import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, sav
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
-import { synthesizeYapperSpeech } from './yapper-rest'
+import { listYapperVoices, synthesizeYapperSpeech } from './yapper-rest'
 import { exportTimeline } from './ffmpeg'
 import {
   deleteTrainedStyle,
@@ -247,6 +247,10 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.audioYapperTts, (e, input: { text: string; voiceId?: string }) => {
     if (!isMainSender(e)) return null
     return synthesizeYapperSpeech(input)
+  })
+  ipcMain.handle(IPC.audioYapperVoices, (e, input: { provider: 'cartesia' | 'elevenlabs'; search?: string }) => {
+    if (!isMainSender(e)) return null
+    return listYapperVoices(input)
   })
 
   ipcMain.handle(

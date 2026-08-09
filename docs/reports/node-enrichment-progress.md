@@ -15,7 +15,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 2 | Motion graphics | in-progress | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. resume: muapi image-edit as a second batch source is the only item left — a genuinely different generation path (not a parameter wire-up), needs its own design pass before implementing. |
 | 3 | Generate video | done | i2v starting-frame picker (routes to gemini via `startFramePath`) + Yapper model picker (`modelHint` + `connectorId: 'yapper'`) shipped in `VideoScreen`; both named items closed. |
 | 4 | Generate image | done | Fixed a real bug (picked style always forced `connectorId: 'fal'`, ignoring `style.connectorId`); resurrected `krea-training.ts` (git-history revival) as a second, opt-in "Krea 2 direct" trainer producing `connectorId: 'krea'` styles, applied via `styles:[{id,strength}]` and honoring the tier toggle (K2 medium/large) — the first genuine production-tier LoRA path. Both named items closed in one fix. |
-| 5 | Generate audio | done | Yapper free-tier TTS fallback (Voice job) shipped first pass; Suno-via-muapi music fallback (agent-routed `generateMedia`/`ResultRow`, `connectorId: 'muapi'`, `modelHint: 'suno'`, instrumental-only toggle) shipped second pass. Both named items closed. |
+| 5 | Generate audio | done | Yapper free-tier TTS fallback (Voice job) shipped first pass; Suno-via-muapi music fallback (agent-routed `generateMedia`/`ResultRow`, `connectorId: 'muapi'`, `modelHint: 'suno'`, instrumental-only toggle) shipped second pass. Both named items closed. Yapper voice browsing (`GET /audio/voices`, a Cartesia/ElevenLabs provider toggle + picker) shipped later, closing Recommendations item 4. |
 | 6 | Create a LoRA | done | "Train from this deepfake's reference photos" shortcut shipped: Deepfake's face-node picker gains a "Train a LoRA from this photo" button when the picked node is a still image, prefilling the Create a LoRA screen's first training image + name + kind (subject). Also fixed a real plumbing gap this depended on: `lora:train`'s IPC handler never resolved `lyme-asset://` canvas-node URLs to disk paths (only `scriptingTurn` had that resolution before), so passing a canvas image straight through would have failed `readFileSync` in both trainers. |
 | 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
 | 8 | Storyboard / Scripting | done | Reference person gained an optional `personaTone` tag (Settings › Trained styles); a script-born Storyboard panel gets a "☺ Send to Deepfake" button that prefills the script and auto-suggests a Reference person by matching the panel's `feeling` against `personaTone` (word overlap, no agent call). |
@@ -29,6 +29,22 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-second autonomous run) — queue confirmed fully `done` (all ten rows), same as
+  the twenty-first run found. Per the empty-queue guardrail, took the top item off the report's own
+  Recommendations list rather than inventing a new row: item 4, Yapper's voice library, was flagged
+  as "a smaller lift" than the fallback path itself and genuinely well-scoped for a single pass (row
+  5's `synthesizeYapperSpeech()` already accepted an optional `voiceId`, just nothing in the UI ever
+  set one). Shipped `listYapperVoices()` in `yapper-rest.ts` (`GET /audio/voices?modelId=…`, mapping
+  a Cartesia/ElevenLabs provider toggle to Yapper's two browsable TTS models) end to end: `IPC.
+  audioYapperVoices` channel, preload/bridge plumbing (both real and browser-preview-mock sides), and
+  a provider-toggle + search + pick UI on the Voice job's existing Yapper-fallback block, replacing
+  its old "one default voice, no browsing yet" text. `npm run typecheck` clean (fresh `npm install`,
+  no `node_modules` at run start). Not run live — no Yapper REST key in this sandbox; the per-voice
+  response field names aren't documented beyond bare `AudioVoice[]`, so parsing reads defensively
+  across the field names the sibling `/audio/speech` response's own `voice{voiceId,provider,name}`
+  shape uses, same honesty-about-uncertainty pattern the Krea-training pass used for an unverified
+  field name. `creative-nodes.md` and `capability-map.md` updated in this commit; Recommendations
+  item 4 in the report is now closed.
 - 2026-08-09 (twenty-first autonomous run) — independently built the same row-10 step 4
   (`stage_listing_with_agent` agent-in-photo staging picker) the twentieth run had already shipped
   and pushed by the time this run tried to push its own copy — a near-identical implementation

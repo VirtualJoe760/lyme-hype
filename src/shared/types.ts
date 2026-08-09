@@ -164,9 +164,17 @@ export interface AudioToolResult {
   text?: string
   /** Structured voice rows when the listing parsed; raw `text` is the fallback. */
   voices?: VoiceEntry[]
+  /** `GET /audio/voices` rows — id-keyed, unlike ElevenLabs's name-keyed `voices`,
+   *  since Yapper's `/audio/speech` takes a `voiceId`, not a name. */
+  yapperVoices?: YapperVoiceEntry[]
   /** Yapper's `/audio/speech` free daily-character tier remaining count. */
   freeCharactersRemainingToday?: number
   error?: string
+}
+
+export interface YapperVoiceEntry {
+  id: string
+  name: string
 }
 
 export interface TrainedStyle {

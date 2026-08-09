@@ -84,6 +84,7 @@ export interface Bridge {
     sfx(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null>
     clone(input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null>
     yapperTts(input: { text: string; voiceId?: string }): Promise<AudioToolResult | null>
+    yapperVoices(input: { provider: 'cartesia' | 'elevenlabs'; search?: string }): Promise<AudioToolResult | null>
   }
   lora: {
     train(input: {
@@ -249,6 +250,10 @@ function createBrowserMock(): Bridge {
         error: 'Connectors run in the Electron main process — unavailable in browser preview.'
       }),
       yapperTts: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      yapperVoices: async () => ({
         ok: false,
         error: 'Connectors run in the Electron main process — unavailable in browser preview.'
       })

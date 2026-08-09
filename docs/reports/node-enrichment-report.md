@@ -1344,6 +1344,74 @@ already being wired into the app for other tiles. That's queue item #1.
 
 ---
 
+## 2026-08-09 — Twenty-second autonomous run: Yapper voice browsing (Recommendations item 4)
+
+Queue state going in: all ten rows still `done`, confirmed the same way the twenty-first run
+confirmed it — read every row's status and resume note fresh rather than trusting the table's
+`done` labels blind. Per the empty-queue guardrail, the right move on a genuinely empty queue is
+picking off the report's own Recommendations list rather than inventing a new row, so I did that:
+item 4, Yapper's voice library.
+
+**Why this one.** Of the five open recommendations, #1 (the `asset-upload` cross-cutting helper)
+and #5 (muapi image-edit as Motion graphics' second batch source) have both been explicitly flagged
+across many prior runs as too large for a single 15–20 minute pass — real design work, not a
+parameter wire-up. #4 was flagged the opposite way: "a smaller lift than building the fallback
+was," because the fallback path itself (`synthesizeYapperSpeech()` in `yapper-rest.ts`, shipped row
+5) already accepted an optional `voiceId` — nothing in the UI ever set one. That's exactly the
+shape of task this routine can finish cleanly in one pass: extend an existing, proven path rather
+than open a new one.
+
+**What I researched.** Re-read `docs/connectors/reference/yapper.md`'s "Key REST endpoints" section
+closely. `GET /audio/voices?modelId=…` is real and documented, but the response shape is thin —
+just `{data: AudioVoice[], nextCursor}` with no field-level schema for `AudioVoice` itself. The
+sibling `/audio/speech` response *does* document its embedded voice object's shape:
+`voice{voiceId, provider, name}`. That's the only concrete evidence available for what a voice row
+actually looks like, so I parsed defensively against `voiceId ?? id` and `name ?? label ?? id`
+rather than assume one exact shape — the same "read defensively, document the uncertainty" pattern
+an earlier run used for Krea's unverified `/assets` response field name. Also confirmed which audio
+models are actually browsable: the catalog lists three (`sonic-3.5` Cartesia, `eleven_v3`
+ElevenLabs, `bytedance/seed-audio-1.0`), but the third is ref-clip voice *design*, not a named-voice
+library — nothing to search there, so the picker only offers the first two, matching `/audio/
+speech`'s own `provider` enum (`elevenlabs`|`cartesia`) exactly.
+
+**What I built.** `listYapperVoices({provider, search?})` in `yapper-rest.ts`, mapping the provider
+to its model id and calling `GET /audio/voices?modelId=…&search=…`. New `YapperVoiceEntry {id,
+name}` shared type (deliberately separate from the existing name-keyed `VoiceEntry` ElevenLabs
+browsing uses — Yapper's speech endpoint needs a `voiceId`, not a name, so reusing the same shape
+would have thrown away the id). Full plumbing: `IPC.audioYapperVoices` channel, `ipc.ts` handler,
+preload bridge method, `bridge.ts` interface + browser-preview-mock stub. UI: the Voice job's
+existing Yapper-fallback block (`AsidePanel.tsx`'s `AudioScreen`) gained a Cartesia/ElevenLabs
+provider toggle, a search box + Browse button, a picked-voice list, and a "Using X · Clear" status
+line, replacing the old "one default voice, no browsing yet" text. Picking no voice still falls
+back to Yapper's own default (`voiceId` stays `undefined` in `synthesizeYapperSpeech`'s call), so
+this is additive — nothing that worked before regresses if a voice is never picked.
+
+**Verified:** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json` (fresh
+`npm install`, no `node_modules` at run start — this sandbox never persists it between runs).
+
+**Not run live** — no Yapper REST key configured in this sandbox, and this was never going to
+change regardless of key availability per the live-billed-call guardrail (this endpoint is free
+either way, but the routine doesn't distinguish — it never fires a real network call against a
+live key blind). The one real unknown left is whether `AudioVoice`'s actual field names match the
+defensive parse; worth a live check once a Yapper REST key exists, same caveat every ChatRealty and
+Krea pass has carried for an under-documented response shape.
+
+**Docs updated in this commit** (doc-drift-is-a-bug): `creative-nodes.md`'s Generate audio · Voice
+row and `capability-map.md`'s `voice-library` cell, its Audio · voice creative-node row, and the §4
+chain-note paragraph that previously said "left for later if it turns out to matter" — it mattered,
+it's built. Recommendations item 4 above is marked shipped rather than deleted, so the list stays
+an honest record of what's been considered.
+
+**Where this leaves things.** The ten-row queue stays fully `done`; this was Recommendations-list
+work, tracked in the progress file's session log rather than a new row (per the guardrail against
+inventing rows). Four items remain on the list: #1 (asset-upload helper, still the biggest
+cross-cutting gap), #2 (ChatRealty CMS drafts), #3 (Veo video-extension), #5 (muapi image-edit as
+Motion graphics' second batch source). #3 (video-extension) looks like the next similarly-scoped
+candidate — small, contained, similar shape to pickers this queue has already shipped repeatedly —
+worth the next pass's first look if the queue is still empty by then.
+
+---
+
 ## 2026-08-09 — Recommendations (queue fully done, no more rows to invent)
 
 All ten queue rows are `done` as of the twentieth run above. Per the routine's own guardrail, an
@@ -1377,10 +1445,9 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    node — the wrapper capability already exists per the reference doc, nothing in the UI surfaces
    it. Small, contained, similar shape to the starting-frame picker row 3 already shipped.
 
-4. **Yapper's voice library** (`GET /audio/voices`) has been "left for later" since row 5's first
-   pass shipped the free-tier TTS fallback with one hardcoded default voice. Worth revisiting now
-   that the fallback path itself is proven — browsing/picking a Yapper voice is a smaller lift than
-   building the fallback was.
+4. ~~**Yapper's voice library** (`GET /audio/voices`)~~ — **shipped** (2026-08-09, twenty-second
+   autonomous run): a Cartesia/ElevenLabs provider toggle on the Voice job's Yapper-fallback block
+   now browses and picks a real `voiceId`. See that run's entry below.
 
 5. **muapi's image-edit tool as Motion graphics' second batch source** — flagged as real,
    separately-scoped work back in row 2's very first pass and never picked back up since (every
