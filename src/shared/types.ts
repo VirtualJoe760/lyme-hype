@@ -479,6 +479,10 @@ export interface ChatRealtyPulledImage {
   label: string
   listingKey: string
   detailUrl: string | null
+  /** 0-based position in the `get_listing_photos` response — the exact index
+   *  `stage_listing_with_agent`'s `photoIndexes` param expects, so the staging
+   *  picker can reuse these pulled photos instead of guessing indices. */
+  photoIndex: number
 }
 
 export interface ChatRealtyPullResult {
@@ -525,6 +529,15 @@ export type ChatRealtyCarouselSlideInput =
     }
   | { kind: 'text'; paragraphs: string[]; italicLast: boolean }
   | { kind: 'cta'; paragraphs: [string, string] }
+
+/** `stage_listing_with_agent`'s result — the one real generation call in the
+ *  ChatRealty creative-rendering chain (~$0.04/photo). The picker that builds
+ *  the request never fires it on its own; a human presses Generate. */
+export interface ChatRealtyStageResult {
+  ok: boolean
+  images?: { src: string }[]
+  error?: string
+}
 
 /** The only credential facts the agent or renderer ever sees — never the value. */
 export interface SecretReport {

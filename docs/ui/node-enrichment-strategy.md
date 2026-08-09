@@ -229,7 +229,7 @@ as paid-for and unused since the map was first written.
 - Steps 3–4 remain open, real, separately-scoped features for future passes — no ordering
   dependency between them.
 
-**Status (2026-08-09 enrichment run, step 3 shipped — row 10 stays in-progress):**
+**Status (2026-08-09 enrichment run, step 3 shipped):**
 
 - `createCarouselSlide()` in `chatrealty.ts`: one `create_carousel_slide` MCP call (deterministic,
   no agent turn, same shape as the other three ChatRealty creative calls) dispatching on a new
@@ -258,8 +258,43 @@ as paid-for and unused since the map was first written.
   captured when the reference doc was written — same confidence tier as the Krea asset-upload
   field-name guesswork from row 4, worth a live check once a token exists (does each `cma` stat
   really take `{label, value}`, does `text` really accept 1–3 paragraphs or a fixed count).
-- Step 4 (agent-in-photo staging picker — real generation spend, build the picker, never fire it)
-  is the only item left in the row 10 build order.
+- Step 4 (agent-in-photo staging picker) shipped in the same overnight pass window by an
+  independent run — see below; the two were merged together rather than one deferring to the other,
+  since they're complementary, not duplicate, work. Row 10's build order is now fully closed.
+
+**Status (2026-08-09 enrichment run, step 4 shipped):**
+
+- `stageListingWithAgent()` in `chatrealty.ts`: one `stage_listing_with_agent` MCP call
+  (`listingKey` + `photoIndexes`, capped to the tool's own 10-photo max), all Cloudinary URLs
+  extracted from the text response (a global regex + dedup, since this tool can return several
+  URLs unlike the single-URL cover/carousel-context calls) and downloaded via `importUrlAsset()`
+  into real image nodes, one per staged photo.
+- `imagesToAssets()` (the same helper `pullListingPhotos()` already used) now stamps each pulled
+  photo with its 0-based `get_listing_photos` position as `ChatRealtyPulledImage.photoIndex` — the
+  exact value `photoIndexes` expects — so the picker never has to guess an index from a list
+  position; it reads the real one back off the pull result.
+- `ChatRealtyPull.tsx` gained an interior-photo checkbox grid (rendered once photos exist,
+  10-pick cap matching the tool's own limit) and a "Stage agent into N photos" button, following
+  the cover form's established shape (own `stageState`/`stageMessage` local state, `ResultRow`-free
+  since this is a direct bridge call like the cover, not an agent-routed `generateMedia` call).
+  Full plumbing thread: `ChatRealtyStageResult` shared type, `chatrealty:stage-listing` IPC channel
+  end to end (`ipc-channels.ts` → `ipc.ts` → `preload/index.ts` → `bridge.ts`, mock included), and
+  a `stageChatRealtyListing` store action shaped like `createChatRealtyCover`.
+- **This is real generation spend** (~$0.04/photo) — unlike the templated cover/carousel-material
+  calls, so this button is the one place in the whole Listing photos tile where a press has a real
+  dollar cost, same category as every other Generate button elsewhere in the app. The picker exists
+  to make interior-only selection easy (the reference doc's documented gotcha: default/first-N
+  selection is usually aerial/exterior and composites a giant floating agent) — nothing here fires
+  it autonomously.
+- **Not run live** — no ChatRealty token configured in this sandbox, and even with one this routine
+  would never press the button itself; the request/response shape (`photoIndexes` in, multiple
+  Cloudinary URLs out) is read directly from the reference doc's verified schema, same confidence
+  level as every prior ChatRealty pass.
+- `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`). `creative-nodes.md` and
+  `capability-map.md` updated in the same commit.
+- Step 3 (carousel slide builder) shipped in the same overnight pass window by an independent run
+  — see above. Row 10's build order is now fully closed: cover, CMA context, carousel slides, and
+  agent staging are all shipped.
 
 ---
 
@@ -561,8 +596,9 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    row updated in this commit. Nothing named is left open on row 9 from row 7's handoff; a future
    pass should treat any further row-9 work as its own gap-search (transition dialog, clip-onto-
    clip stretch goal, etc.) rather than assume more is queued here.
-10. **Listing photos (ChatRealty)** — analyzed above; cover render, Scripting-panel CMA context,
-    and the carousel slide builder shipped. Agent-in-photo staging is the one item left.
+10. **Listing photos (ChatRealty)** — analyzed above; all four build-order items shipped: cover
+    render, Scripting-panel CMA context, the carousel slide builder, and agent-in-photo staging.
+    Row 10 is fully closed, and with it the entire ten-row queue.
 
 ## What "enrichment" means per run (guardrails for the automated routine)
 

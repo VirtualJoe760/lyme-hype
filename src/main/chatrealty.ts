@@ -7,6 +7,7 @@ import type {
   ChatRealtyListing,
   ChatRealtyListingContextResult,
   ChatRealtyPullResult,
+  ChatRealtyStageResult,
   ConnectorDef
 } from '@shared/types'
 import { importUrlAsset, saveImageAsset } from './asset-store'
@@ -112,13 +113,15 @@ function imagesToAssets(
   let n = 0
   for (const block of content) {
     if (block.type !== 'image' || typeof block.data !== 'string') continue
+    const photoIndex = n
     n += 1
     const saved = saveImageAsset(block.data, block.mimeType ?? 'image/jpeg')
     out.push({
       src: saved.url,
       label: `${labelBase} · ${String(n).padStart(2, '0')}`,
       listingKey,
-      detailUrl
+      detailUrl,
+      photoIndex
     })
   }
   return out
@@ -295,6 +298,53 @@ export async function createCarouselSlide(
 
     const saved = await importUrlAsset(match[0], 'image')
     return { ok: true, src: saved.url }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    client.stop()
+  }
+}
+
+const CLOUDINARY_URLS = /https:\/\/\S+/g
+
+/**
+ * `stage_listing_with_agent` — the one real generation call in ChatRealty's
+ * creative-rendering chain (Nano Banana compositing the agent's headshot into
+ * up to 10 interior photos, ~$0.04 each). Unlike `createListingCover`/
+ * `planListingCarousel`/`createCarouselSlide` above, this is genuine billed
+ * spend, so this function exists purely as wiring: it fires exactly when the
+ * caller invokes it, same as any other connector's Generate button — the
+ * picker that builds `photoIndexes` is what enforces "interior rooms only,"
+ * this call doesn't second-guess the caller's selection.
+ */
+export async function stageListingWithAgent(
+  listingKey: string,
+  photoIndexes: number[]
+): Promise<ChatRealtyStageResult> {
+  const client = new McpStdioClient()
+  try {
+    const token = resolveChatRealtyToken()
+    if (!token) return { ok: false, error: 'No ChatRealty token configured.' }
+    if (photoIndexes.length === 0) return { ok: false, error: 'Pick at least one interior photo.' }
+    await client.start(serverSpec(token))
+
+    const result = await client.callTool('stage_listing_with_agent', {
+      listingKey,
+      photoIndexes: photoIndexes.slice(0, 10),
+      count: Math.min(photoIndexes.length, 10)
+    })
+    if (result.isError) {
+      return { ok: false, error: textOf(result.content).slice(0, 300) }
+    }
+    const matches = [...new Set(textOf(result.content).match(CLOUDINARY_URLS) ?? [])]
+    if (matches.length === 0) return { ok: false, error: 'No staged photos came back.' }
+
+    const images: { src: string }[] = []
+    for (const url of matches) {
+      const saved = await importUrlAsset(url, 'image')
+      images.push({ src: saved.url })
+    }
+    return { ok: true, images }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {

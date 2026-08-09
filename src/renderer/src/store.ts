@@ -342,6 +342,7 @@ interface StudioStore {
     count: number
     error?: string
     topListing?: { listingKey: string; address: string; city: string; detailUrl: string | null }
+    photos: { src: string; label: string; photoIndex: number }[]
   }>
   createChatRealtyCover(
     listingKey: string,
@@ -351,6 +352,11 @@ interface StudioStore {
     input: ChatRealtyCarouselSlideInput,
     opts: { label: string; listingKey?: string; detailUrl?: string }
   ): Promise<{ ok: boolean; error?: string }>
+  stageChatRealtyListing(
+    listingKey: string,
+    photoIndexes: number[],
+    opts: { labelBase: string; detailUrl?: string }
+  ): Promise<{ ok: boolean; count: number; error?: string }>
   flushPersist(): void
 }
 
@@ -1544,7 +1550,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     async pullChatRealtyPhotos(query) {
       const result = await bridge.chatRealty.pull(query)
       if (!result || !result.ok) {
-        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.' }
+        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.', photos: [] }
       }
       const cols = 3
       const gap = 128
@@ -1569,7 +1575,12 @@ export const useStudio = create<StudioStore>((set, get) => {
         error: result.images.length === 0 ? (result.error ?? 'No photos found.') : undefined,
         topListing: top
           ? { listingKey: top.listingKey, address: top.address, city: top.city, detailUrl: top.detailUrl }
-          : undefined
+          : undefined,
+        photos: result.images.map((img) => ({
+          src: img.src,
+          label: img.label,
+          photoIndex: img.photoIndex
+        }))
       }
     },
 
@@ -1609,6 +1620,30 @@ export const useStudio = create<StudioStore>((set, get) => {
         startRendering: false
       })
       return { ok: true }
+    },
+
+    async stageChatRealtyListing(listingKey, photoIndexes, opts) {
+      const result = await bridge.chatRealty.stageListing(listingKey, photoIndexes)
+      if (!result || !result.ok || !result.images || result.images.length === 0) {
+        return { ok: false, count: 0, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      const cols = 3
+      const gap = 128
+      const originX = 60
+      const originY = 260
+      result.images.forEach((img, i) => {
+        get().addNode({
+          label: `${opts.labelBase} · Staged ${String(i + 1).padStart(2, '0')}`,
+          mediaType: 'image',
+          source: 'generate',
+          src: img.src,
+          detailUrl: opts.detailUrl,
+          listingKey,
+          position: { x: originX + (i % cols) * gap, y: originY + Math.floor(i / cols) * gap },
+          startRendering: false
+        })
+      })
+      return { ok: true, count: result.images.length }
     },
 
     flushPersist() {

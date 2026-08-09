@@ -7,6 +7,30 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twentieth autonomous run: merging a genuine collision on row 10 — both halves of the build order shipped, queue fully done
+
+Started this run to find another session had landed on row 10 at the same moment, independently —
+not a duplicate-work collision like several earlier ones in this log, but a complementary one: they
+took step 3 (carousel slide builder), I'd already built step 4 (agent-in-photo staging picker)
+locally before fetching and seeing their push. Since the two pieces don't overlap in what they *do*
+— different tools, different render kinds — deferring to whichever pushed first would have thrown
+away real, working code for no reason, unlike the "identical fix, pick one" collisions rows 4/6/9
+hit earlier. Instead: `git pull --rebase`, then a manual conflict resolution across every file both
+passes touched (`chatrealty.ts`, `ipc.ts`, `preload/index.ts`, `bridge.ts`, `store.ts`,
+`ChatRealtyPull.tsx`, `shared/types.ts`, `shared/ipc-channels.ts`, both docs, and the two report
+files you're reading right now) — keeping every real line from both sides, not picking a winner.
+`npm run typecheck` clean on the merged tree afterward, both `tsconfig.node.json` and
+`tsconfig.web.json`, confirming the merge didn't just resolve textually but actually compiles.
+
+The practical result: row 10's build order (cover, CMA context, carousel slides, agent staging) is
+now fully shipped — all four items — which means the entire ten-row queue this routine has worked
+through since night one is `done` for the first time. Read the two entries immediately below for
+what each half-run actually built; they're kept as originally written (each still says "row 10 stays
+in-progress" in its own closing line, which was true from that pass's own vantage point before the
+merge — the queue file itself now correctly says `done`).
+
+---
+
 ## 2026-08-09 — Nineteenth autonomous run: Listing photos (row 10, step 3) — the carousel slide builder is real
 
 Queue state going in: row 10 `in-progress`, steps 1–2 (cover render, Scripting-panel CMA context)
@@ -84,6 +108,66 @@ app.
 
 **Queue state:** row 10 stays `in-progress`; one item left (step 4), everything else stays `done`
 per the prior runs' own entries below.
+
+---
+
+## 2026-08-09 — Nineteenth autonomous run: Listing photos (row 10, step 4) — the agent-staging picker, the one real billed call in this chain
+
+Queue state going in: row 10 `in-progress`, steps 1–2 (cover render, Scripting-panel CMA context)
+shipped by the seventeenth/eighteenth runs, steps 3 (carousel slide builder) and 4 (agent-in-photo
+staging picker) still open with no ordering dependency. Step 4 was the smaller, self-contained
+slice — a picker plus one new wrapper function, versus step 3's four different render-kind forms —
+so this pass took it.
+
+**What I researched.** No web search — same reasoning as the two prior Listing-photos passes: the
+gap is fully specified by `docs/connectors/reference/chatrealty.md`'s already-verified schema for
+`stage_listing_with_agent` (`listingKey`, `photoIndexes` 0-based max 10, `count` 1–10 default 5,
+optional `headshotUrl`/`prompt` overrides; returns multiple Cloudinary URLs, ~$0.04/photo, ~30s for
+10). The one thing worth re-reading closely: the reference doc's own gotcha that default/first-N
+photo selection "produces a giant floating agent" because MLS feeds lead with drone/exterior shots
+— confirming the picker, not just the wrapper call, is the actual point of this slice.
+
+**What I built.** `stageListingWithAgent(listingKey, photoIndexes)` in `chatrealty.ts`: one
+`stage_listing_with_agent` MCP call (capped to the tool's own 10-photo max), every Cloudinary URL
+in the text response extracted with a global regex and deduped (this tool can return several URLs
+per call, unlike the single-URL `create_listing_cover`/`plan_listing_carousel` calls this chain
+already wired), each one downloaded via the existing `importUrlAsset()` path into a real image
+node — same ingestion mechanism as the cover render, just looped.
+
+The picker needed exact photo indices, not guessed ones, so I extended `imagesToAssets()` (the
+same helper `pullListingPhotos()` already uses) to stamp each pulled photo with its real 0-based
+`get_listing_photos` position as a new `ChatRealtyPulledImage.photoIndex` field — the pull path
+already iterates photos in response order to build labels ("· 01", "· 02", …), so this was reading
+back a value that already existed implicitly (the loop counter) rather than inventing new logic.
+`pullChatRealtyPhotos` in `store.ts` now returns that photo list (`{src, label, photoIndex}[]`)
+alongside the existing `topListing`, and `ChatRealtyPull.tsx` renders it as a checkbox grid once a
+pull succeeds — check the interior rooms, press "Stage agent into N photos," which calls a new
+`stageChatRealtyListing` store action (shaped like `createChatRealtyCover`) and lands each staged
+result as its own image node below the originals. Full plumbing thread: `ChatRealtyStageResult`
+shared type, `chatrealty:stage-listing` IPC channel end to end (`ipc-channels.ts` → `ipc.ts` →
+`preload/index.ts` → `bridge.ts`, mock stub included), small `.cr-photo-grid`/`.cr-photo-pick` CSS
+additions matching the existing `.cr-*` token-based styling.
+
+**What I verified.** `npm run typecheck` clean — fresh `npm install` in this sandbox (`node_modules`
+wasn't present at run start), both `tsconfig.node.json` and `tsconfig.web.json`. One real typecheck
+catch worth noting: `pullChatRealtyPhotos`'s early-return error branch didn't include the new
+`photos` field, which TypeScript correctly flagged as a union-type mismatch against the return
+signature — a genuine bug the compiler caught before it shipped, not a false positive, fixed by
+adding `photos: []` to that branch. **Not run live** — no ChatRealty token configured in this
+sandbox, and this is the one tool in the whole Listing-photos chain that's real billed spend
+regardless of a token — cover renders and carousel context are templated/deterministic, this one
+actually runs Nano Banana compositing. Consistent with the standing guardrail, the picker exists to
+make interior-only selection easy and the wrapper function exists to be callable, but nothing in
+this pass calls it — only a human pressing the button in a running app would.
+
+**What I could not do.** Step 3, the carousel slide builder (`create_carousel_slide`, four kinds —
+`banner`/`cma`/`text`/`cta` — each with its own required-field shape, e.g. `cma` wants exactly 4
+`stats` entries and `cta` wants exactly 2 `paragraphs`), is real, separately-scoped UI work closer
+to the Motion graphics wizard's staged-screens pattern than a single form. Left for a future pass;
+it's the last open item in row 10's build order.
+
+**Queue state:** row 10 stays `in-progress` with one item left (step 3); everything else stays
+`done` per the prior runs' own entries below.
 
 ---
 

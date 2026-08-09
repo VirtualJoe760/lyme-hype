@@ -7,6 +7,7 @@ import type {
   ChatRealtyCoverResult,
   ChatRealtyListingContextResult,
   ChatRealtyPullResult,
+  ChatRealtyStageResult,
   ClaudeAuthStatus,
   CombineLocalRequest,
   ConnectorDef,
@@ -155,7 +156,9 @@ const api = {
     listingContext: (listingKey: string): Promise<ChatRealtyListingContextResult | null> =>
       ipcRenderer.invoke(IPC.chatRealtyListingContext, listingKey),
     createCarouselSlide: (input: ChatRealtyCarouselSlideInput): Promise<ChatRealtyCoverResult | null> =>
-      ipcRenderer.invoke(IPC.chatRealtyCarouselSlide, input)
+      ipcRenderer.invoke(IPC.chatRealtyCarouselSlide, input),
+    stageListing: (listingKey: string, photoIndexes: number[]): Promise<ChatRealtyStageResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyStage, listingKey, photoIndexes)
   },
   connectors: {
     list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),

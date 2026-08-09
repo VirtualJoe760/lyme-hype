@@ -8,6 +8,7 @@ type PullState = 'idle' | 'pulling' | 'done' | 'error'
 type CoverState = 'idle' | 'working' | 'done' | 'error'
 type SlideKind = ChatRealtyCarouselSlideInput['kind']
 type SlideState = 'idle' | 'working' | 'done' | 'error'
+type StageState = 'idle' | 'working' | 'done' | 'error'
 
 interface TopListing {
   listingKey: string
@@ -55,10 +56,17 @@ function emptyCarouselForm(): {
   }
 }
 
+interface PulledPhoto {
+  src: string
+  label: string
+  photoIndex: number
+}
+
 export function ChatRealtyPull(): React.JSX.Element | null {
   const pull = useStudio((s) => s.pullChatRealtyPhotos)
   const createCover = useStudio((s) => s.createChatRealtyCover)
   const createSlide = useStudio((s) => s.createChatRealtyCarouselSlide)
+  const stageListing = useStudio((s) => s.stageChatRealtyListing)
   const [connected, setConnected] = useState<boolean | null>(null)
   const [query, setQuery] = useState('')
   const [state, setState] = useState<PullState>('idle')
@@ -72,6 +80,10 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   const [slideForm, setSlideForm] = useState(emptyCarouselForm())
   const [slideState, setSlideState] = useState<SlideState>('idle')
   const [slideMessage, setSlideMessage] = useState('')
+  const [photos, setPhotos] = useState<PulledPhoto[]>([])
+  const [interiorPicks, setInteriorPicks] = useState<Set<number>>(new Set())
+  const [stageState, setStageState] = useState<StageState>('idle')
+  const [stageMessage, setStageMessage] = useState('')
 
   useEffect(() => {
     let active = true
@@ -101,6 +113,10 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     setSlideState('idle')
     setSlideMessage('')
     setSlideForm(emptyCarouselForm())
+    setPhotos([])
+    setInteriorPicks(new Set())
+    setStageState('idle')
+    setStageMessage('')
     try {
       const result = await pull(query)
       if (result.ok && result.count > 0) {
@@ -109,6 +125,7 @@ export function ChatRealtyPull(): React.JSX.Element | null {
           `Added ${result.count} listing photo${result.count === 1 ? '' : 's'} to the canvas.`
         )
         setTopListing(result.topListing ?? null)
+        setPhotos(result.photos)
       } else {
         setState('error')
         setMessage(result.error ?? 'Nothing came back.')
@@ -116,6 +133,39 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     } catch (err) {
       setState('error')
       setMessage(err instanceof Error ? err.message : 'The pull failed.')
+    }
+  }
+
+  function toggleInteriorPick(photoIndex: number): void {
+    setInteriorPicks((prev) => {
+      const next = new Set(prev)
+      if (next.has(photoIndex)) next.delete(photoIndex)
+      else if (next.size < 10) next.add(photoIndex)
+      return next
+    })
+  }
+
+  async function handleStageListing(): Promise<void> {
+    if (!topListing || interiorPicks.size === 0) return
+    setStageState('working')
+    setStageMessage('')
+    try {
+      const result = await stageListing(topListing.listingKey, [...interiorPicks], {
+        labelBase: topListing.address || 'Listing',
+        detailUrl: topListing.detailUrl ?? undefined
+      })
+      if (result.ok) {
+        setStageState('done')
+        setStageMessage(
+          `Added ${result.count} agent-staged photo${result.count === 1 ? '' : 's'} to the canvas.`
+        )
+      } else {
+        setStageState('error')
+        setStageMessage(result.error ?? 'Staging failed.')
+      }
+    } catch (err) {
+      setStageState('error')
+      setStageMessage(err instanceof Error ? err.message : 'Staging failed.')
     }
   }
 
@@ -416,6 +466,38 @@ export function ChatRealtyPull(): React.JSX.Element | null {
             {slideState === 'working' ? 'Rendering…' : '▤ Create carousel slide'}
           </Button>
           {slideMessage && <div className={`cr-msg ${slideState}`}>{slideMessage}</div>}
+        </div>
+      )}
+      {topListing && photos.length > 0 && (
+        <div className="cr-cover">
+          <p className="cr-help">
+            Stage the agent into interior photos (Nano Banana composite, real generation spend —
+            ~$0.04 each). Pick interior rooms only; aerial/exterior shots composite badly.
+          </p>
+          <div className="cr-photo-grid">
+            {photos.map((p) => (
+              <label key={p.photoIndex} className="cr-photo-pick">
+                <input
+                  type="checkbox"
+                  checked={interiorPicks.has(p.photoIndex)}
+                  onChange={() => toggleInteriorPick(p.photoIndex)}
+                />
+                <span>{p.label}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            className="action-btn cr-btn"
+            disabled={stageState === 'working' || interiorPicks.size === 0}
+            onClick={() => void handleStageListing()}
+          >
+            {stageState === 'working'
+              ? 'Staging…'
+              : interiorPicks.size === 0
+                ? '☺ Stage agent into photos'
+                : `☺ Stage agent into ${interiorPicks.size} photo${interiorPicks.size === 1 ? '' : 's'}`}
+          </button>
+          {stageMessage && <div className={`cr-msg ${stageState}`}>{stageMessage}</div>}
         </div>
       )}
     </div>

@@ -33,7 +33,8 @@ import {
   createListingCover,
   hasChatRealtyToken,
   planListingCarousel,
-  pullListingPhotos
+  pullListingPhotos,
+  stageListingWithAgent
 } from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
 import { addSuggestion, listSuggestions, openSuggestionKeyPage, reconcileInstalledConnectors } from './connector-suggestions'
@@ -327,6 +328,13 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.chatRealtyCarouselSlide, (e, input: ChatRealtyCarouselSlideInput) => {
     if (!isMainSender(e)) return null
     return createCarouselSlide(input)
+  })
+  ipcMain.handle(IPC.chatRealtyStage, (e, listingKey: string, photoIndexes: number[]) => {
+    if (!isMainSender(e)) return null
+    return stageListingWithAgent(
+      typeof listingKey === 'string' ? listingKey : '',
+      Array.isArray(photoIndexes) ? photoIndexes.filter((n) => Number.isInteger(n)) : []
+    )
   })
 
   ipcMain.handle(IPC.connectorsList, (e) => {

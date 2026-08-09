@@ -1755,6 +1755,26 @@
   font-family: inherit;
 }
 
+.cr-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 8px;
+  margin-bottom: 8px;
+}
+
+.cr-photo-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.cr-photo-pick input {
+  margin: 0;
+}
+
 /* ---------- agent link card ---------- */
 
 .agent-card {

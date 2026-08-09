@@ -20,7 +20,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
 | 8 | Storyboard / Scripting | done | Reference person gained an optional `personaTone` tag (Settings › Trained styles); a script-born Storyboard panel gets a "☺ Send to Deepfake" button that prefills the script and auto-suggests a Reference person by matching the panel's `feeling` against `personaTone` (word overlap, no agent call). |
 | 9 | Timeline / export | done | Built the local ffmpeg compositing row 7 explicitly deferred here: Combine's four remaining pairs (video+video stitch, image+video overlay, audio+video score, audio+audio mix) now produce real output via a new `combineLocal()`/`media:combine-local` IPC round trip instead of the Phase 2 placeholder node. |
-| 10 | Listing photos (ChatRealty) | in-progress | Cover render shipped: `create_listing_cover` wired into the Listing photos tile (hook/body form on the top-matched listing, Cloudinary URL downloaded via `importUrlAsset`, real image node). CMA-context shipped: `planListingCarousel()` (`chatrealty:listing-context` IPC) feeds `plan_listing_carousel`'s real listing facts/CMA stats into the Scripting panel's first agent turn whenever a ChatRealty-sourced node is in the session, once per conversation. Carousel slide builder shipped: `createCarouselSlide()` (`chatrealty:create-carousel-slide` IPC) wraps `create_carousel_slide` (no `listingKey` — this tool takes literal per-kind fields, not a lookup, per the reference doc's own param list) behind a kind picker (cma/text/cta/banner) + four per-kind forms on the Listing photos tile, same Cloudinary-URL-then-`importUrlAsset` ingestion as the cover. resume: (4) `stage_listing_with_agent` interior-photo picker is the only item left (real generation spend, ~$0.04/photo — build the picker, never fire it). The `cma`/`text`/`cta` field shapes used above are inferred from the reference doc's prose (no field-level schema was captured) — worth a live check once a token exists, same confidence tier as row 4's Krea asset-upload field-name guesswork. |
+| 10 | Listing photos (ChatRealty) | done | Cover render shipped: `create_listing_cover` wired into the Listing photos tile (hook/body form on the top-matched listing, Cloudinary URL downloaded via `importUrlAsset`, real image node). CMA-context shipped: `planListingCarousel()` (`chatrealty:listing-context` IPC) feeds `plan_listing_carousel`'s real listing facts/CMA stats into the Scripting panel's first agent turn whenever a ChatRealty-sourced node is in the session, once per conversation. Carousel slide builder shipped (a concurrent run, same pass window): `createCarouselSlide()` (`chatrealty:create-carousel-slide` IPC) wraps `create_carousel_slide` (no `listingKey` — this tool takes literal per-kind fields, not a lookup) behind a kind picker (cma/text/cta/banner) + four per-kind forms on the tile, same Cloudinary-URL-then-`importUrlAsset` ingestion as the cover; the `cma`/`text`/`cta` field shapes are inferred from the reference doc's prose (no field-level schema captured), worth a live check once a token exists. Agent-in-photo staging shipped (this run): `stageListingWithAgent()` wraps `stage_listing_with_agent` (real ~$0.04/photo Nano Banana compositing — the one billed call in this chain), an interior-photo checkbox picker (each pulled photo carries its real `get_listing_photos` position as `ChatRealtyPulledImage.photoIndex`, so the picker feeds exact indices instead of guessing), full IPC/bridge/store plumbing, button fires only on a human click. All four build-order items closed — row 10 is the last node in the queue, and the queue is now fully `done`. |
 
 ## Cross-cutting plumbing (build once, benefits multiple rows)
 
@@ -29,6 +29,16 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twentieth autonomous run) — collided with the nineteenth run on row 10, independently:
+  it took step 3 (carousel slide builder), this run took step 4 (agent-in-photo staging picker) —
+  complementary, not duplicate, work, so instead of deferring to whichever pushed first, this pass
+  rebased onto their commit and manually merged both features into the same files (`chatrealty.ts`,
+  `ipc.ts`, `preload/index.ts`, `bridge.ts`, `store.ts`, `ChatRealtyPull.tsx`, both docs), keeping
+  every real line from both sides rather than picking one. `npm run typecheck` clean on the merged
+  tree (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install`). This closes row 10's build
+  order completely — all four items (cover, CMA context, carousel slides, agent staging) now shipped
+  — which also means the whole ten-row queue is fully `done` for the first time. See both runs'
+  entries immediately below for what each one actually built.
 - 2026-08-09 (nineteenth autonomous run) — row 10, step 3 of the strategy doc's build order:
   `create_carousel_slide` wired via a new `createCarouselSlide()` in `chatrealty.ts` and a kind-
   picker + four per-kind forms (cma/text/cta/banner) on the Listing photos tile, beneath the
@@ -42,9 +52,16 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
   `npm install`, no `node_modules` at run start). Not run live — no ChatRealty token in this
   sandbox; the per-kind field shapes (`stats`, `listingPrice`/`scope`/`period`/`pitch`,
   `paragraphs`/`italicLast`) are inferred from the reference doc's prose since no field-level
-  schema exists for this tool, worth a live check once a token exists. `creative-nodes.md` and
-  `capability-map.md` updated in the same commit. Row 10 left in-progress: step 4 (agent-in-photo
-  staging picker) is the only item left in the build order.
+  schema exists for this tool, worth a live check once a token exists.
+- 2026-08-09 (nineteenth autonomous run, independently — see the twentieth run's collision note
+  above) — row 10, step 4 of the strategy doc's build order: `stage_listing_with_agent` (real
+  ~$0.04/photo Nano Banana compositing) wired end to end — `stageListingWithAgent()` in
+  `chatrealty.ts`, a new interior-photo checkbox picker on the Listing photos tile,
+  `ChatRealtyPulledImage` gained a real `photoIndex` field so the picker's checkboxes map to exact
+  `get_listing_photos` positions instead of guessing, full IPC/bridge/store plumbing. `npm run
+  typecheck` clean (fresh `npm install`, no `node_modules` at run start). Not run live — no
+  ChatRealty token in this sandbox, and this is the one tool in the chain that's real billed spend
+  regardless — the picker builds the request, a human press is what would fire it.
 - 2026-08-09 (eighteenth autonomous run) — row 10, step 2 of the strategy doc's build order:
   `plan_listing_carousel`'s real facts/CMA material now feeds the Scripting panel's agent context
   (`planListingCarousel()` + `chatrealty:listing-context` IPC, fetched once on a conversation's

@@ -5,6 +5,7 @@ import type {
   ChatRealtyCoverResult,
   ChatRealtyListingContextResult,
   ChatRealtyPullResult,
+  ChatRealtyStageResult,
   ClaudeAuthStatus,
   CombineLocalRequest,
   ConnectorDef,
@@ -113,6 +114,7 @@ export interface Bridge {
     ): Promise<ChatRealtyCoverResult | null>
     listingContext(listingKey: string): Promise<ChatRealtyListingContextResult | null>
     createCarouselSlide(input: ChatRealtyCarouselSlideInput): Promise<ChatRealtyCoverResult | null>
+    stageListing(listingKey: string, photoIndexes: number[]): Promise<ChatRealtyStageResult | null>
   }
   connectors: {
     list(): Promise<ConnectorView[]>
@@ -291,6 +293,10 @@ function createBrowserMock(): Bridge {
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       }),
       createCarouselSlide: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      stageListing: async () => ({
         ok: false,
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       })
