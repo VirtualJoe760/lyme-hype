@@ -1988,12 +1988,21 @@
   background: var(--panel);
   border-right: 1px solid var(--border);
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   padding: 3px 6px;
   cursor: pointer;
   user-select: none;
+}
+
+.tl-track-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.tl-track-btns {
+  flex: none;
 }
 
 .tl-track-head.muted .tl-track-name {

@@ -10,7 +10,8 @@ type ExportState =
   | { status: 'ok'; outPath: string }
   | { status: 'error'; message: string }
 
-const TRACK_HEAD_W = 118
+// Wide enough for name + the right-aligned M/S/L group on one row.
+const TRACK_HEAD_W = 150
 const RULER_H = 22
 const HEAD_H = 38
 const SNAP_TOLERANCE_PX = 8
