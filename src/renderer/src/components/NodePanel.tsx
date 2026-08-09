@@ -92,6 +92,7 @@ export function NodePanel(props: {
   const [training, setTraining] = useState(false)
   const [trainError, setTrainError] = useState<string | null>(null)
   const [openSetting, setOpenSetting] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [params, setParams] = useState<Record<string, string>>(() =>
     Object.fromEntries(manifest.parameters.map((p) => [p.id, p.options?.[0] ?? '']))
   )
@@ -125,24 +126,32 @@ export function NodePanel(props: {
   // The same model is often resold by several connectors (eleven v3 on both ElevenLabs
   // and Yapper). Two identically-labelled pills that route differently is exactly the
   // ambiguity the pill row exists to remove, so collisions carry their connector.
+  // Setting an end frame narrows the row to models that can actually take one. muapi's
+  // FLF models are deliberately absent from `video-frame-conditioning` — its MCP video
+  // tool has a single image_url and no end-frame parameter, so they could never run it.
+  const endFrameSet = !!(nodeInputs[manifest.id] ?? {})['endFrame']
+  const rowCapability = endFrameSet && manifest.media === 'video'
+    ? 'video-frame-conditioning'
+    : tool.capability
+
   const picker = useMemo(() => {
-    const rows = tool.capability ? modelPickerOrder(tool.capability, ready) : []
+    const rows = rowCapability ? modelPickerOrder(rowCapability, ready) : []
     const seen = new Map<string, number>()
     for (const r of rows) seen.set(r.label, (seen.get(r.label) ?? 0) + 1)
     return rows.map((r) => ({
       ...r,
       pillLabel: (seen.get(r.label) ?? 0) > 1 ? `${r.label} · ${r.connectorId}` : r.label
     }))
-  }, [tool.capability, ready])
+  }, [rowCapability, ready])
 
   // The model row is re-framed by the tool, so a selection that can't run the new tool is
   // replaced rather than silently rerouted — the panel names what it left.
   const reconciled = useMemo(
-    () => reconcileModel(stage.modelId ?? null, tool.capability, ready),
-    [stage.modelId, tool.capability, ready]
+    () => reconcileModel(stage.modelId ?? null, rowCapability, ready),
+    [stage.modelId, rowCapability, ready]
   )
   const model: CatalogModel | null = reconciled.model
-  const canRun = tool.capability === null || !!model
+  const canRun = rowCapability === null || !!model
 
   // A handoff moves the artifact to a DIFFERENT node, so self-targets are dropped —
   // "deepfake · as the source performance" offered inside Deepfake is noise. Nodes whose
@@ -265,6 +274,28 @@ export function NodePanel(props: {
     person: { role: 'faceSource', media: 'image' }
   }
 
+  /** Media a setting will accept, so a drop is refused before it lands rather than
+   *  silently putting a video where a start frame belongs. */
+  function acceptedMedia(kind: string): MediaType | null {
+    if (kind === 'refs' || kind === 'startFrame' || kind === 'endFrame' || kind === 'person') return 'image'
+    if (kind === 'sourceMedia') return manifest.id === 'deepfake' ? 'video' : 'video'
+    return null
+  }
+
+  function acceptsDrop(kind: string, types: readonly string[]): boolean {
+    if (!types.includes('application/lyme-node')) return false
+    return acceptedMedia(kind) !== null
+  }
+
+  function linkCanvasNode(kind: string, src: string): void {
+    if (kind === 'refs') {
+      setRefs(refs.includes(src) ? refs : [...refs, src])
+      return
+    }
+    const mediaRole = MEDIA_ROLES[kind]
+    if (mediaRole) setNodeInput(manifest.id, mediaRole.role, src)
+  }
+
   function settingValue(kind: string): string {
     if (kind === 'takes') return String(takes)
     if (kind === 'style') return style ? style.name.slice(0, 9) : 'none'
@@ -360,7 +391,22 @@ export function NodePanel(props: {
           return (
             <button
               key={s.id}
-              className={`np-set${value !== 'none' ? ' on' : ''}`}
+              className={`np-set${value !== 'none' ? ' on' : ''}${dropTarget === s.id ? ' drop' : ''}`}
+              onDragOver={(e) => {
+                if (!acceptsDrop(s.kind, e.dataTransfer.types)) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'copy'
+                setDropTarget(s.id)
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(e) => {
+                setDropTarget(null)
+                const nodeId = e.dataTransfer.getData('application/lyme-node')
+                const node = nodes.find((n) => n.id === nodeId)
+                if (!node?.data.src) return
+                e.preventDefault()
+                linkCanvasNode(s.kind, node.data.src)
+              }}
               onClick={() => {
                 if (s.kind === 'takes') {
                   setTakes(takes >= 8 ? 1 : takes === 1 ? 2 : takes === 2 ? 4 : 8)
@@ -513,7 +559,7 @@ export function NodePanel(props: {
       ) : (
         <div className="np-models">
           <div className="np-lbl">
-            MODEL · {picker.filter((m) => m.ready).length} can {tool.label}
+            MODEL · {picker.filter((m) => m.ready).length} can {endFrameSet ? 'first→last' : tool.label}
           </div>
           <div className="np-track">
             {picker.length === 0 && <span className="np-none">no model can do this</span>}
@@ -530,6 +576,10 @@ export function NodePanel(props: {
           </div>
           <span className="np-fade" />
         </div>
+      )}
+
+      {model?.constraint && (
+        <div className="np-local">{model.label} — {model.constraint}</div>
       )}
 
       {needsMask && (

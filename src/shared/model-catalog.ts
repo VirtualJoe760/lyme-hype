@@ -51,6 +51,9 @@ export interface CatalogModel {
   retiresOn?: string
   /** Present in the provider's catalog but not startable through its API. */
   unavailable?: boolean
+  /** A hard rule the model imposes once a capability is used — shown in the panel so it
+   *  isn't discovered as a 4xx (Veo locks to 8s the moment an end frame is supplied). */
+  constraint?: string
 }
 
 const IMAGE: CatalogModel[] = [
@@ -303,6 +306,7 @@ const VIDEO: CatalogModel[] = [
     ],
     maxRefs: 3,
     note: 'start+end frames · 4/6/8s',
+    constraint: 'an end frame locks the clip to exactly 8s',
     featured: true
   },
   {
@@ -335,12 +339,11 @@ const VIDEO: CatalogModel[] = [
     connectorId: 'muapi',
     providerModelId: 'seedance-2',
     media: 'video',
-    capabilities: [
-      'video-gen-t2v',
-      'video-gen-i2v',
-      'video-frame-conditioning',
-      'video-extension'
-    ],
+    // No frame conditioning here on purpose: muapi's MCP `muapi_video_from_image` takes
+    // exactly ONE image_url and has no end-frame parameter, even though the model enum
+    // lists FLF models. Start+end on muapi is REST-only, so offering it through this
+    // connector would be a control that cannot run (muapi.md gotchas).
+    capabilities: ['video-gen-t2v', 'video-gen-i2v', 'video-extension'],
     maxRefs: 9,
     note: 'native audio sync · omni reference',
     featured: true
@@ -360,8 +363,8 @@ const VIDEO: CatalogModel[] = [
     connectorId: 'muapi',
     providerModelId: 'seedance-2.5',
     media: 'video',
-    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
-    note: 'up to 30s'
+    capabilities: ['video-gen-i2v'],
+    note: 'up to 30s · start frame only via MCP'
   },
   {
     id: 'muapi:kling-master',
@@ -404,8 +407,73 @@ const VIDEO: CatalogModel[] = [
     connectorId: 'muapi',
     providerModelId: 'vidu-q3-flf',
     media: 'video',
-    capabilities: ['video-gen-t2v', 'video-frame-conditioning'],
-    note: 'cheap first/last frame'
+    capabilities: ['video-gen-t2v'],
+    note: 'FLF model, but muapi MCP can’t pass an end frame — use fal'
+  },
+  {
+    id: 'fal:veo3.1-flf',
+    label: 'veo 3.1 flf',
+    connectorId: 'fal',
+    providerModelId: 'fal-ai/veo3.1/first-last-frame-to-video',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
+    note: 'dedicated first→last endpoint',
+    featured: true
+  },
+  {
+    id: 'fal:veo3.1-lite-flf',
+    label: 'veo 3.1 lite flf',
+    connectorId: 'fal',
+    providerModelId: 'fal-ai/veo3.1/lite/first-last-frame-to-video',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
+    note: 'same family as Gemini’s Veo, a fraction of the rate'
+  },
+  {
+    id: 'fal:seedance-2.5-i2v',
+    label: 'seedance 2.5',
+    connectorId: 'fal',
+    providerModelId: 'bytedance/seedance-2.5/image-to-video',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
+    note: '4–30s · native audio · end_image_url',
+    featured: true
+  },
+  {
+    id: 'fal:kling-v3-pro-i2v',
+    label: 'kling v3 pro',
+    connectorId: 'fal',
+    providerModelId: 'fal-ai/kling-video/v3/pro/image-to-video',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
+    note: 'start+end · 3–15s · multi-shot prompts'
+  },
+  {
+    id: 'fal:wan-2.7-i2v',
+    label: 'wan 2.7 flf',
+    connectorId: 'fal',
+    providerModelId: 'fal-ai/wan/v2.7/image-to-video',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning', 'video-extension'],
+    note: 'end frame + continue-from-clip'
+  },
+  {
+    id: 'fal:flux-3-keyframes',
+    label: 'flux 3 keyframes',
+    connectorId: 'fal',
+    providerModelId: 'blackforestlabs/flux-3/keyframes-to-video',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
+    note: 'more than two frames — a keyframe sequence'
+  },
+  {
+    id: 'fal:pixverse-transition',
+    label: 'pixverse transition',
+    connectorId: 'fal',
+    providerModelId: 'fal-ai/pixverse/v6/transition',
+    media: 'video',
+    capabilities: ['video-gen-i2v', 'video-frame-conditioning'],
+    note: 'cheapest first→last route'
   },
   {
     id: 'krea:veo-3.1',
