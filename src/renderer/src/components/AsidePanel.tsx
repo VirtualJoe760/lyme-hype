@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react'
-import type { TrainedStyle } from '@shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { ConnectorView, TrainedStyle, VoiceEntry } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
-import { AgentCard } from './AgentCard'
 import { ChatRealtyPull } from './ChatRealtyPull'
 import { MotionGraphicsWizard } from './MotionGraphicsWizard'
 
 /**
- * The Create panel (docs/ui/create-panel.md): a two-level, task-first aside —
- * home is a tile grid, tapping a tile opens only that task's controls, a back
- * arrow returns. Replaces the old flat kitchen-sink form.
+ * The Create panel v2 (docs/ui/create-panel.md + docs/concepts/
+ * create-panel-v2.html): status-aware tile grid → task screens that answer
+ * "will this work, what runs it, what does it cost" before anything is typed —
+ * run-line up top, one hero input, smart-default chips, a result row that
+ * tracks the node instead of silently bouncing home.
  */
 
 type Screen =
@@ -31,8 +32,8 @@ const TILES: { key: Screen; glyph: string; label: string; blurb: string }[] = [
   { key: 'audio', glyph: '♪', label: 'Generate audio', blurb: 'Voice, music, SFX, voice cloning' },
   { key: 'motion', glyph: '✦', label: 'Motion graphics', blurb: 'References → reveal animation → alpha' },
   { key: 'isolate', glyph: '⏏', label: 'Isolate audio', blurb: 'Extract a track locally — free, no tokens' },
-  { key: 'lora', glyph: '◈', label: 'Create a LoRA', blurb: 'Train a reusable style on Krea' },
-  { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Lip-sync / face-swap via Yapper' },
+  { key: 'lora', glyph: '◈', label: 'Create a LoRA', blurb: "Train a reusable style on fal's Krea trainers" },
+  { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Lip-sync / talking avatars via Yapper' },
   { key: 'upload', glyph: '↑', label: 'Upload', blurb: 'A file from this machine' },
   { key: 'link', glyph: '⛓', label: 'Link', blurb: 'Download a direct media URL' },
   { key: 'pull', glyph: '⌂', label: 'Listing photos', blurb: 'Pull real MLS photos (ChatRealty)' }
@@ -50,6 +51,30 @@ const SCREEN_TITLES: Record<Screen, string> = {
   link: 'Link',
   motion: 'Motion graphics',
   pull: 'Listing photos'
+}
+
+/** Which connectors make a tile ready (ANY of them). null = always ready
+ *  (local ffmpeg / disk / download — never a connector). */
+const TILE_NEEDS: Partial<Record<Screen, string[]>> = {
+  video: ['muapi', 'fal', 'gemini', 'krea'],
+  image: ['gemini', 'openai', 'muapi', 'fal', 'krea'],
+  audio: ['elevenlabs'],
+  motion: ['gemini', 'openai'],
+  lora: ['fal'],
+  deepfake: ['yapper'],
+  pull: ['chatrealty']
+}
+
+function connectorReady(connectors: ConnectorView[], id: string): boolean {
+  const def = connectors.find((c) => c.id === id)
+  return !!def && (def.authType === 'none' || def.hasCredential)
+}
+
+function tileReady(connectors: ConnectorView[], screen: Screen): { ready: boolean; needs?: string } {
+  const needs = TILE_NEEDS[screen]
+  if (!needs) return { ready: true }
+  if (needs.some((id) => connectorReady(connectors, id))) return { ready: true }
+  return { ready: false, needs: needs[0] }
 }
 
 const ASPECTS = ['9:16', '1:1', '16:9']
@@ -84,17 +109,73 @@ function ChipRow(props: {
   )
 }
 
-function VideoScreen(props: { installedIds: string[]; done: () => void }): React.JSX.Element {
+/** The run-line: will this work, what runs it, what does it cost. */
+function RunLine(props: { ok: boolean; label: string; cost?: string }): React.JSX.Element {
+  const openSettings = useStudio((s) => s.openSettings)
+  return (
+    <div className="runline">
+      <span className={`runline-dot${props.ok ? '' : ' warn'}`} />
+      <span className="runline-label">{props.label}</span>
+      {props.ok ? (
+        props.cost && <span className="runline-cost">{props.cost}</span>
+      ) : (
+        <button className="runline-connect" onClick={() => openSettings('connectors')}>
+          Connect →
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Tracks a generated node's rendering → ready/error lifecycle in place. */
+function ResultRow(props: { nodeId: string | null }): React.JSX.Element | null {
+  const node = useStudio((s) => s.nodes.find((n) => n.id === props.nodeId) ?? null)
+  const focusNode = useStudio((s) => s.focusNode)
+  if (!props.nodeId || !node) return null
+  const status = node.data.status
+  return (
+    <div className={`result-row ${status}`}>
+      {status === 'rendering' && <span className="result-spin" />}
+      {status === 'ready' && <span className="result-ok">✓</span>}
+      {status === 'error' && <span className="result-err">⚠</span>}
+      <span className="result-label" title={status === 'error' ? node.data.error : node.data.label}>
+        {status === 'rendering'
+          ? `${node.data.label} rendering on canvas`
+          : status === 'ready'
+            ? `${node.data.label} ready`
+            : `${node.data.label} failed — ${node.data.error ?? 'unknown'}`}
+      </span>
+      <button className="result-view" onClick={() => focusNode(node.id)}>
+        view →
+      </button>
+    </div>
+  )
+}
+
+function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const generateMedia = useStudio((s) => s.generateMedia)
   const [prompt, setPrompt] = useState('')
   const [aspect, setAspect] = useState('9:16')
   const [duration, setDuration] = useState('12s')
+  const [resultId, setResultId] = useState<string | null>(null)
+  const [showMore, setShowMore] = useState(false)
   const [resolution, setResolution] = useState('1080p')
   // Routing intent (catalog.md): muapi is the video primary when installed.
-  const [connector, setConnector] = useState(props.installedIds.includes('muapi') ? 'muapi' : '')
+  const muapiReady = connectorReady(props.connectors, 'muapi')
+  const [connector, setConnector] = useState(muapiReady ? 'muapi' : '')
+  const { ready } = tileReady(props.connectors, 'video')
 
   return (
     <>
+      <RunLine
+        ok={ready}
+        label={
+          ready
+            ? `runs on ${connector || 'agent pick'}${connector === 'muapi' ? ' · seedance' : ''}`
+            : 'no video connector connected'
+        }
+        cost="$$ paid"
+      />
       <textarea
         className="prompt-area"
         placeholder="lantern spirit rising from a river of flames, chorus swell, wide shot"
@@ -103,81 +184,100 @@ function VideoScreen(props: { installedIds: string[]; done: () => void }): React
       />
       <ChipRow options={ASPECTS} value={aspect} onChange={setAspect} />
       <ChipRow options={DURATIONS} value={duration} onChange={setDuration} />
-      <ChipRow options={RESOLUTIONS} value={resolution} onChange={setResolution} />
-      <select className="cr-input create-select" value={connector} onChange={(e) => setConnector(e.target.value)}>
-        <option value="">Connector: agent picks</option>
-        {props.installedIds.map((id) => (
-          <option key={id} value={id}>
-            Connector: {id}
-          </option>
-        ))}
-      </select>
+      <button className="more-toggle" onClick={() => setShowMore(!showMore)}>
+        {showMore ? '▾' : '▸'} More options
+      </button>
+      {showMore && (
+        <div className="more-body">
+          <ChipRow options={RESOLUTIONS} value={resolution} onChange={setResolution} />
+          <select
+            className="cr-input create-select"
+            value={connector}
+            onChange={(e) => setConnector(e.target.value)}
+          >
+            <option value="">Connector: agent picks</option>
+            {props.connectors.map((c) => (
+              <option key={c.id} value={c.id}>
+                Connector: {c.id}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <button
         className="generate-btn"
         disabled={!prompt.trim()}
-        onClick={() => {
-          void generateMedia({
-            label: labelFromPrompt(prompt, 'clip'),
-            mediaType: 'video',
-            prompt: prompt.trim(),
-            aspectRatio: aspect,
-            durationSec: parseInt(duration, 10) || undefined,
-            resolution,
-            connectorId: connector || undefined
-          })
-          props.done()
-        }}
+        onClick={() =>
+          setResultId(
+            generateMedia({
+              label: labelFromPrompt(prompt, 'clip'),
+              mediaType: 'video',
+              prompt: prompt.trim(),
+              aspectRatio: aspect,
+              durationSec: parseInt(duration, 10) || undefined,
+              resolution,
+              connectorId: connector || undefined
+            })
+          )
+        }
       >
         Generate
       </button>
+      <ResultRow nodeId={resultId} />
     </>
   )
 }
 
 function ImageScreen(props: {
-  installedIds: string[]
+  connectors: ConnectorView[]
   styles: TrainedStyle[]
-  done: () => void
 }): React.JSX.Element {
   const generateMedia = useStudio((s) => s.generateMedia)
   const [prompt, setPrompt] = useState('')
   const [aspect, setAspect] = useState('9:16')
   const [tier, setTier] = useState<'storyboard' | 'production'>('storyboard')
-  const storyboardChoices = ['gemini', 'openai'].filter((id) => props.installedIds.includes(id))
+  const [resultId, setResultId] = useState<string | null>(null)
+  const storyboardChoices = ['gemini', 'openai'].filter((id) => connectorReady(props.connectors, id))
   const [storyboardConnector, setStoryboardConnector] = useState(storyboardChoices[0] ?? '')
   const [styleId, setStyleId] = useState('')
-
   const style = props.styles.find((s) => s.id === styleId)
+  const muapiReady = connectorReady(props.connectors, 'muapi')
+
+  const runLabel = style
+    ? `fal · ${style.trainer === 'flux-krea' ? 'flux-krea-lora' : 'krea 2 lora'} · "${style.name}"`
+    : tier === 'production'
+      ? muapiReady
+        ? 'midjourney via muapi'
+        : 'production needs muapi'
+      : storyboardConnector
+        ? `${storyboardConnector} · storyboard tier`
+        : 'no storyboard connector'
+  const runOk = style ? connectorReady(props.connectors, 'fal') : tier === 'production' ? muapiReady : !!storyboardConnector
 
   function handleGenerate(): void {
-    // The tier choice is what finally drives GenerationParams.connectorId from
-    // the UI — the routing gap catalog.md carried since Phase 4. A trained
-    // LoRA routes through fal (where the trainers live) with the weights URL
-    // in the hint so the agent passes it to the model's lora parameter.
+    // The tier choice drives GenerationParams.connectorId — the routing gap
+    // closed in Phase 13. A trained LoRA routes through fal with the weights
+    // URL in the hint so the agent passes it to the model's lora parameter.
     const connectorId =
-      style !== undefined
-        ? 'fal'
-        : tier === 'production'
-          ? props.installedIds.includes('muapi')
-            ? 'muapi'
-            : undefined
-          : storyboardConnector || undefined
+      style !== undefined ? 'fal' : tier === 'production' ? (muapiReady ? 'muapi' : undefined) : storyboardConnector || undefined
     const styleHint = style
       ? `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
       : undefined
-    void generateMedia({
-      label: labelFromPrompt(prompt, 'img'),
-      mediaType: 'image',
-      prompt: prompt.trim(),
-      aspectRatio: aspect,
-      connectorId,
-      modelHint: styleHint ?? (tier === 'production' ? 'Midjourney' : undefined)
-    })
-    props.done()
+    setResultId(
+      generateMedia({
+        label: labelFromPrompt(prompt, 'img'),
+        mediaType: 'image',
+        prompt: prompt.trim(),
+        aspectRatio: aspect,
+        connectorId,
+        modelHint: styleHint ?? (tier === 'production' ? 'Midjourney' : undefined)
+      })
+    )
   }
 
   return (
     <>
+      <RunLine ok={runOk} label={runLabel} cost={tier === 'production' ? '$$$ committed' : '$ cheap'} />
       <textarea
         className="prompt-area"
         placeholder="citrus-slice vinyl record spinning in fog, studio light"
@@ -219,28 +319,66 @@ function ImageScreen(props: {
       <button className="generate-btn" disabled={!prompt.trim()} onClick={handleGenerate}>
         Generate
       </button>
-      <p className="aside-note">
-        Storyboard = Gemini/OpenAI, cheap sketches. Production = Midjourney via muapi, the
-        committed spend. A trained style routes through Krea instead.
-      </p>
+      <ResultRow nodeId={resultId} />
     </>
   )
 }
 
 type AudioJob = 'voice' | 'music' | 'sfx' | 'clone'
 
-function AudioScreen(props: { done: () => void }): React.JSX.Element {
+function AudioScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const addNode = useStudio((s) => s.addNode)
+  const focusNode = useStudio((s) => s.focusNode)
   const [job, setJob] = useState<AudioJob>('voice')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const ready = connectorReady(props.connectors, 'elevenlabs')
 
   const [voiceQuery, setVoiceQuery] = useState('')
-  const [voiceList, setVoiceList] = useState('')
+  const [voices, setVoices] = useState<VoiceEntry[] | null>(null)
+  const [voicesRaw, setVoicesRaw] = useState('')
   const [voiceName, setVoiceName] = useState('')
+  const [previewing, setPreviewing] = useState<string | null>(null)
   const [text, setText] = useState('')
+  const [musicLength, setMusicLength] = useState('60s')
+  const [sfxDuration, setSfxDuration] = useState('2s')
   const [cloneName, setCloneName] = useState('')
   const [cloneFiles, setCloneFiles] = useState<string[]>([])
+  const previewAudio = useRef<HTMLAudioElement | null>(null)
+
+  async function browse(): Promise<void> {
+    setBusy(true)
+    try {
+      const result = await bridge.audioTools.voices(voiceQuery)
+      if (result?.ok) {
+        setVoices(result.voices ?? null)
+        setVoicesRaw(result.voices ? '' : (result.text ?? ''))
+      } else {
+        setVoices(null)
+        setVoicesRaw(`⚠ ${result?.error ?? 'failed'}`)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function preview(name: string): Promise<void> {
+    // A tiny cached TTS call per voice — hearing it beats picking blind.
+    setPreviewing(name)
+    try {
+      const result = await bridge.audioTools.preview(name)
+      if (result?.ok && result.src) {
+        previewAudio.current?.pause()
+        const el = new Audio(result.src)
+        previewAudio.current = el
+        void el.play().catch(() => {})
+      } else if (result?.error) {
+        setStatus({ kind: 'error', text: result.error })
+      }
+    } finally {
+      setPreviewing(null)
+    }
+  }
 
   async function run(kind: AudioJob): Promise<void> {
     setBusy(true)
@@ -250,9 +388,9 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
         kind === 'voice'
           ? await bridge.audioTools.tts({ text, voiceName: voiceName || undefined })
           : kind === 'music'
-            ? await bridge.audioTools.music({ prompt: text })
+            ? await bridge.audioTools.music({ prompt: text, lengthMs: (parseInt(musicLength, 10) || 60) * 1000 })
             : kind === 'sfx'
-              ? await bridge.audioTools.sfx({ prompt: text })
+              ? await bridge.audioTools.sfx({ prompt: text, durationSec: parseFloat(sfxDuration) || 2 })
               : await bridge.audioTools.clone({ name: cloneName, filePaths: cloneFiles })
       if (result?.ok && result.src) {
         addNode({
@@ -263,7 +401,6 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
           startRendering: false
         })
         setStatus({ kind: 'ok', text: 'Audio node added to the canvas.' })
-        props.done()
       } else if (result?.ok) {
         setStatus({ kind: 'ok', text: result.text ?? 'Done.' })
       } else {
@@ -276,6 +413,11 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
 
   return (
     <>
+      <RunLine
+        ok={ready}
+        label={ready ? 'elevenlabs · direct tool calls' : 'ElevenLabs not connected'}
+        cost="$ per generation"
+      />
       <div className="tab-row">
         {(['voice', 'music', 'sfx', 'clone'] as AudioJob[]).map((j) => (
           <button key={j} className={job === j ? 'active' : ''} onClick={() => setJob(j)}>
@@ -289,28 +431,41 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
           <div className="mgfx-row">
             <input
               className="cr-input"
-              placeholder="Search the voice library…"
+              placeholder="Search your voice library…"
               value={voiceQuery}
               onChange={(e) => setVoiceQuery(e.target.value)}
-            />
-            <button
-              className="conn-mini"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true)
-                void bridge.audioTools
-                  .voices(voiceQuery)
-                  .then((r) => setVoiceList(r?.ok ? (r.text ?? '') : `⚠ ${r?.error ?? 'failed'}`))
-                  .finally(() => setBusy(false))
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void browse()
               }}
-            >
+            />
+            <button className="conn-mini" disabled={busy} onClick={() => void browse()}>
               Browse
             </button>
           </div>
-          {voiceList && <pre className="create-voice-list">{voiceList}</pre>}
+          {voices && voices.length > 0 && (
+            <div className="voice-list">
+              {voices.map((v) => (
+                <div key={v.name} className={`voice-row${voiceName === v.name ? ' sel' : ''}`}>
+                  <button
+                    className="voice-play"
+                    title="Preview (tiny TTS call, cached)"
+                    disabled={previewing !== null}
+                    onClick={() => void preview(v.name)}
+                  >
+                    {previewing === v.name ? '…' : '▶'}
+                  </button>
+                  <button className="voice-name" onClick={() => setVoiceName(v.name)}>
+                    {v.name}
+                  </button>
+                  <span className="voice-tags">{v.tags}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {voicesRaw && <pre className="create-voice-list">{voicesRaw}</pre>}
           <input
             className="cr-input create-select"
-            placeholder="Voice name (from the list; empty = default)"
+            placeholder="Voice name (pick above; empty = default)"
             value={voiceName}
             onChange={(e) => setVoiceName(e.target.value)}
           />
@@ -326,16 +481,32 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
         </>
       )}
 
-      {(job === 'music' || job === 'sfx') && (
+      {job === 'music' && (
         <>
           <textarea
             className="prompt-area"
-            placeholder={job === 'music' ? 'lo-fi citrus groove, 90 bpm, warm tape hiss' : 'vinyl scratch into a heavy bass drop'}
+            placeholder="lo-fi citrus groove, 90 bpm, warm tape hiss"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run(job)}>
-            {busy ? 'Generating…' : job === 'music' ? '♪ Compose music' : '♪ Generate SFX'}
+          <ChipRow options={['30s', '60s', '120s']} value={musicLength} onChange={setMusicLength} />
+          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run('music')}>
+            {busy ? 'Composing…' : '♪ Compose music'}
+          </button>
+        </>
+      )}
+
+      {job === 'sfx' && (
+        <>
+          <textarea
+            className="prompt-area"
+            placeholder="vinyl scratch into a heavy bass drop"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <ChipRow options={['1s', '2s', '5s']} value={sfxDuration} onChange={setSfxDuration} />
+          <button className="generate-btn" disabled={busy || !text.trim()} onClick={() => void run('sfx')}>
+            {busy ? 'Generating…' : '♪ Generate SFX'}
           </button>
         </>
       )}
@@ -343,8 +514,8 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
       {job === 'clone' && (
         <>
           <p className="aside-help">
-            Your own audio LoRA: sample recordings in, a reusable named voice out — usable from the
-            Voice tab afterward.
+            Your own audio LoRA: sample recordings in, a reusable named voice out — it shows up in
+            the Voice tab's library afterward.
           </p>
           <input
             className="cr-input create-select"
@@ -368,18 +539,35 @@ function AudioScreen(props: { done: () => void }): React.JSX.Element {
         </>
       )}
 
-      {status && <p className={`cr-msg ${status.kind === 'ok' ? 'done' : 'error'}`}>{status.text}</p>}
+      {status && (
+        <p className={`cr-msg ${status.kind === 'ok' ? 'done' : 'error'}`}>
+          {status.text}
+          {status.kind === 'ok' && status.text.includes('canvas') && (
+            <button
+              className="result-view"
+              onClick={() => {
+                const nodes = useStudio.getState().nodes
+                const last = nodes[nodes.length - 1]
+                if (last) focusNode(last.id)
+              }}
+            >
+              view →
+            </button>
+          )}
+        </p>
+      )}
     </>
   )
 }
 
-function IsolateScreen(props: { done: () => void }): React.JSX.Element {
+function IsolateScreen(): React.JSX.Element {
   const nodes = useStudio((s) => s.nodes)
   const addNode = useStudio((s) => s.addNode)
   const [nodeId, setNodeId] = useState('')
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
 
   const videoNodes = nodes.filter(
     (n) => n.data.mediaType === 'video' && n.data.status === 'ready' && n.data.src && !n.data.panel
@@ -388,6 +576,7 @@ function IsolateScreen(props: { done: () => void }): React.JSX.Element {
   async function run(source: { assetUrl?: string; filePath?: string; url?: string }, label: string): Promise<void> {
     setBusy(true)
     setError(null)
+    setDone(false)
     try {
       const result = await bridge.media.isolateAudio(source)
       if (result?.ok && result.src) {
@@ -399,7 +588,7 @@ function IsolateScreen(props: { done: () => void }): React.JSX.Element {
           src: result.src,
           startRendering: false
         })
-        props.done()
+        setDone(true)
       } else {
         setError(result?.error ?? 'Extraction failed.')
       }
@@ -410,9 +599,7 @@ function IsolateScreen(props: { done: () => void }): React.JSX.Element {
 
   return (
     <>
-      <p className="aside-help">
-        Extracts the audio track with local ffmpeg — free, instant, no connector tokens.
-      </p>
+      <RunLine ok label="local ffmpeg — no connector" cost="free" />
       <select className="cr-input create-select" value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
         <option value="">From a canvas video node…</option>
         {videoNodes.map((n) => (
@@ -455,11 +642,11 @@ function IsolateScreen(props: { done: () => void }): React.JSX.Element {
         }}
       />
       <p className="aside-note">
-        Hosting-site links (YouTube etc.) aren't direct media files and are out of scope for now —
-        only URLs that resolve straight to a video file work here.
+        Hosting-site links (YouTube etc.) aren't direct media files and are out of scope for now.
       </p>
-      {error && <p className="cr-msg error">{error}</p>}
       {busy && <p className="cr-msg">Extracting…</p>}
+      {done && <p className="cr-msg done">Audio node added to the canvas.</p>}
+      {error && <p className="cr-msg error">{error}</p>}
     </>
   )
 }
@@ -469,7 +656,7 @@ const TRAINERS = [
   { id: 'flux-krea', label: 'FLUX.1 Krea [dev] (~$2/run)', steps: ['500', '1000', '2000'], defaultSteps: '1000' }
 ]
 
-function LoraScreen(): React.JSX.Element {
+function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const [name, setName] = useState('')
   const [files, setFiles] = useState<string[]>([])
   const [trainer, setTrainer] = useState(TRAINERS[0].id)
@@ -478,6 +665,7 @@ function LoraScreen(): React.JSX.Element {
   const [triggerWord, setTriggerWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const ready = connectorReady(props.connectors, 'fal')
 
   const trainerDef = TRAINERS.find((t) => t.id === trainer) ?? TRAINERS[0]
 
@@ -510,10 +698,12 @@ function LoraScreen(): React.JSX.Element {
 
   return (
     <>
-      <p className="aside-help">
-        Train a reusable LoRA from example images on fal's Krea trainers — published per-step
-        pricing, billed to your fal account. Use 4+ images; more is better.
-      </p>
+      <RunLine
+        ok={ready}
+        label={ready ? `fal · ${trainerDef.id} trainer` : 'fal not connected'}
+        cost={trainerDef.id === 'krea-2' ? '$0.003/step' : '~$2/run'}
+      />
+      <p className="aside-help">Use 4+ example images; more is better.</p>
       <select
         className="cr-input create-select"
         value={trainer}
@@ -568,21 +758,21 @@ function LoraScreen(): React.JSX.Element {
   )
 }
 
-function DeepfakeScreen(props: { installedIds: string[]; done: () => void }): React.JSX.Element {
+function DeepfakeScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const generateMedia = useStudio((s) => s.generateMedia)
   const [prompt, setPrompt] = useState('')
-  const yapperReady = props.installedIds.includes('yapper')
+  const [resultId, setResultId] = useState<string | null>(null)
+  const ready = connectorReady(props.connectors, 'yapper')
 
-  // Yapper's real API surface (verified against its OpenAPI + MCP docs) is
-  // lip-sync/talking-avatar generation: script → speech → video-lipsync over
-  // an asset in the user's Yapper library. There is NO face-swap process type
-  // at the API layer, so no face-swap mode is offered here.
+  // Yapper's real API surface (verified): lip-sync/talking-avatar only — no
+  // face-swap process type exists, so no face-swap mode is offered.
   return (
     <>
+      <RunLine ok={ready} label={ready ? 'yapper · max lip-sync' : 'Yapper not connected'} cost="credits" />
       <p className="aside-help">
         Talking-avatar / lip-sync via Yapper's Max model. Describe who talks (an asset in your
-        Yapper library, or one the agent imports by URL) and the script they deliver — the agent
-        chains speech generation and lip-sync.
+        Yapper library, or one the agent imports by URL) and the script — the agent chains speech
+        generation and lip-sync.
       </p>
       <textarea
         className="prompt-area"
@@ -593,26 +783,20 @@ function DeepfakeScreen(props: { installedIds: string[]; done: () => void }): Re
       <button
         className="generate-btn"
         disabled={!prompt.trim()}
-        onClick={() => {
-          void generateMedia({
-            label: labelFromPrompt(prompt, 'df'),
-            mediaType: 'video',
-            prompt: `Talking-avatar lip-sync job (generate the speech audio first if needed, then lip-sync): ${prompt.trim()}`,
-            // Specialty routing: likeness work goes to Yapper specifically,
-            // never a general video model (catalog.md).
-            connectorId: 'yapper'
-          })
-          props.done()
-        }}
+        onClick={() =>
+          setResultId(
+            generateMedia({
+              label: labelFromPrompt(prompt, 'df'),
+              mediaType: 'video',
+              prompt: `Talking-avatar lip-sync job (generate the speech audio first if needed, then lip-sync): ${prompt.trim()}`,
+              connectorId: 'yapper'
+            })
+          )
+        }
       >
         Generate via Yapper
       </button>
-      {!yapperReady && (
-        <p className="aside-note">
-          Yapper isn't connected yet — add it in Settings › Connectors (OAuth, no key to paste) or
-          this will error.
-        </p>
-      )}
+      <ResultRow nodeId={resultId} />
     </>
   )
 }
@@ -694,11 +878,11 @@ export function AsidePanel(): React.JSX.Element {
   const width = useStudio((s) => s.asideWidth)
 
   const [screen, setScreen] = useState<Screen>('home')
-  const [installedIds, setInstalledIds] = useState<string[]>([])
+  const [connectors, setConnectors] = useState<ConnectorView[]>([])
   const [styles, setStyles] = useState<TrainedStyle[]>([])
 
   useEffect(() => {
-    void bridge.connectors.list().then((list) => setInstalledIds(list.map((c) => c.id)))
+    void bridge.connectors.list().then(setConnectors)
     void bridge.lora.list().then(setStyles)
   }, [screen])
 
@@ -719,31 +903,40 @@ export function AsidePanel(): React.JSX.Element {
       </div>
       <div className="panel-body">
         {screen !== 'home' && (
-          // Same back-button language Play view uses — a real labeled button
-          // leading the screen, not a glyph tucked into the header.
           <button className="play-back create-back-row" onClick={home}>
             ← Back to Create
           </button>
         )}
         {screen === 'home' && (
-          <>
-            <div className="create-tiles">
-              {TILES.map((tile) => (
-                <button key={tile.key} className="create-tile" title={tile.blurb} onClick={() => setScreen(tile.key)}>
-                  <span className={`create-tile-thumb sw${(TILES.indexOf(tile) % 6) + 1}`}>{tile.glyph}</span>
-                  <span className="create-tile-label">{tile.label}</span>
+          <div className="create-tiles">
+            {TILES.map((tile, index) => {
+              const state = tileReady(connectors, tile.key)
+              return (
+                <button
+                  key={tile.key}
+                  className={`create-tile${state.ready ? '' : ' dim'}`}
+                  title={state.ready ? tile.blurb : `${tile.blurb} — connect ${state.needs} first`}
+                  onClick={() => setScreen(tile.key)}
+                >
+                  <span className={`create-tile-thumb sw${(index % 6) + 1}`}>
+                    {tile.glyph}
+                    {!state.ready && <span className="tile-needs">needs {state.needs}</span>}
+                  </span>
+                  <span className="create-tile-label">
+                    {tile.label}
+                    <span className={`tile-status${state.ready ? ' ok' : ''}`} />
+                  </span>
                 </button>
-              ))}
-            </div>
-            <AgentCard />
-          </>
+              )
+            })}
+          </div>
         )}
-        {screen === 'video' && <VideoScreen installedIds={installedIds} done={home} />}
-        {screen === 'image' && <ImageScreen installedIds={installedIds} styles={styles} done={home} />}
-        {screen === 'audio' && <AudioScreen done={home} />}
-        {screen === 'isolate' && <IsolateScreen done={home} />}
-        {screen === 'lora' && <LoraScreen />}
-        {screen === 'deepfake' && <DeepfakeScreen installedIds={installedIds} done={home} />}
+        {screen === 'video' && <VideoScreen connectors={connectors} />}
+        {screen === 'image' && <ImageScreen connectors={connectors} styles={styles} />}
+        {screen === 'audio' && <AudioScreen connectors={connectors} />}
+        {screen === 'isolate' && <IsolateScreen />}
+        {screen === 'lora' && <LoraScreen connectors={connectors} />}
+        {screen === 'deepfake' && <DeepfakeScreen connectors={connectors} />}
         {screen === 'upload' && <UploadScreen done={home} />}
         {screen === 'link' && <LinkScreen done={home} />}
         {screen === 'motion' && <MotionGraphicsWizard />}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ModelProviderView } from '@shared/types'
 import { bridge } from '../../bridge'
+import { AgentCard } from '../AgentCard'
 
 const CLAUDE_API_KEY_CREDENTIAL_ID = 'anthropic-claude-api-key'
 const CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID = 'anthropic-claude-oauth-token'
@@ -200,6 +201,11 @@ export function ModelsTab(): React.JSX.Element {
           </div>
         </div>
       )}
+      {/* The agent-link diagnostic lives with the model settings now — the
+          Create panel's home is tasks only (create-panel v2). */}
+      <div className="settings-agent-card">
+        <AgentCard />
+      </div>
     </div>
   )
 }

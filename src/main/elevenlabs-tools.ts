@@ -103,6 +103,24 @@ async function fileProducingCall(
   return outcome as AudioToolResult
 }
 
+/** Best-effort parse of the server's voice listing into rows. The reply is
+ *  prose, not JSON, so this matches the "Name: … / ID: …"-style blocks it
+ *  emits today and degrades to the raw text when nothing parses. */
+export function parseVoiceListing(text: string): { name: string; tags: string }[] {
+  const voices: { name: string; tags: string }[] = []
+  const blocks = text.split(/\n\s*\n|(?=\bName:\s)/g)
+  for (const block of blocks) {
+    const name = block.match(/Name:\s*([^\n,;]+)/i)?.[1]?.trim()
+    if (!name) continue
+    const category = block.match(/Category:\s*([^\n,;]+)/i)?.[1]?.trim()
+    const labels = block.match(/Labels?:\s*([^\n]+)/i)?.[1]?.trim()
+    const description = block.match(/Description:\s*([^\n]+)/i)?.[1]?.trim()
+    const tags = [category, labels ?? description].filter(Boolean).join(' · ')
+    voices.push({ name, tags: tags.slice(0, 60) })
+  }
+  return voices
+}
+
 export function searchVoices(query: string): Promise<AudioToolResult> {
   return withElevenLabs(async (client) => {
     // There is no list_voices tool on the official server — search_voices with
@@ -113,8 +131,24 @@ export function searchVoices(query: string): Promise<AudioToolResult> {
     )
     const text = resultText(result)
     if (result.isError) return { ok: false as const, error: text || 'Voice search failed.' }
-    return { ok: true as const, text }
+    const voices = parseVoiceListing(text)
+    return { ok: true as const, text, voices: voices.length > 0 ? voices : undefined }
   }) as Promise<AudioToolResult>
+}
+
+const PREVIEW_LINE = 'Sixty seconds. One story. Let’s make it move.'
+const previewCache = new Map<string, string>()
+
+/** Short cached TTS sample so a voice can be heard before the real spend —
+ *  one tiny call per voice per app run, then it's free. */
+export async function previewVoice(voiceName: string): Promise<AudioToolResult> {
+  const key = voiceName.trim()
+  if (!key) return { ok: false, error: 'No voice name.' }
+  const cached = previewCache.get(key)
+  if (cached) return { ok: true, src: cached }
+  const result = await fileProducingCall('text_to_speech', { text: PREVIEW_LINE, voice_name: key }, 120_000)
+  if (result.ok && result.src) previewCache.set(key, result.src)
+  return result
 }
 
 export function textToSpeech(input: { text: string; voiceName?: string }): Promise<AudioToolResult> {
@@ -123,8 +157,11 @@ export function textToSpeech(input: { text: string; voiceName?: string }): Promi
   return fileProducingCall('text_to_speech', args, 180_000)
 }
 
-export function composeMusic(input: { prompt: string }): Promise<AudioToolResult> {
-  return fileProducingCall('compose_music', { prompt: input.prompt }, 600_000)
+export function composeMusic(input: { prompt: string; lengthMs?: number }): Promise<AudioToolResult> {
+  const args: Record<string, unknown> = { prompt: input.prompt }
+  // Schema-verified bound: 3000–600000 ms.
+  if (input.lengthMs) args['music_length_ms'] = Math.min(600_000, Math.max(3000, input.lengthMs))
+  return fileProducingCall('compose_music', args, 600_000)
 }
 
 export function soundEffects(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult> {

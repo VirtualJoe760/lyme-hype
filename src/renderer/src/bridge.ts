@@ -72,8 +72,9 @@ export interface Bridge {
   }
   audioTools: {
     voices(query: string): Promise<AudioToolResult | null>
+    preview(voiceName: string): Promise<AudioToolResult | null>
     tts(input: { text: string; voiceName?: string }): Promise<AudioToolResult | null>
-    music(input: { prompt: string }): Promise<AudioToolResult | null>
+    music(input: { prompt: string; lengthMs?: number }): Promise<AudioToolResult | null>
     sfx(input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null>
     clone(input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null>
   }
@@ -204,6 +205,10 @@ function createBrowserMock(): Bridge {
     },
     audioTools: {
       voices: async () => ({
+        ok: false,
+        error: 'Connectors run in the Electron main process — unavailable in browser preview.'
+      }),
+      preview: async () => ({
         ok: false,
         error: 'Connectors run in the Electron main process — unavailable in browser preview.'
       }),

@@ -125,10 +125,18 @@ export interface LocalToolResult {
   error?: string
 }
 
+export interface VoiceEntry {
+  name: string
+  /** Compact descriptor line: category · labels. */
+  tags: string
+}
+
 export interface AudioToolResult {
   ok: boolean
   src?: string
   text?: string
+  /** Structured voice rows when the listing parsed; raw `text` is the fallback. */
+  voices?: VoiceEntry[]
   error?: string
 }
 

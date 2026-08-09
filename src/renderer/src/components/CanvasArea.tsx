@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -24,7 +24,21 @@ function CanvasInner(): React.JSX.Element {
   const openCombine = useStudio((s) => s.openCombine)
   const openPlay = useStudio((s) => s.openPlay)
   const [tool, setTool] = useState<Tool>('select')
-  const { getIntersectingNodes } = useReactFlow()
+  const { getIntersectingNodes, setCenter } = useReactFlow()
+  const focusNodeId = useStudio((s) => s.focusNodeId)
+  const clearFocusNode = useStudio((s) => s.clearFocusNode)
+
+  // "View →" from a Create screen's result row pans the canvas to the node.
+  // Instant jump, not animated — an animation can be cancelled by any other
+  // viewport-touching render mid-flight and silently end up nowhere.
+  useEffect(() => {
+    if (!focusNodeId) return
+    const node = nodes.find((n) => n.id === focusNodeId)
+    if (node) {
+      void setCenter(node.position.x + 52, node.position.y + 50, { zoom: 1.2 })
+    }
+    clearFocusNode()
+  }, [focusNodeId, nodes, setCenter, clearFocusNode])
 
   // Un-promoted Storyboard panels are node objects too, but they only belong to
   // the Storyboard sequence — the Canvas shows real nodes and promoted panels.

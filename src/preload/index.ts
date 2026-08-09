@@ -100,9 +100,11 @@ const api = {
   audioTools: {
     voices: (query: string): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioVoices, query),
+    preview: (voiceName: string): Promise<AudioToolResult | null> =>
+      ipcRenderer.invoke(IPC.audioPreview, voiceName),
     tts: (input: { text: string; voiceName?: string }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioTts, input),
-    music: (input: { prompt: string }): Promise<AudioToolResult | null> =>
+    music: (input: { prompt: string; lengthMs?: number }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioMusic, input),
     sfx: (input: { prompt: string; durationSec?: number }): Promise<AudioToolResult | null> =>
       ipcRenderer.invoke(IPC.audioSfx, input),

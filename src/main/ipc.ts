@@ -12,7 +12,7 @@ import type {
 import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, saveImageAsset } from './asset-store'
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
-import { cloneVoice, composeMusic, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
+import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
 import { exportTimeline } from './ffmpeg'
 import { deleteTrainedStyle, listTrainedStyles, trainStyle } from './fal-training'
 import { isolateAudio, keyAlpha } from './media-tools'
@@ -200,11 +200,15 @@ export function registerIpc(window: BrowserWindow): void {
     if (!isMainSender(e)) return null
     return searchVoices(typeof query === 'string' ? query : '')
   })
+  ipcMain.handle(IPC.audioPreview, (e, voiceName: string) => {
+    if (!isMainSender(e)) return null
+    return previewVoice(typeof voiceName === 'string' ? voiceName : '')
+  })
   ipcMain.handle(IPC.audioTts, (e, input: { text: string; voiceName?: string }) => {
     if (!isMainSender(e)) return null
     return textToSpeech(input)
   })
-  ipcMain.handle(IPC.audioMusic, (e, input: { prompt: string }) => {
+  ipcMain.handle(IPC.audioMusic, (e, input: { prompt: string; lengthMs?: number }) => {
     if (!isMainSender(e)) return null
     return composeMusic(input)
   })

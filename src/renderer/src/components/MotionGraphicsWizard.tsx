@@ -297,13 +297,51 @@ export function MotionGraphicsWizard(): React.JSX.Element {
     }
   }
 
-  const stageIndex: Record<Stage, number> = { refs: 1, variations: 2, batch: 3, final: 4, animate: 5, alpha: 6 }
+  const STAGES: { key: Stage; label: string }[] = [
+    { key: 'refs', label: 'refs' },
+    { key: 'variations', label: 'prompts' },
+    { key: 'batch', label: 'batch' },
+    { key: 'final', label: 'final' },
+    { key: 'animate', label: 'animate' },
+    { key: 'alpha', label: 'alpha' }
+  ]
+  const stageIndex = STAGES.findIndex((s) => s.key === stage)
+  // A visited stage keeps its state, so walking back is plain navigation —
+  // "iterate" is just clicking an earlier dot (create-panel v2).
+  function canVisit(target: Stage): boolean {
+    if (busy) return false
+    switch (target) {
+      case 'refs':
+        return true
+      case 'variations':
+        return variations.length > 0
+      case 'batch':
+        return batch.length > 0
+      case 'final':
+        return finalSrc !== null || pickedId !== null
+      case 'animate':
+        return finalSrc !== null
+      case 'alpha':
+        return animateStarted || gfxVideoNodes.length > 0
+    }
+  }
 
   return (
     <div className="mgfx">
-      <p className="mgfx-stage-indicator">Stage {stageIndex[stage]}/6 · {
-        { refs: 'References', variations: 'Prompt variations', batch: 'Batch review', final: 'Final pass', animate: 'Animate', alpha: 'Alpha keying' }[stage]
-      }</p>
+      <div className="mgfx-steps">
+        {STAGES.map((s, i) => (
+          <button
+            key={s.key}
+            className={`mgfx-step${i === stageIndex ? ' now' : i < stageIndex ? ' done' : ''}`}
+            disabled={i === stageIndex || !canVisit(s.key)}
+            title={s.label}
+            onClick={() => setStage(s.key)}
+          >
+            <span className="mgfx-step-dot">{i < stageIndex ? '✓' : i + 1}</span>
+            <span className="mgfx-step-label">{s.label}</span>
+          </button>
+        ))}
+      </div>
       {error && <p className="mgfx-error">{error}</p>}
 
       {stage === 'refs' && (

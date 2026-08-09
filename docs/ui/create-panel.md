@@ -107,6 +107,19 @@ Most tiles (Generate video/audio/image, Deepfake) funnel into the existing `gene
 
 None left that would block an unattended build.
 
+## v2 (built 2026-08-09, same day as v1 — user-directed redesign)
+
+After using v1, the user called for a redesign: "robust functionality, presented simply." The concept was designed first as an interactive page — **[`../concepts/create-panel-v2.html`](../concepts/create-panel-v2.html)** — then built to it after sign-off (full v2, all four questions answered):
+
+- **Status-aware tiles**: every tile carries a readiness dot computed from the installed-connectors list (`hasCredential` included); unready tiles dim with a "needs X" chip but still open, and their screen's run-line shows a one-tap **Connect →** into Settings › Connectors. The three local tools (Isolate/Upload/Link) are always green.
+- **The run-line** on every task screen: which connector/model the job will run on and its cost tier — the tier routing became a visible label instead of invisible policy.
+- **Result rows replace silent-return-home**: Generate keeps you on the screen with a row tracking the node's rendering → ready/failed lifecycle (failure reason inline), and **view →** pans the canvas straight to the node (instant `setCenter`, deliberately un-animated — a cancelled animation silently goes nowhere).
+- **A real voice picker**: the ElevenLabs listing parses into rows (name + tags, raw-text fallback if parsing fails) with a ▶ preview per voice — a tiny cached TTS call each (user opted in), selection fills the voice field. Music gained a length control (30s/60s/120s → `music_length_ms`), SFX a duration chip row (schema bound 0.5–5s).
+- **The Motion graphics stepper**: six labeled dots, done stages clickable (state is retained, so "iterate" is just walking back), future stages gated on their prerequisites, everything locked while busy.
+- **More options** discloses the sometimes-controls (resolution, connector override) so the prompt stays the hero.
+- **The agent-link card moved to Settings › Models** — Create's home is tasks only.
+- **LoRA routing** is the fal trainers (see the decision above), with the trainer picker, style/subject mode, and trigger word on the tile.
+
 ## Done when
 
 The tile grid replaces today's flat form, and every tile opens its own focused screen with a working back arrow. Generate video / Generate audio / Generate image / Deepfake produce real nodes through the existing generation pipeline, just entered through a task-specific screen instead of one shared form. Motion graphics is its own, larger done-criteria given its scope: references in → agent-authored prompt variations → batch-generated grid → iterate → reference-reinforced final image → start/end-frame animated video → (bonus) a looping variant with its black background keyed to real alpha transparency via ffmpeg, no After Effects required.

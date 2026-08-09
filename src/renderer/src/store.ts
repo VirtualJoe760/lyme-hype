@@ -256,7 +256,14 @@ interface StudioStore {
     referenceImagePaths?: string[]
     startFramePath?: string
     endFramePath?: string
-  }): Promise<void>
+    /** Returns the node id IMMEDIATELY (generation continues async) so Create
+     *  screens can track the node's rendering → ready/error lifecycle. */
+  }): string
+
+  /** Canvas pans to this node (CanvasArea consumes and clears it). */
+  focusNodeId: string | null
+  focusNode(nodeId: string): void
+  clearFocusNode(): void
 
   /** Scripting panel (docs/ui/scripting-panel.md). */
   scriptingBusy: boolean
@@ -1001,7 +1008,7 @@ export const useStudio = create<StudioStore>((set, get) => {
       }
     },
 
-    async generateMedia(input) {
+    generateMedia(input) {
       const id = input.nodeId ?? nextId('node')
       // A fresh Generate creates the rendering node; a promote reuses the panel
       // node (already flipped to rendering) — only create when it's new.
@@ -1026,41 +1033,58 @@ export const useStudio = create<StudioStore>((set, get) => {
         persist()
       }
 
-      let result: Awaited<ReturnType<typeof bridge.generate.run>> = null
-      try {
-        result = await bridge.generate.run({
-          mediaType: input.mediaType,
-          prompt: input.prompt,
-          aspectRatio: input.aspectRatio,
-          durationSec: input.durationSec,
-          resolution: input.resolution,
-          connectorId: input.connectorId,
-          modelHint: input.modelHint,
-          referenceImagePaths: input.referenceImagePaths,
-          startFramePath: input.startFramePath,
-          endFramePath: input.endFramePath
-        })
-      } catch (error) {
-        result = {
-          ok: false,
-          mediaType: input.mediaType,
-          error: error instanceof Error ? error.message : String(error)
+      // The id returns immediately; the generation itself runs on, patching
+      // the node wherever it lives when the result lands.
+      void (async () => {
+        let result: Awaited<ReturnType<typeof bridge.generate.run>> = null
+        try {
+          result = await bridge.generate.run({
+            mediaType: input.mediaType,
+            prompt: input.prompt,
+            aspectRatio: input.aspectRatio,
+            durationSec: input.durationSec,
+            resolution: input.resolution,
+            connectorId: input.connectorId,
+            modelHint: input.modelHint,
+            referenceImagePaths: input.referenceImagePaths,
+            startFramePath: input.startFramePath,
+            endFramePath: input.endFramePath
+          })
+        } catch (error) {
+          result = {
+            ok: false,
+            mediaType: input.mediaType,
+            error: error instanceof Error ? error.message : String(error)
+          }
         }
-      }
 
-      if (result?.ok && result.src) {
-        patchNodeAnywhere(id, {
-          src: result.src,
-          status: 'ready',
-          error: undefined,
-          genNote: result.note
-        })
-      } else {
-        patchNodeAnywhere(id, {
-          status: 'error',
-          error: result?.error ?? 'Generation failed.'
-        })
-      }
+        if (result?.ok && result.src) {
+          patchNodeAnywhere(id, {
+            src: result.src,
+            status: 'ready',
+            error: undefined,
+            genNote: result.note
+          })
+        } else {
+          patchNodeAnywhere(id, {
+            status: 'error',
+            error: result?.error ?? 'Generation failed.'
+          })
+        }
+      })()
+      return id
+    },
+
+    focusNodeId: null,
+
+    focusNode(nodeId) {
+      const session = activeSession()
+      if (session && session.view !== 'canvas') updateSession(session.id, { view: 'canvas' })
+      set({ focusNodeId: nodeId })
+    },
+
+    clearFocusNode() {
+      set({ focusNodeId: null })
     },
 
     scriptingBusy: false,

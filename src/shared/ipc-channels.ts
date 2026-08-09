@@ -25,6 +25,7 @@ export const IPC = {
   mediaKeyAlpha: 'media:key-alpha',
 
   audioVoices: 'audio:voices',
+  audioPreview: 'audio:preview',
   audioTts: 'audio:tts',
   audioMusic: 'audio:music',
   audioSfx: 'audio:sfx',
