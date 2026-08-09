@@ -161,6 +161,29 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
 3. **Generate video** — currently single-shot t2v; enrich with i2v (a canvas image node as the
    starting frame — Gemini already supports this structurally, just not surfaced on this tile)
    and per-model routing beyond muapi (Yapper's ~20-model catalog is currently invisible here).
+
+   **Status (2026-08-09 enrichment run — both items shipped):** `VideoScreen` (`AsidePanel.tsx`)
+   gained two "More options" pickers. A **starting-frame picker** lists ready, non-panel canvas
+   image nodes; picking one sets `GenerationParams.startFramePath` to that node's `src` and forces
+   `connectorId: 'gemini'` — the only wired i2v path per the capability matrix (muapi/fal both need
+   `asset-upload` first, still open plumbing). This reuses `startFramePath` exactly as the Motion
+   graphics wizard's Animate stage already does; no new main-process plumbing was needed, only the
+   picker UI and the routing override. A **Yapper model picker** (`YAPPER_VIDEO_MODELS`, ~20
+   entries transcribed from `docs/connectors/reference/yapper.md`'s model table) sets `modelHint`
+   to the literal model id (`sora-2`, `kling-3.0-pro`, `seedance-2.5`, …) and forces
+   `connectorId: 'yapper'` — same literal-id-as-modelHint pattern the Veo quality-tier picker
+   established in row 2, so the agent gets an unambiguous string to match against
+   `yapper_start_process`'s own `model` enum rather than a label to interpret. The two pickers are
+   mutually exclusive by precedence (a starting frame always wins, since only Gemini can honor it);
+   the existing manual connector `<select>` still works when neither is set. `npm run typecheck`
+   clean (ran `npm install --include=dev` first — this sandbox's `node_modules` was missing
+   `@types/node` and other devDependencies despite `node_modules/` existing, a stale/partial
+   install from an earlier pass rather than a truly fresh one). **Not run live** — no Gemini or
+   Yapper key configured in this sandbox; the wiring is real (both fields reuse already-verified
+   plumbing — `startFramePath` from row 2, `modelHint` from rows 1/2), but the actual tool calls
+   are unverified, same ceiling as every prior pass. Nothing left unbuilt on this row's two named
+   items; muapi/fal i2v (blocked on `asset-upload`) is out of scope for a "surface what already
+   works" pass and belongs with the cross-cutting `asset-upload` helper instead.
 4. **Generate image** — LoRA integration exists for storyboard tier; extend the same
    `lora-use` path to production tier, and consider Krea 2 direct (`styles:[{id,strength}]`) as
    a second LoRA-application route alongside fal.

@@ -86,6 +86,35 @@ const ASPECTS = ['9:16', '1:1', '16:9']
 const DURATIONS = ['6s', '12s', '15s']
 const RESOLUTIONS = ['720p', '1080p']
 
+/** Yapper's video-generation catalog (docs/connectors/reference/yapper.md) —
+ *  the hosted MCP connector is a full aggregator, not lipsync-only, but
+ *  nothing let a user reach a specific model by id before this. Passed as
+ *  `modelHint`; `generation.ts`'s buildPrompt turns it into a preference line
+ *  the agent matches against yapper_start_process's own `model` enum. */
+const YAPPER_VIDEO_MODELS: { id: string; label: string }[] = [
+  { id: '', label: 'Yapper model: agent picks' },
+  { id: 'seedance-2.5', label: 'seedance-2.5 (4-30s · 720p)' },
+  { id: 'seedance-2.0', label: 'seedance-2.0 (4-15s · 2160p)' },
+  { id: 'seedance-2.0-fast', label: 'seedance-2.0-fast (4-15s · 2160p)' },
+  { id: 'seedance-2.0-mini', label: 'seedance-2.0-mini (4-15s · 720p, cheap)' },
+  { id: 'seedance-2.0-open', label: 'seedance-2.0-open (4-15s · 2160p)' },
+  { id: 'kling-3.0', label: 'kling-3.0 (4-15s · 1080p)' },
+  { id: 'kling-3.0-pro', label: 'kling-3.0-pro (4-15s · 1080p)' },
+  { id: 'veo3-quality', label: 'veo3-quality (8s · 1080p)' },
+  { id: 'veo3-fast', label: 'veo3-fast (8s · 1080p, cheap)' },
+  { id: 'sora-2', label: 'sora-2 (4-20s · 1080p)' },
+  { id: 'sora-2-pro', label: 'sora-2-pro (4-20s · 1080p)' },
+  { id: 'wan-3.0', label: 'wan-3.0 (2-30s · 1080p)' },
+  { id: 'wan-2.7', label: 'wan-2.7 (2-10s · 1080p)' },
+  { id: 'flux-3', label: 'flux-3 (5-20s · 1080p)' },
+  { id: 'minimax-h3', label: 'minimax-h3 (5-15s · 1440p)' },
+  { id: 'pixverse-v6', label: 'pixverse-v6 (1-15s · 1080p)' },
+  { id: 'grok-imagine', label: 'grok-imagine (4-15s · 720p)' },
+  { id: 'grok-imagine-v1.5', label: 'grok-imagine-v1.5 (1-15s · 720p)' },
+  { id: 'gemini-omni-flash', label: 'gemini-omni-flash (3-10s · 1080p, no frame ctrl)' },
+  { id: 'happy-horse', label: 'happy-horse (3-15s · 720p)' }
+]
+
 let generateCounter = 0
 function labelFromPrompt(prompt: string, prefix: string): string {
   const words = prompt.trim().split(/\s+/).filter(Boolean).slice(0, 2).join('-').toLowerCase()
@@ -159,6 +188,7 @@ function ResultRow(props: { nodeId: string | null }): React.JSX.Element | null {
 
 function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   const generateMedia = useStudio((s) => s.generateMedia)
+  const nodes = useStudio((s) => s.nodes)
   const [prompt, setPrompt] = useState('')
   const [aspect, setAspect] = useState('9:16')
   const [duration, setDuration] = useState('12s')
@@ -167,20 +197,37 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
   const [resolution, setResolution] = useState('1080p')
   // Routing intent (catalog.md): muapi is the video primary when installed.
   const muapiReady = connectorReady(props.connectors, 'muapi')
+  const geminiReady = connectorReady(props.connectors, 'gemini')
+  const yapperReady = connectorReady(props.connectors, 'yapper')
   const [connector, setConnector] = useState(muapiReady ? 'muapi' : '')
+  const [startFrameNodeId, setStartFrameNodeId] = useState('')
+  const [yapperModel, setYapperModel] = useState('')
   const { ready } = tileReady(props.connectors, 'video')
+
+  // i2v: only Gemini's Veo wrapper accepts a start_frame_path today (capability
+  // map §2 — muapi/fal need asset-upload first, still open plumbing), so
+  // picking a starting frame overrides whatever connector is otherwise chosen.
+  const imageNodes = nodes.filter(
+    (n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src && !n.data.panel
+  )
+  const startFrameSrc = imageNodes.find((n) => n.id === startFrameNodeId)?.data.src
+  const effectiveConnectorId = startFrameSrc ? 'gemini' : yapperModel ? 'yapper' : connector || undefined
+  const runOk = startFrameSrc ? geminiReady : yapperModel ? yapperReady : ready
+  const runLabel = startFrameSrc
+    ? geminiReady
+      ? 'runs on gemini · i2v start frame (Veo)'
+      : 'i2v needs gemini connected'
+    : yapperModel
+      ? yapperReady
+        ? `runs on yapper · ${yapperModel}`
+        : 'needs yapper connected'
+      : ready
+        ? `runs on ${connector || 'agent pick'}${connector === 'muapi' ? ' · seedance' : ''}`
+        : 'no video connector connected'
 
   return (
     <>
-      <RunLine
-        ok={ready}
-        label={
-          ready
-            ? `runs on ${connector || 'agent pick'}${connector === 'muapi' ? ' · seedance' : ''}`
-            : 'no video connector connected'
-        }
-        cost="$$ paid"
-      />
+      <RunLine ok={runOk} label={runLabel} cost="$$ paid" />
       <textarea
         className="prompt-area"
         placeholder="lantern spirit rising from a river of flames, chorus swell, wide shot"
@@ -207,6 +254,33 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
               </option>
             ))}
           </select>
+          {imageNodes.length > 0 && (
+            <select
+              className="cr-input create-select"
+              value={startFrameNodeId}
+              onChange={(e) => setStartFrameNodeId(e.target.value)}
+            >
+              <option value="">Starting frame: none (text → video)</option>
+              {imageNodes.map((n) => (
+                <option key={n.id} value={n.id}>
+                  Starting frame: {n.data.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {yapperReady && (
+            <select
+              className="cr-input create-select"
+              value={yapperModel}
+              onChange={(e) => setYapperModel(e.target.value)}
+            >
+              {YAPPER_VIDEO_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
       <button
@@ -221,7 +295,9 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
               aspectRatio: aspect,
               durationSec: parseInt(duration, 10) || undefined,
               resolution,
-              connectorId: connector || undefined
+              connectorId: effectiveConnectorId,
+              startFramePath: startFrameSrc,
+              modelHint: startFrameSrc ? undefined : yapperModel || undefined
             })
           )
         }

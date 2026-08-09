@@ -65,7 +65,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 
 | Tile | In | Out | Capabilities consumed |
 |---|---|---|---|
-| **Generate video** | prompt + aspect/duration/res (+ connector override) | video node | `video-gen-t2v` (any provider of it — muapi default when present) |
+| **Generate video** | prompt + aspect/duration/res (+ connector override, optional canvas-image starting frame, optional Yapper model pick) | video node | `video-gen-t2v` (any provider of it — muapi default when present); `video-gen-i2v` via a starting-frame image node (Gemini/Veo only — forces that connector, since it's the only wired i2v path today) |
 | **Generate image** | prompt + aspect + tier toggle (+ trained style) | image node | `image-gen` (storyboard tier) or `image-production` (Midjourney-class); `lora-use` when a trained style is picked |
 | **Generate audio · Voice** | voice pick (browse/preview) + line | audio node | `audio-tts` (+ `voice-library`) |
 | **Generate audio · Music** | prompt + length | audio node | `audio-music` |

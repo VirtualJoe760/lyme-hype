@@ -64,7 +64,10 @@ way around.
 Cross-cutting corrections from the reference aggregation (2026-08-09): **face-swap DOES exist —
 on muapi** (`muapi_enhance_face_swap`); it's Yapper that lacks it. **Yapper is a full
 aggregator** (~20 video + 11 image models + free-tier sync TTS), not lipsync-only — routing
-still treats it as specialty, deliberately, but the tiles count it as a video/image provider.
+still treats it as specialty, deliberately, but the tiles count it as a video/image provider. Its
+video catalog is now reachable by name from the Generate video tile (2026-08-09 enrichment run,
+row 3) — a model picker sets `modelHint` to the literal model id (`sora-2`, `kling-3.0-pro`, …)
+and forces `connectorId: 'yapper'`, matching the Motion graphics wizard's literal-model-id pattern.
 **ChatRealty is not data-only**: server-side staging (Nano Banana composites, ~$0.04/photo),
 listing covers, and carousel slides return Cloudinary URLs — a second ingestion path.
 **OpenAI cannot output transparency** (gpt-image-2 rejects background:'transparent') — the
@@ -76,7 +79,7 @@ deny-list alongside muapi's Stripe/keys tools.
 
 | Creative node | Requires (ANY provider of) | Default route | Escape hatch |
 |---|---|---|---|
-| Generate video | `video-gen-t2v` | muapi (Seedance) | connector select incl. agent-pick |
+| Generate video | `video-gen-t2v` | muapi (Seedance) | connector select incl. agent-pick; picking a canvas image as a starting frame routes `video-gen-i2v` through gemini; a Yapper model pick routes through yapper with that model as `modelHint` |
 | Generate image · storyboard | `image-gen` | gemini/openai pick | — |
 | Generate image · production | `image-production` | muapi + hint "Midjourney" | tier toggle |
 | Generate image · with style | `lora-use` | fal + weights-URL hint | — |
@@ -114,7 +117,11 @@ several connectors can satisfy one node.
 - **i2v everywhere except Gemini** needs `asset-upload` first (muapi has it stdio-side; fal has
   it; Yapper imports by URL, or now the Deepfake-scoped REST signed-upload above for local
   files) — a general-purpose `asset-upload` helper spanning all three connectors and every
-  node (not just Deepfake's local-media case) is still the open plumbing item.
+  node (not just Deepfake's local-media case) is still the open plumbing item. Gemini's i2v path
+  itself is now reachable from the Generate video tile (2026-08-09 enrichment run, row 3): picking
+  a ready canvas image node as a starting frame sets `GenerationParams.startFramePath` and forces
+  `connectorId: 'gemini'`, reusing the same `startFramePath` plumbing the Motion graphics wizard's
+  Animate stage already exercised — muapi/fal/Yapper i2v are still blocked on `asset-upload`.
 - **muapi frame conditioning is REST-only** — the MCP tool takes a single image_url even
   though the model enum lists first-last-frame models; if muapi-side interpolation ever
   matters, it's a REST call, not a tool call. (Gemini's wrapper covers this need today, and

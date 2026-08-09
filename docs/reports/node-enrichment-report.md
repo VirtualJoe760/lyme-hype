@@ -7,6 +7,70 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Sixth autonomous run: Generate video (row 3), i2v starting frame + Yapper model routing
+
+Checked rows 1 and 2 first, per the queue's own resume notes: row 1 (Deepfake) has nothing left
+that's safely buildable blind — its only open item is live verification of the muapi/Yapper
+upload→lipsync chains, explicitly joint-session scope. Row 2 (Motion graphics) has one open item
+(muapi image-edit as a second batch source) that the prior run correctly flagged as "a genuinely
+different generation path, not a parameter wire-up" — real design scope, not a blind-safe fit for
+a 15-20 minute pass. So moved to row 3, Generate video, next in the strategy doc's priority order
+and still `pending`.
+
+**What the tile was missing:** `VideoScreen` (the Create panel's Generate video tile,
+`AsidePanel.tsx`) was single-shot text→video only — a prompt, aspect/duration/resolution chips,
+and a manual connector dropdown. Two capabilities the connector layer already supports were
+invisible to the user: Gemini's Veo wrapper accepts a `start_frame_path` for image-conditioned
+video (already plumbed end-to-end for the Motion graphics wizard's Animate stage, just never
+exposed on this simpler tile), and Yapper's hosted connector is a genuine ~20-model video
+aggregator (Seedance, Kling, Veo, Sora, Wan, Pixverse, Grok Imagine, and more per
+`docs/connectors/reference/yapper.md`) with no way to name a specific model from the UI — only
+"connect Yapper and hope the agent picks something reasonable."
+
+**What I built:** two new pickers in the tile's "More options" section, both reusing plumbing that
+already exists rather than adding any:
+
+- **Starting frame (i2v).** Lists the canvas's ready, non-panel image nodes. Picking one sets
+  `GenerationParams.startFramePath` to that node's asset path and forces `connectorId: 'gemini'`
+  — checked the capability matrix first: Gemini's `start_frame_path` is the *only* wired i2v path
+  today, muapi and fal both need a general-purpose `asset-upload` helper first (still an open
+  cross-cutting item), so silently letting the picker apply to any connector would have been a
+  UI promise the backend can't keep. The run-line reflects this: it reads "runs on gemini · i2v
+  start frame (Veo)" when Gemini is connected, or "i2v needs gemini connected" (with the usual
+  Connect → button) when it isn't.
+- **Yapper model.** A `YAPPER_VIDEO_MODELS` list (~20 entries, transcribed from the reference
+  doc's model table with a duration/resolution hint per entry) that sets `modelHint` to the
+  literal model id and forces `connectorId: 'yapper'` — the exact same "hand the agent an
+  unambiguous id from the tool's own enum, not a label to interpret" pattern the Veo quality-tier
+  picker established in row 2's Motion graphics pass.
+
+The two pickers are mutually exclusive by precedence in the generate handler — a chosen starting
+frame always wins over a chosen Yapper model, since only Gemini can honor frame conditioning —
+and the existing manual connector dropdown still works untouched when neither is set.
+
+**Verification:** `npm run typecheck` — had to run `npm install --include=dev` first, since this
+session's `node_modules` existed but was missing `@types/node` and other devDependencies (a
+stale/partial install carried over from an earlier pass rather than a genuinely fresh one; worth
+a note in case a future run hits the same `TS2688: Cannot find type definition file for 'node'`
+error and wonders why `node_modules` "already existing" wasn't enough). Clean after the reinstall,
+both `tsconfig.node.json` and `tsconfig.web.json` programs. **Not run live** — no Gemini or Yapper
+credential is configured in this sandbox, and live generation spend is out of scope for the
+autonomous routine either way; both new fields route through `startFramePath` and `modelHint`,
+fields already exercised (and left unverified live) by the Motion graphics and Deepfake passes, so
+this doesn't introduce a new unverified code path, just two new UI entry points into existing ones.
+
+**Docs updated in this commit:** `docs/ui/creative-nodes.md` (Generate video's table row),
+`docs/architecture/capability-map.md` (the node→capability table's Generate video row, plus notes
+in both "known unwired paths" bullets this closes), `docs/ui/node-enrichment-strategy.md` (row 3's
+status), `docs/reports/node-enrichment-progress.md` (row 3 → done, session log).
+
+**Left for later:** muapi/fal i2v, still blocked on the cross-cutting `asset-upload` helper (blocks
+rows 1, 3, 7 per the progress file) — deliberately out of scope for this pass, which was "surface
+what already works," not "build new upload plumbing." Row 3 has no other named items; next run
+should move to row 4 (Generate image) unless another run gets there first.
+
+---
+
 ## 2026-08-09 — Fifth autonomous run: Motion graphics (row 2), two wrapper capabilities surfaced
 
 Row 1 (Deepfake) has nothing left that's safely buildable blind — its sole resume item is live

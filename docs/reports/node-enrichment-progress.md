@@ -13,7 +13,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 |---|---|---|---|
 | 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. Clone-and-attach (former resume item c) shipped: the Create panel's Clone-voice job can attach its result to a Reference person in one step. Yapper REST signed-upload (former resume item a) shipped: `src/main/yapper-rest.ts` + a synthetic-id credential (`yapper-rest`, riding the existing generic secret vault) + a Settings › Connectors row to set it; `generation.ts` pre-uploads local source media to Yapper and hands the agent asset ids directly when Yapper is the only attached connector. resume: (b) is the only item left — live-verify the whole chain (muapi upload→lipsync, and the new Yapper REST fallback) once real keys exist; needs a joint session, nothing further is safely buildable blind. |
 | 2 | Motion graphics | in-progress | Reference-image picker cap raised 5→10 (matches Gemini's real limit; wrapper already supported it) and Animate-stage Veo quality-tier picker (default/fast/lite via `modelHint`) shipped. resume: muapi image-edit as a second batch source is the only item left — a genuinely different generation path (not a parameter wire-up), needs its own design pass before implementing. |
-| 3 | Generate video | pending | Add i2v from a canvas image node; surface Yapper's ~20-model catalog as a routing option. |
+| 3 | Generate video | done | i2v starting-frame picker (routes to gemini via `startFramePath`) + Yapper model picker (`modelHint` + `connectorId: 'yapper'`) shipped in `VideoScreen`; both named items closed. |
 | 4 | Generate image | pending | Extend lora-use to production tier; add Krea 2 direct styles param as a second LoRA route. |
 | 5 | Generate audio | pending | Yapper free-tier TTS fallback; Suno-via-muapi as a music alternative. |
 | 6 | Create a LoRA | pending | "Train from this deepfake's reference photos" shortcut once Reference-person exists (needs #1). |
@@ -29,6 +29,12 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (sixth autonomous run) — Rows 1 and 2 have nothing left to build blind this pass (row
+  1 is live-verification-only; row 2's remaining item is a genuinely new generation path, not a
+  wire-up), so moved to row 3 (Generate video) per the strategy doc's priority order. Shipped both
+  named items: a starting-frame picker on the canvas (i2v via Gemini, reusing `startFramePath`
+  from the Motion graphics wizard) and a Yapper model picker (~20 models, `modelHint` +
+  `connectorId: 'yapper'`, same literal-id pattern as row 2's Veo tier picker). Row 3 marked done.
 - 2026-08-09 (fifth autonomous run) — Row 1 (Deepfake) has nothing left to build blind (only
   live verification remains, joint-session scope), so moved to row 2 (Motion graphics) with a
   clean slate as the prior run's report suggested. Raised the References stage's picker cap
