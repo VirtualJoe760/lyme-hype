@@ -2,7 +2,7 @@ import type { NodeProps } from '@xyflow/react'
 import type { MediaFlowNode } from '../store'
 import { useStudio } from '../store'
 
-function Waveform(): React.JSX.Element {
+export function Waveform(): React.JSX.Element {
   const bars = [10, 20, 14, 26, 16, 24, 12, 18]
   return (
     <svg viewBox="0 0 100 36" preserveAspectRatio="xMidYMid meet">
@@ -91,11 +91,28 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
           title={data.sentToTimeline ? 'In Cut Room' : 'Send to timeline'}
           onClick={(e) => {
             e.stopPropagation()
-            sendToTimeline(id)
+            void sendToTimeline(id)
           }}
         >
           {data.sentToTimeline ? '✓' : '→'}
         </button>
+      )}
+      {ready && data.src && (
+        // HTML5 drag source for placing this node at a specific time/track on
+        // the timeline. `nodrag` keeps React Flow from starting a node drag;
+        // images are timeline-droppable too (overlay stills), unlike the
+        // append-only send button above.
+        <span
+          className="drag-grip nodrag"
+          draggable
+          title="Drag onto a timeline track"
+          onDragStart={(e) => {
+            e.dataTransfer.setData('application/lyme-node', id)
+            e.dataTransfer.effectAllowed = 'copy'
+          }}
+        >
+          ⣿
+        </span>
       )}
       <button
         className="del-btn"

@@ -116,11 +116,14 @@ Export pipeline in `src/main/ffmpeg.ts`; Cut Room UI reworked in `CutRoom.tsx`; 
 - Mac build, code-signing, and notarization on Joseph's MacBook, per the `architecture/platform-decisions.md` build order.
 - Auto-update wiring (electron-updater) — not needed day one, easy to add once there's something to update.
 
-## Phase 10 — Multitrack timeline (Cut Room rework)
+## Phase 10 — Multitrack timeline (Cut Room rework) ✅ (built 2026-08-08)
 
-Not started. Full spec: [ui/timeline.md](ui/timeline.md). Replaces the current single-track sequential clip strip with a real time-based multitrack timeline: dynamic add-able video/audio tracks (default layout Video 1/2 + Audio 1/2), a razor tool plus split-at-playhead, snapping, per-track mute (real, affects export) and solo (preview-only, never export), and a real rewrite of the ffmpeg export filter graph (`overlay` composites video tracks in ascending order, `amix` blends audio, not just `concat`). No dependency on Phase 8/9 — can be built any time after Phase 7's single-track pipeline, which it extends rather than throws away (trim/split semantics carry over from Play view). Every open design question in the spec has a firm v1 default; nothing here should block an unattended build.
+Full spec + build-decision record: [ui/timeline.md](ui/timeline.md).
 
-- **Done when:** see [ui/timeline.md](ui/timeline.md)'s own done-criteria — a correctly-composited export with overlapping video/audio tracks, not just a longer sequential list.
+- [x] Data model: `TimelineTrack`/`TimelineClip` (per-clip trim independent of the node's Play trim, seeded from it at add time), persisted per-session as `Session.timeline`; legacy `cutRoom` arrays migrate on load.
+- [x] CutRoom rewritten as a real timeline: zoomable ruler (wheel + fit), dynamic tracks (+V/+A, default V1/V2/A1/A2), positioned clip rectangles (posters/waveforms), drag/reposition/move-across-tracks with ripple overlap resolution, edge retrim, razor + split-at-playhead, snapping (magnet toggle), per-track M/S/L, composited monitor pane with playhead-synced live preview, HTML5 drag from a canvas node's ⣿ grip onto a specific track/time.
+- [x] ffmpeg export rewritten: unified `overlay`-chain graph over a black canvas with per-clip `enable` windows + `amix` with `adelay` positioning; mute-only (solo structurally absent from the export types); no-audio-stream inputs probed and excluded from the mix. Selftest covers the pure builder; the real graph was executed against the machine's ffmpeg and verified (1080×1920, correct duration, alpha overlay path included).
+- **Done criteria met** — see the doc's done-when note for what was verified and the one synthetic-overlay caveat.
 
 ## Phase 11 — Scripting panel
 

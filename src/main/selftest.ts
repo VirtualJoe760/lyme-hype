@@ -18,7 +18,7 @@ import {
   setActiveModelProvider
 } from './model-providers'
 import { deleteSecret, readSecretValue, storeSecret } from './credential-vault'
-import { buildConcatArgs, resolveFfmpeg } from './ffmpeg'
+import { buildMultitrackArgs, resolveFfmpeg } from './ffmpeg'
 import { runGeneration } from './generation'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -80,7 +80,7 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
           name: 'Self Test',
           createdAt: new Date().toISOString(),
           nodes: [],
-          cutRoom: [],
+          timeline: { tracks: [], clips: [] },
           view: 'canvas' as const
         }
       ],
@@ -356,23 +356,54 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     fail(`generation wiring: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  // 11. ffmpeg export — verify the pure command builder (no ffmpeg executed) and
-  //     that discovery resolves without throwing (null is fine = not installed).
+  // 11. ffmpeg export — verify the pure multitrack builder (no ffmpeg executed)
+  //     against the timeline.md done-criteria scenario: two clips at different
+  //     positions on the base video track, an overlay clip above during part of
+  //     that span, voice + music on two audio tracks, one muted audio track
+  //     whose clip must vanish, and an embedded-audio mute. Solo can't leak by
+  //     construction — ResolvedTimelineClip carries no solo field.
   try {
-    const args = buildConcatArgs(
+    const base = { trackType: 'video' as const, trackOrder: 0, trackMuted: false }
+    const overlay = { trackType: 'video' as const, trackOrder: 1, trackMuted: false }
+    const voice = { trackType: 'audio' as const, trackOrder: 0, trackMuted: false }
+    const mutedMusic = { trackType: 'audio' as const, trackOrder: 1, trackMuted: true }
+    const args = buildMultitrackArgs(
       [
-        { path: 'a.mp4', trimIn: 1, trimOut: 3 },
-        { path: 'b.mp4', muted: true }
+        { path: 'a.mp4', mediaType: 'video', ...base, startTime: 0, trimIn: 1, trimOut: 4, audioMuted: true, hasAudio: true },
+        { path: 'b.mp4', mediaType: 'video', ...base, startTime: 4, trimIn: 0, trimOut: 6, hasAudio: true },
+        // No hasAudio — a Motion-graphics overlay with no audio stream must
+        // stay out of the mix instead of referencing a missing [i:a].
+        { path: 'gfx.webm', mediaType: 'video', ...overlay, startTime: 2, trimIn: 0, trimOut: 3 },
+        { path: 'still.png', mediaType: 'image', ...overlay, startTime: 6, trimIn: 0, trimOut: 2 },
+        { path: 'vo.mp3', mediaType: 'audio', ...voice, startTime: 0.5, trimIn: 0, trimOut: 8 },
+        { path: 'music.mp3', mediaType: 'audio', ...mutedMusic, startTime: 0, trimIn: 0, trimOut: 10 }
       ],
       'out.mp4'
     )
     const s = args.join(' ')
     const wellFormed =
-      args.filter((a) => a === '-i').length === 2 &&
-      s.includes('concat=n=2:v=1:a=1') &&
-      s.includes('trim=start=1:end=3') &&
-      s.includes('volume=0') &&
+      // Muted track's clip contributes no input at all.
+      !s.includes('music.mp3') &&
+      args.filter((a) => a === '-i').length === 5 &&
+      // Canvas + per-clip overlays with enable windows at real positions.
+      s.includes('color=black:s=1080x1920') &&
+      (s.match(/overlay=/g) ?? []).length === 4 &&
+      s.includes("enable='between(t,4,10)'") &&
+      s.includes("enable='between(t,2,5)'") &&
+      // Base clips pad to the full canvas; overlay clips center instead.
+      s.includes('pad=1080:1920') &&
+      s.includes('overlay=(W-w)/2:(H-h)/2') &&
+      // Image stills loop for their placed duration.
+      s.includes('-loop 1 -t 2 -i still.png') &&
+      // Audio: voice delayed to position; a.mp4's embedded track is audioMuted
+      // and b.mp4's embedded track mixes with the voice via amix.
+      s.includes('adelay=500|500') &&
+      s.includes('amix=inputs=2') &&
+      !s.includes('[0:a]') &&
+      s.includes('libx264') &&
       args[args.length - 1] === 'out.mp4'
+    // Duration caps at the furthest clip end (base b.mp4 ends at 10).
+    const durationCapped = s.includes('-t 10')
     let discovery = 'threw'
     try {
       const r = resolveFfmpeg()
@@ -380,10 +411,10 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     } catch {
       discovery = 'threw'
     }
-    if (wellFormed && discovery !== 'threw') {
-      log(`ffmpeg export: PASS (concat args well-formed; discovery: ${discovery})`)
+    if (wellFormed && durationCapped && discovery !== 'threw') {
+      log(`ffmpeg export: PASS (multitrack overlay+amix graph well-formed; discovery: ${discovery})`)
     } else {
-      fail(`ffmpeg export: wellFormed=${wellFormed} discovery=${discovery}`)
+      fail(`ffmpeg export: wellFormed=${wellFormed} durationCapped=${durationCapped} discovery=${discovery}`)
     }
   } catch (error) {
     fail(`ffmpeg export: ${error instanceof Error ? error.message : String(error)}`)

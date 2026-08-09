@@ -15,7 +15,7 @@ import type {
   PersistedState,
   SecretReport,
   SecretRequest,
-  TimelineExportClip
+  TimelineExportSpec
 } from '@shared/types'
 
 export interface Bridge {
@@ -42,7 +42,7 @@ export interface Bridge {
     run(params: GenerationParams): Promise<GenerationResult | null>
   }
   cutRoom: {
-    export(clips: TimelineExportClip[]): Promise<CutExportResult | null>
+    export(spec: TimelineExportSpec): Promise<CutExportResult | null>
   }
   chatRealty: {
     status(): Promise<{ connected: boolean } | null>

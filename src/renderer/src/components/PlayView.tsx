@@ -113,7 +113,7 @@ export function PlayView(): React.JSX.Element | null {
         <button
           className="conn-mini primary-mini"
           onClick={() => {
-            sendToTimeline(node.id)
+            void sendToTimeline(node.id)
           }}
         >
           → Send to timeline

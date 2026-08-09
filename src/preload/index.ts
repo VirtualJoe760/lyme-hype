@@ -17,7 +17,7 @@ import type {
   PersistedState,
   SecretReport,
   SecretRequest,
-  TimelineExportClip
+  TimelineExportSpec
 } from '../shared/types'
 
 const api = {
@@ -61,8 +61,8 @@ const api = {
       ipcRenderer.invoke(IPC.generateRun, params)
   },
   cutRoom: {
-    export: (clips: TimelineExportClip[]): Promise<CutExportResult | null> =>
-      ipcRenderer.invoke(IPC.cutRoomExport, clips)
+    export: (spec: TimelineExportSpec): Promise<CutExportResult | null> =>
+      ipcRenderer.invoke(IPC.cutRoomExport, spec)
   },
   chatRealty: {
     status: (): Promise<{ connected: boolean } | null> => ipcRenderer.invoke(IPC.chatRealtyStatus),

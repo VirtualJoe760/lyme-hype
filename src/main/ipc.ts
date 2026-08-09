@@ -6,7 +6,7 @@ import type {
   ModelProviderDef,
   PersistedState,
   SecretRequest,
-  TimelineExportClip
+  TimelineExportSpec
 } from '@shared/types'
 import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { runAgentPrompt } from './agent'
@@ -129,7 +129,7 @@ export function registerIpc(window: BrowserWindow): void {
     return runGeneration(params)
   })
 
-  ipcMain.handle(IPC.cutRoomExport, async (e, clips: TimelineExportClip[]) => {
+  ipcMain.handle(IPC.cutRoomExport, async (e, spec: TimelineExportSpec) => {
     if (!isMainSender(e) || !mainWindow) return null
     const picked = await dialog.showSaveDialog(mainWindow, {
       title: 'Export timeline',
@@ -137,7 +137,7 @@ export function registerIpc(window: BrowserWindow): void {
       filters: [{ name: 'MP4 video', extensions: ['mp4'] }]
     })
     if (picked.canceled || !picked.filePath) return { ok: false, canceled: true }
-    return exportTimeline(clips, picked.filePath)
+    return exportTimeline(spec, picked.filePath)
   })
 
   ipcMain.handle(IPC.chatRealtyStatus, (e) => (isMainSender(e) ? { connected: hasChatRealtyToken() } : null))

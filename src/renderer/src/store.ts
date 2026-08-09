@@ -4,6 +4,7 @@ import type {
   AgentStreamEvent,
   CanvasNodeState,
   CutExportResult,
+  ExportClip,
   MediaNodeData,
   MediaType,
   PersistedState,
@@ -11,7 +12,9 @@ import type {
   SourceMethod,
   StudioView,
   ThemeId,
-  TimelineExportClip
+  TimelineClip,
+  TimelineState,
+  TrackType
 } from '@shared/types'
 import { bridge } from './bridge'
 
@@ -39,6 +42,105 @@ function pickSwatch(): number {
 
 /** Stub-generation latency so the Rendering… state is visible (real jobs land in Phase 4). */
 const STUB_RENDER_MS = 2500
+
+/** Placed length for clips whose source duration isn't known yet (images, or
+ *  legacy-migrated clips before their lazy metadata probe lands). */
+const DEFAULT_CLIP_SEC = 5
+
+/** The default starting layout (docs/ui/timeline.md): a narrated reel with a
+ *  music bed and an occasional overlay, without an empty timeline being
+ *  intimidating. Tracks stay dynamic beyond this. */
+function defaultTimeline(): TimelineState {
+  return {
+    tracks: [
+      { id: nextId('track'), type: 'video', name: 'Video 1', muted: false, soloed: false, locked: false, order: 0 },
+      { id: nextId('track'), type: 'video', name: 'Video 2', muted: false, soloed: false, locked: false, order: 1 },
+      { id: nextId('track'), type: 'audio', name: 'Audio 1', muted: false, soloed: false, locked: false, order: 0 },
+      { id: nextId('track'), type: 'audio', name: 'Audio 2', muted: false, soloed: false, locked: false, order: 1 }
+    ],
+    clips: []
+  }
+}
+
+/** Reads a media file's duration off a detached element — the timeline needs
+ *  concrete trim bounds, and nodes don't store duration. Resolves 0 on failure
+ *  (caller falls back to DEFAULT_CLIP_SEC). */
+export function probeDuration(src: string, mediaType: MediaType): Promise<number> {
+  if (mediaType === 'image') return Promise.resolve(0)
+  return new Promise((resolve) => {
+    const el = document.createElement(mediaType === 'video' ? 'video' : 'audio')
+    const done = (value: number): void => {
+      el.removeAttribute('src')
+      resolve(value)
+    }
+    el.preload = 'metadata'
+    el.onloadedmetadata = () => done(Number.isFinite(el.duration) ? el.duration : 0)
+    el.onerror = () => done(0)
+    el.src = src
+  })
+}
+
+function clipDuration(clip: TimelineClip): number {
+  return Math.max(0.05, clip.trimOut - clip.trimIn)
+}
+
+/**
+ * Ripple overlap resolution for one track (docs/ui/timeline.md: ripple, not
+ * overwrite): clips sorted by start; any clip overlapping the one before it
+ * shifts right to its end. Gaps are untouched — position stays free.
+ */
+function rippleTrack(clips: TimelineClip[], trackId: string): TimelineClip[] {
+  const onTrack = clips
+    .filter((c) => c.trackId === trackId)
+    .sort((a, b) => a.startTime - b.startTime)
+  const shifted = new Map<string, number>()
+  let prevEnd = -Infinity
+  for (const clip of onTrack) {
+    const start = Math.max(clip.startTime, prevEnd === -Infinity ? clip.startTime : prevEnd)
+    if (start !== clip.startTime) shifted.set(clip.id, start)
+    prevEnd = start + clipDuration(clip)
+  }
+  if (shifted.size === 0) return clips
+  return clips.map((c) => (shifted.has(c.id) ? { ...c, startTime: shifted.get(c.id)! } : c))
+}
+
+/** End-of-content on one track — where an appended clip lands. */
+function trackEnd(clips: TimelineClip[], trackId: string): number {
+  return clips
+    .filter((c) => c.trackId === trackId)
+    .reduce((max, c) => Math.max(max, c.startTime + clipDuration(c)), 0)
+}
+
+/** Migrates a legacy single-track cutRoom array into the multitrack shape:
+ *  video clips laid back-to-back on Video 1, audio on Audio 1. Durations are
+ *  provisional until the lazy metadata probe patches them. */
+function migrateSession(session: Session): Session {
+  if (session.timeline && session.timeline.tracks.length > 0) return session
+  const timeline = defaultTimeline()
+  const videoTrack = timeline.tracks.find((t) => t.type === 'video')!
+  const audioTrack = timeline.tracks.find((t) => t.type === 'audio')!
+  for (const legacy of session.cutRoom ?? []) {
+    const node = session.nodes.find((n) => n.id === legacy.nodeId)
+    const trimIn = node?.data.trimIn ?? 0
+    const trimOut = node?.data.trimOut ?? 0
+    const track = legacy.mediaType === 'audio' ? audioTrack : videoTrack
+    const duration = trimOut > trimIn ? trimOut - trimIn : DEFAULT_CLIP_SEC
+    timeline.clips.push({
+      id: legacy.id,
+      nodeId: legacy.nodeId,
+      trackId: track.id,
+      startTime: trackEnd(timeline.clips, track.id),
+      trimIn,
+      trimOut: trimIn + duration,
+      sourceDuration: 0,
+      label: legacy.label,
+      mediaType: legacy.mediaType,
+      swatch: legacy.swatch
+    })
+  }
+  const { cutRoom: _legacy, ...rest } = session
+  return { ...rest, timeline }
+}
 
 /** Panel size defaults + clamps (docs/ui/layout-and-panels.md). Timeline max is
  *  a viewport fraction, so it's resolved at drag time, not stored here. */
@@ -104,9 +206,22 @@ interface StudioStore {
     startRendering?: boolean
   }): void
   removeNode(id: string): void
-  sendToTimeline(nodeId: string): void
-  removeClip(clipId: string): void
-  moveClip(clipId: string, dir: -1 | 1): void
+
+  /** Timeline (multitrack Cut Room). */
+  selectedTrackId: string | null
+  sendToTimeline(nodeId: string): Promise<void>
+  addClipToTimelineAt(nodeId: string, trackId: string, startTime: number): Promise<void>
+  moveTimelineClip(clipId: string, trackId: string, startTime: number): void
+  commitClipPosition(clipId: string): void
+  retrimTimelineClip(clipId: string, trimIn: number, trimOut: number): void
+  commitClipTrim(clipId: string): void
+  splitTimelineClip(clipId: string, atTime: number): void
+  removeTimelineClip(clipId: string): void
+  patchTimelineClip(clipId: string, patch: Partial<TimelineClip>): void
+  addTrack(type: TrackType): void
+  removeTrack(trackId: string): void
+  toggleTrackFlag(trackId: string, flag: 'muted' | 'soloed' | 'locked'): void
+  selectTrack(trackId: string): void
   exportTimeline(): Promise<CutExportResult | null>
 
   openCombine(sourceId: string, targetId: string): void
@@ -157,7 +272,7 @@ function newSession(index: number): Session {
     name: `R-${String(index).padStart(3, '0')} · Untitled`,
     createdAt: new Date().toISOString(),
     nodes: [],
-    cutRoom: [],
+    timeline: defaultTimeline(),
     view: 'canvas'
   }
 }
@@ -270,15 +385,18 @@ export const useStudio = create<StudioStore>((set, get) => {
       const persisted = await bridge.sessions.load()
       let sessions = persisted?.sessions ?? []
       // Any node persisted mid-"render" would otherwise pulse forever — the stub
-      // timer died with the previous process.
-      sessions = sessions.map((session) => ({
-        ...session,
-        nodes: session.nodes.map((node) =>
-          node.data.status === 'rendering'
-            ? { ...node, data: { ...node.data, status: 'ready' as const } }
-            : node
-        )
-      }))
+      // timer died with the previous process. Legacy single-track cutRoom
+      // arrays migrate to the multitrack timeline here too.
+      sessions = sessions.map((session) =>
+        migrateSession({
+          ...session,
+          nodes: session.nodes.map((node) =>
+            node.data.status === 'rendering'
+              ? { ...node, data: { ...node.data, status: 'ready' as const } }
+              : node
+          )
+        })
+      )
       if (sessions.length === 0) sessions = [newSession(1)]
       const activeSessionId =
         persisted?.activeSessionId && sessions.some((s) => s.id === persisted.activeSessionId)
@@ -357,13 +475,16 @@ export const useStudio = create<StudioStore>((set, get) => {
     onNodesChange(changes) {
       set({ nodes: applyNodeChanges(changes, get().nodes) })
       // Keyboard deletes arrive here (not through removeNode) — evict the
-      // removed nodes' clips from the Cut Room too.
+      // removed nodes' clips from the timeline too.
       const removedIds = changes.filter((c) => c.type === 'remove').map((c) => c.id)
       if (removedIds.length > 0) {
         const session = activeSession()
-        if (session && session.cutRoom.some((clip) => removedIds.includes(clip.nodeId))) {
+        if (session && session.timeline.clips.some((clip) => removedIds.includes(clip.nodeId))) {
           updateSession(session.id, {
-            cutRoom: session.cutRoom.filter((clip) => !removedIds.includes(clip.nodeId))
+            timeline: {
+              ...session.timeline,
+              clips: session.timeline.clips.filter((clip) => !removedIds.includes(clip.nodeId))
+            }
           })
         }
       }
@@ -405,80 +526,282 @@ export const useStudio = create<StudioStore>((set, get) => {
       const session = activeSession()
       if (session) {
         updateSession(session.id, {
-          cutRoom: session.cutRoom.filter((clip) => clip.nodeId !== id)
+          timeline: {
+            ...session.timeline,
+            clips: session.timeline.clips.filter((clip) => clip.nodeId !== id)
+          }
         })
       }
       persist()
     },
 
-    sendToTimeline(nodeId) {
+    selectedTrackId: null,
+
+    async sendToTimeline(nodeId) {
+      // Append at end-of-content on the first (lowest-order) matching-type
+      // track — today's familiar behavior; placing at a specific time is the
+      // drag-onto-a-track path (addClipToTimelineAt).
       const session = activeSession()
       const node = get().nodes.find((n) => n.id === nodeId)
       if (!session || !node) return
       if (node.data.mediaType === 'image') return
       if (node.data.status !== 'ready') return
-      if (session.cutRoom.some((clip) => clip.nodeId === nodeId)) return
-      updateSession(session.id, {
-        cutRoom: [
-          ...session.cutRoom,
-          {
-            id: nextId('clip'),
-            nodeId,
-            label: node.data.label,
-            mediaType: node.data.mediaType,
-            swatch: node.data.swatch
-          }
-        ]
+      const trackType: TrackType = node.data.mediaType === 'audio' ? 'audio' : 'video'
+      const track = session.timeline.tracks
+        .filter((t) => t.type === trackType && !t.locked)
+        .sort((a, b) => a.order - b.order)[0]
+      if (!track) return
+      await get().addClipToTimelineAt(nodeId, track.id, trackEnd(session.timeline.clips, track.id))
+    },
+
+    async addClipToTimelineAt(nodeId, trackId, startTime) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      const session = activeSession()
+      if (!node || !session) return
+      if (node.data.status !== 'ready') return
+      const track = session.timeline.tracks.find((t) => t.id === trackId)
+      if (!track || track.locked) return
+      // No silent type conversion: audio ↔ audio tracks, video/image ↔ video.
+      const clipTrackType: TrackType = node.data.mediaType === 'audio' ? 'audio' : 'video'
+      if (track.type !== clipTrackType) return
+
+      const sourceDuration =
+        node.data.src && node.data.mediaType !== 'image'
+          ? await probeDuration(node.data.src, node.data.mediaType)
+          : 0
+      // Seed the clip's trim from the node's Play-view trim (what you saw in
+      // Play is what lands) — independently editable after that.
+      const trimIn = node.data.trimIn ?? 0
+      const trimOut =
+        node.data.trimOut ?? (sourceDuration > 0 ? sourceDuration : trimIn + DEFAULT_CLIP_SEC)
+
+      // The active session may have changed while probing metadata — re-check.
+      const current = activeSession()
+      if (!current || current.id !== session.id) return
+      const clip: TimelineClip = {
+        id: nextId('clip'),
+        nodeId,
+        trackId,
+        startTime: Math.max(0, startTime),
+        trimIn,
+        trimOut,
+        sourceDuration,
+        label: node.data.label,
+        mediaType: node.data.mediaType,
+        swatch: node.data.swatch
+      }
+      updateSession(current.id, {
+        timeline: {
+          ...current.timeline,
+          clips: rippleTrack([...current.timeline.clips, clip], trackId)
+        }
       })
       patchNodeData(nodeId, { sentToTimeline: true })
     },
 
-    removeClip(clipId) {
+    moveTimelineClip(clipId, trackId, startTime) {
+      // Live position update during a drag — raw, no ripple; the drop commits
+      // via commitClipPosition so mid-drag states don't cascade shifts.
       const session = activeSession()
       if (!session) return
-      const clip = session.cutRoom.find((c) => c.id === clipId)
+      const clip = session.timeline.clips.find((c) => c.id === clipId)
+      const track = session.timeline.tracks.find((t) => t.id === trackId)
+      const fromTrack = session.timeline.tracks.find((t) => t.id === clip?.trackId)
+      if (!clip || !track || fromTrack?.locked || track.locked) return
+      if (track.type !== fromTrack?.type) return
       updateSession(session.id, {
-        cutRoom: session.cutRoom.filter((c) => c.id !== clipId)
+        timeline: {
+          ...session.timeline,
+          clips: session.timeline.clips.map((c) =>
+            c.id === clipId ? { ...c, trackId, startTime: Math.max(0, startTime) } : c
+          )
+        }
       })
-      if (clip && get().nodes.some((n) => n.id === clip.nodeId)) {
+    },
+
+    commitClipPosition(clipId) {
+      const session = activeSession()
+      if (!session) return
+      const clip = session.timeline.clips.find((c) => c.id === clipId)
+      if (!clip) return
+      updateSession(session.id, {
+        timeline: {
+          ...session.timeline,
+          clips: rippleTrack(session.timeline.clips, clip.trackId)
+        }
+      })
+    },
+
+    retrimTimelineClip(clipId, trimIn, trimOut) {
+      const session = activeSession()
+      if (!session) return
+      const clip = session.timeline.clips.find((c) => c.id === clipId)
+      const track = session.timeline.tracks.find((t) => t.id === clip?.trackId)
+      if (!clip || track?.locked) return
+      const maxOut = clip.sourceDuration > 0 ? clip.sourceDuration : Number.POSITIVE_INFINITY
+      const nextIn = Math.max(0, Math.min(trimIn, trimOut - 0.1))
+      const nextOut = Math.min(maxOut, Math.max(trimOut, nextIn + 0.1))
+      updateSession(session.id, {
+        timeline: {
+          ...session.timeline,
+          clips: session.timeline.clips.map((c) =>
+            c.id === clipId ? { ...c, trimIn: nextIn, trimOut: nextOut } : c
+          )
+        }
+      })
+    },
+
+    commitClipTrim(clipId) {
+      // Extending a clip's right edge into its neighbor ripples the later
+      // clips right — same rule as repositioning.
+      get().commitClipPosition(clipId)
+    },
+
+    splitTimelineClip(clipId, atTime) {
+      const session = activeSession()
+      if (!session) return
+      const clip = session.timeline.clips.find((c) => c.id === clipId)
+      const track = session.timeline.tracks.find((t) => t.id === clip?.trackId)
+      if (!clip || track?.locked) return
+      const offset = atTime - clip.startTime
+      if (offset <= 0.05 || offset >= clipDuration(clip) - 0.05) return
+      const cutPoint = clip.trimIn + offset
+      const right: TimelineClip = {
+        ...clip,
+        id: nextId('clip'),
+        startTime: atTime,
+        trimIn: cutPoint,
+        label: `${clip.label}_b`
+      }
+      updateSession(session.id, {
+        timeline: {
+          ...session.timeline,
+          clips: session.timeline.clips
+            .map((c) => (c.id === clipId ? { ...c, trimOut: cutPoint } : c))
+            .concat(right)
+        }
+      })
+    },
+
+    removeTimelineClip(clipId) {
+      const session = activeSession()
+      if (!session) return
+      const clip = session.timeline.clips.find((c) => c.id === clipId)
+      if (!clip) return
+      const remaining = session.timeline.clips.filter((c) => c.id !== clipId)
+      updateSession(session.id, {
+        timeline: { ...session.timeline, clips: remaining }
+      })
+      // Only clear the node badge when its last timeline instance is gone.
+      if (
+        !remaining.some((c) => c.nodeId === clip.nodeId) &&
+        get().nodes.some((n) => n.id === clip.nodeId)
+      ) {
         patchNodeData(clip.nodeId, { sentToTimeline: false })
       }
     },
 
-    moveClip(clipId, dir) {
+    patchTimelineClip(clipId, patch) {
       const session = activeSession()
       if (!session) return
-      const clips = [...session.cutRoom]
-      const idx = clips.findIndex((c) => c.id === clipId)
-      const swap = idx + dir
-      if (idx < 0 || swap < 0 || swap >= clips.length) return
-      const tmp = clips[idx]
-      clips[idx] = clips[swap]
-      clips[swap] = tmp
-      updateSession(session.id, { cutRoom: clips })
+      updateSession(session.id, {
+        timeline: {
+          ...session.timeline,
+          clips: session.timeline.clips.map((c) => (c.id === clipId ? { ...c, ...patch } : c))
+        }
+      })
+    },
+
+    addTrack(type) {
+      const session = activeSession()
+      if (!session) return
+      const sameType = session.timeline.tracks.filter((t) => t.type === type)
+      const order = sameType.reduce((max, t) => Math.max(max, t.order), -1) + 1
+      const name = `${type === 'video' ? 'Video' : 'Audio'} ${sameType.length + 1}`
+      updateSession(session.id, {
+        timeline: {
+          ...session.timeline,
+          tracks: [
+            ...session.timeline.tracks,
+            { id: nextId('track'), type, name, muted: false, soloed: false, locked: false, order }
+          ]
+        }
+      })
+    },
+
+    removeTrack(trackId) {
+      // Removes the track's clips from the timeline, never their source nodes.
+      const session = activeSession()
+      if (!session) return
+      const orphaned = session.timeline.clips.filter((c) => c.trackId === trackId)
+      const remaining = session.timeline.clips.filter((c) => c.trackId !== trackId)
+      updateSession(session.id, {
+        timeline: {
+          tracks: session.timeline.tracks.filter((t) => t.id !== trackId),
+          clips: remaining
+        }
+      })
+      for (const clip of orphaned) {
+        if (
+          !remaining.some((c) => c.nodeId === clip.nodeId) &&
+          get().nodes.some((n) => n.id === clip.nodeId)
+        ) {
+          patchNodeData(clip.nodeId, { sentToTimeline: false })
+        }
+      }
+      if (get().selectedTrackId === trackId) set({ selectedTrackId: null })
+    },
+
+    toggleTrackFlag(trackId, flag) {
+      const session = activeSession()
+      if (!session) return
+      updateSession(session.id, {
+        timeline: {
+          ...session.timeline,
+          tracks: session.timeline.tracks.map((t) =>
+            t.id === trackId ? { ...t, [flag]: !t[flag] } : t
+          )
+        }
+      })
+    },
+
+    selectTrack(trackId) {
+      set({ selectedTrackId: trackId })
     },
 
     async exportTimeline() {
       const session = activeSession()
       if (!session) return null
-      // Resolve each timeline clip to its live node so trims/mute set after it
-      // was sent are honored. Only nodes with real media are exportable.
-      const clips: TimelineExportClip[] = []
-      for (const clip of session.cutRoom) {
+      const orderedTracks = session.timeline.tracks.slice().sort((a, b) => a.order - b.order)
+      // Solo is intentionally dropped here — TimelineExportSpec carries no solo
+      // field, so export honors mute alone (docs/ui/timeline.md's rule).
+      const tracks = orderedTracks.map((t) => ({ type: t.type, muted: t.muted, order: t.order }))
+      const trackIndex = new Map(orderedTracks.map((t, i) => [t.id, i] as const))
+      // Resolve each clip to its live node for the real media source and the
+      // node-level audio mute set in Play view.
+      const clips: ExportClip[] = []
+      for (const clip of session.timeline.clips) {
         const node = get().nodes.find((n) => n.id === clip.nodeId)
         if (!node?.data.src) continue
+        const index = trackIndex.get(clip.trackId)
+        if (index === undefined) continue
         clips.push({
           src: node.data.src,
-          mediaType: node.data.mediaType,
-          trimIn: node.data.trimIn,
-          trimOut: node.data.trimOut,
-          muted: node.data.audioMuted
+          mediaType: clip.mediaType,
+          trackIndex: index,
+          startTime: clip.startTime,
+          trimIn: clip.trimIn,
+          trimOut: clip.trimOut,
+          audioMuted: node.data.audioMuted
         })
       }
       if (clips.length === 0) {
-        return { ok: false, error: 'No exportable clips — the timeline needs video nodes with real media.' }
+        return {
+          ok: false,
+          error: 'No exportable clips — the timeline needs clips whose nodes have real media.'
+        }
       }
-      return bridge.cutRoom.export(clips)
+      return bridge.cutRoom.export({ tracks, clips })
     },
 
     openCombine(sourceId, targetId) {

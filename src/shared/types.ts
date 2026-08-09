@@ -108,6 +108,8 @@ export interface CanvasNodeState {
   data: MediaNodeData
 }
 
+/** Legacy single-track Cut Room clip (pre-multitrack). Only survives in old
+ *  persisted sessions; migrated to TimelineClip on load. */
 export interface CutClip {
   id: string
   nodeId: string
@@ -116,12 +118,57 @@ export interface CutClip {
   swatch: number
 }
 
+export type TrackType = 'video' | 'audio'
+
+export interface TimelineTrack {
+  id: string
+  type: TrackType
+  name: string
+  /** Real, persistent state: silences (audio) / hides from compositing (video)
+   *  in BOTH live preview and export. */
+  muted: boolean
+  /** Monitoring convenience only — affects the live preview, NEVER export.
+   *  The export payload type (TimelineExportSpec) deliberately has no solo
+   *  field, so leaking it into an export is a compile error, not a bug. */
+  soloed: boolean
+  /** Prevents accidental edits to this track's clips. */
+  locked: boolean
+  /** Among same-type tracks. Lowest video order = compositing base. */
+  order: number
+}
+
+/** A clip is a rectangle positioned in time, not a list entry. */
+export interface TimelineClip {
+  id: string
+  nodeId: string
+  trackId: string
+  /** Seconds from timeline zero. */
+  startTime: number
+  /** The timeline clip's OWN trim — seeded from the node's Play-view trim when
+   *  added, independently editable after (the same asset can appear twice with
+   *  two different cuts). */
+  trimIn: number
+  trimOut: number
+  /** Source media duration for retrim clamping; 0 = not probed yet. */
+  sourceDuration: number
+  label: string
+  mediaType: MediaType
+  swatch: number
+}
+
+export interface TimelineState {
+  tracks: TimelineTrack[]
+  clips: TimelineClip[]
+}
+
 export interface Session {
   id: string
   name: string
   createdAt: string
   nodes: CanvasNodeState[]
-  cutRoom: CutClip[]
+  timeline: TimelineState
+  /** Legacy pre-multitrack shape; migrated into `timeline` on load. */
+  cutRoom?: CutClip[]
   view: StudioView
 }
 
@@ -213,16 +260,32 @@ export interface ConnectorSuggestion {
   note?: string
 }
 
-/** One resolved timeline clip handed to the ffmpeg export (order = array order). */
-export interface TimelineExportClip {
+/** A track as the export sees it. NOTE: no `soloed` here, on purpose — solo is
+ *  a preview-only monitoring state and must never affect export (timeline.md).
+ *  Keeping it out of the payload type makes that rule structural. */
+export interface ExportTrack {
+  type: TrackType
+  muted: boolean
+  order: number
+}
+
+/** One resolved clip handed to the ffmpeg export. */
+export interface ExportClip {
   /** lyme-asset:// URL of the source media. */
   src: string
   mediaType: MediaType
-  /** Non-destructive in/out points (seconds); baked into the output here. */
-  trimIn?: number
-  trimOut?: number
-  /** Video's own audio silenced in the output. */
-  muted?: boolean
+  /** Index into TimelineExportSpec.tracks. */
+  trackIndex: number
+  startTime: number
+  trimIn: number
+  trimOut: number
+  /** Video clip's own embedded audio silenced (Play view's audio delete). */
+  audioMuted?: boolean
+}
+
+export interface TimelineExportSpec {
+  tracks: ExportTrack[]
+  clips: ExportClip[]
 }
 
 export interface CutExportResult {
