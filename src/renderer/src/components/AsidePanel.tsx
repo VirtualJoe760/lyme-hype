@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { findManifest } from '@shared/node-manifest'
 import type { ConnectorView, TrainedStyle, VoiceEntry, YapperVoiceEntry } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { ChatRealtyPull } from './ChatRealtyPull'
 import { MotionGraphicsWizard } from './MotionGraphicsWizard'
+import { NodePanel } from './NodePanel'
 
 /**
  * The Create panel v2 (docs/ui/create-panel.md + docs/concepts/
@@ -409,120 +411,6 @@ function VideoScreen(props: { connectors: ConnectorView[] }): React.JSX.Element 
           )}
         </div>
       )}
-    </>
-  )
-}
-
-function ImageScreen(props: {
-  connectors: ConnectorView[]
-  styles: TrainedStyle[]
-}): React.JSX.Element {
-  const generateMedia = useStudio((s) => s.generateMedia)
-  const [prompt, setPrompt] = useState('')
-  const [aspect, setAspect] = useState('9:16')
-  const [tier, setTier] = useState<'storyboard' | 'production'>('storyboard')
-  const [resultId, setResultId] = useState<string | null>(null)
-  const storyboardChoices = ['gemini', 'openai'].filter((id) => connectorReady(props.connectors, id))
-  const [storyboardConnector, setStoryboardConnector] = useState(storyboardChoices[0] ?? '')
-  const [styleId, setStyleId] = useState('')
-  const style = props.styles.find((s) => s.id === styleId)
-  const muapiReady = connectorReady(props.connectors, 'muapi')
-
-  const kreaTier = tier === 'production' ? 'krea/krea-2/large (highest quality)' : 'krea/krea-2/medium'
-  const runLabel = style
-    ? style.connectorId === 'krea'
-      ? `krea · styles:[{id}] · "${style.name}" · ${tier === 'production' ? 'K2 large' : 'K2 medium'}`
-      : `fal · ${style.trainer === 'flux-krea' ? 'flux-krea-lora' : 'krea 2 lora'} · "${style.name}"`
-    : tier === 'production'
-      ? muapiReady
-        ? 'midjourney via muapi'
-        : 'production needs muapi'
-      : storyboardConnector
-        ? `${storyboardConnector} · storyboard tier`
-        : 'no storyboard connector'
-  const runOk = style
-    ? connectorReady(props.connectors, style.connectorId)
-    : tier === 'production'
-      ? muapiReady
-      : !!storyboardConnector
-
-  function handleGenerate(): void {
-    // The tier choice drives GenerationParams.connectorId — the routing gap
-    // closed in Phase 13. A trained LoRA routes through the backend it was
-    // trained on: fal (weights URL, tier-agnostic) or Krea (styles:[{id}],
-    // where tier now genuinely picks K2 medium vs. K2 large — the production-
-    // tier LoRA route fal has no equivalent for; docs/ui/node-enrichment-
-    // strategy.md row 4).
-    const connectorId =
-      style !== undefined
-        ? style.connectorId
-        : tier === 'production'
-          ? muapiReady
-            ? 'muapi'
-            : undefined
-          : storyboardConnector || undefined
-    const styleHint = style
-      ? style.connectorId === 'krea'
-        ? `the Krea 2 ${kreaTier} with my trained style (call krea's generate tool with styles: [{id: "${style.id}", strength: 1}])`
-        : `${style.trainer === 'flux-krea' ? 'the fal-ai/flux-krea-lora model' : 'the Krea 2 LoRA model'} with my trained LoRA "${style.name}"${style.loraUrl ? ` (weights: ${style.loraUrl}, strength ~0.9)` : ''}`
-      : undefined
-    setResultId(
-      generateMedia({
-        label: labelFromPrompt(prompt, 'img'),
-        mediaType: 'image',
-        prompt: prompt.trim(),
-        aspectRatio: aspect,
-        connectorId,
-        modelHint: styleHint ?? (tier === 'production' ? 'Midjourney' : undefined)
-      })
-    )
-  }
-
-  return (
-    <>
-      <RunLine ok={runOk} label={runLabel} cost={tier === 'production' ? '$$$ committed' : '$ cheap'} />
-      <textarea
-        className="prompt-area"
-        placeholder="citrus-slice vinyl record spinning in fog, studio light"
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-      />
-      <ChipRow options={ASPECTS} value={aspect} onChange={setAspect} />
-      <div className="tab-row">
-        <button className={tier === 'storyboard' ? 'active' : ''} onClick={() => setTier('storyboard')}>
-          Storyboard · cheap
-        </button>
-        <button className={tier === 'production' ? 'active' : ''} onClick={() => setTier('production')}>
-          Production · Midjourney
-        </button>
-      </div>
-      {tier === 'storyboard' && storyboardChoices.length > 1 && (
-        <select
-          className="cr-input create-select"
-          value={storyboardConnector}
-          onChange={(e) => setStoryboardConnector(e.target.value)}
-        >
-          {storyboardChoices.map((id) => (
-            <option key={id} value={id}>
-              Model: {id}
-            </option>
-          ))}
-        </select>
-      )}
-      {props.styles.length > 0 && (
-        <select className="cr-input create-select" value={styleId} onChange={(e) => setStyleId(e.target.value)}>
-          <option value="">Trained style: none</option>
-          {props.styles.map((s) => (
-            <option key={s.id} value={s.id}>
-              Trained style: {s.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <button className="generate-btn" disabled={!prompt.trim()} onClick={handleGenerate}>
-        Generate
-      </button>
-      <ResultRow nodeId={resultId} />
     </>
   )
 }
@@ -1598,7 +1486,14 @@ export function AsidePanel(): React.JSX.Element {
           </div>
         )}
         {screen === 'video' && <VideoScreen connectors={connectors} />}
-        {screen === 'image' && <ImageScreen connectors={connectors} styles={styles} />}
+        {screen === 'image' && (
+          <NodePanel
+            manifest={findManifest('image')!}
+            connectors={connectors}
+            styles={styles}
+            onBack={home}
+          />
+        )}
         {screen === 'audio' && (
           <AudioScreen
             connectors={connectors}

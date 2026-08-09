@@ -3195,3 +3195,122 @@
   font-size: 11px;
   color: var(--text-soft);
 }
+
+/* ---------- NodePanel (manifest-driven creative node, build-plan Phase 16/17) ---------- */
+
+.np { display: flex; flex-direction: column; }
+
+.np-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.np-sq {
+  width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-soft); background: none; display: grid; place-items: center; font-size: 12px;
+  cursor: pointer;
+}
+.np-sq:hover { color: var(--accent); border-color: var(--accent-dim); }
+.np-sq-ghost { opacity: .35; cursor: default; }
+.np-title {
+  font-family: var(--heading-font); letter-spacing: .12em; font-size: 11px;
+  text-transform: uppercase; color: var(--text);
+}
+
+.np-preview {
+  position: relative; width: 100%; max-height: 236px; margin: 0 auto 8px;
+  border-radius: 9px; border: 1px solid var(--border); background: var(--bg);
+  overflow: hidden; display: grid; place-items: center;
+}
+.np-preview.filled { border-color: var(--accent-dim); }
+.np-art { width: 100%; height: 100%; object-fit: cover; display: block; }
+.np-empty {
+  font-family: var(--mono); font-size: 10px; color: var(--text-soft);
+  text-align: center; line-height: 1.7; padding: 8px;
+}
+.np-empty.np-err { color: var(--danger); }
+.np-spin {
+  width: 11px; height: 11px; border-radius: 50%; background: var(--accent);
+  animation: np-pulse 1.3s infinite;
+}
+@keyframes np-pulse { 50% { opacity: .3; } }
+.np-nav {
+  position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 7px; align-items: center; background: rgba(10, 12, 8, .78);
+  border-radius: 20px; padding: 3px 9px; font-family: var(--mono); font-size: 9px; color: var(--text);
+}
+.np-nav button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0 2px; }
+
+.np-tools { display: flex; gap: 4px; margin-bottom: 10px; }
+.np-tool {
+  flex: 1; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 7px;
+  background: none; color: var(--text-soft); display: grid; place-items: center; cursor: pointer;
+}
+.np-tool:hover:not(.off) { border-color: var(--accent-dim); color: var(--accent); }
+.np-tool.on { border-color: var(--accent); color: var(--accent); background: rgba(198, 241, 53, .08); }
+.np-tool.off { opacity: .3; cursor: not-allowed; }
+.np-icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.np-settings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
+.np-set {
+  aspect-ratio: 1; border: 1px solid var(--border); border-radius: 7px; background: var(--bg);
+  padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; text-align: center; cursor: pointer; color: var(--text-soft);
+}
+.np-set:hover { border-color: var(--accent-dim); }
+.np-set b { font-family: var(--mono); font-size: 8px; font-weight: 400; letter-spacing: .04em; }
+.np-set em { font-family: var(--mono); font-size: 8.5px; font-style: normal; color: var(--text); }
+.np-set.on { border-color: var(--accent-dim); }
+.np-set.on em, .np-set.on .np-icon { color: var(--accent); }
+
+.np-models, .np-cont { position: relative; margin-bottom: 9px; }
+.np-cont { border-top: 1px solid var(--border); padding-top: 9px; margin-top: 3px; }
+.np-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: .1em; color: var(--text-soft); margin-bottom: 5px; }
+.np-track { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.np-track::-webkit-scrollbar { display: none; }
+.np-fade {
+  position: absolute; right: 0; bottom: 2px; width: 24px; height: 26px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--panel) 80%);
+}
+.np-pill {
+  flex: none; white-space: nowrap; font-family: var(--mono); font-size: 9.5px;
+  border: 1px solid var(--border); border-radius: 20px; padding: 5px 11px;
+  color: var(--text-soft); background: var(--bg); cursor: pointer;
+}
+.np-pill:hover { border-color: var(--accent-dim); color: var(--text); }
+.np-pill.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.np-pill.dim { opacity: .4; border-style: dashed; }
+.np-none { font-family: var(--mono); font-size: 9.5px; color: var(--danger); padding: 5px 2px; }
+
+.np-switched {
+  font-family: var(--mono); font-size: 9px; color: var(--accent);
+  background: rgba(198, 241, 53, .08); border: 1px solid var(--accent-dim);
+  border-radius: 6px; padding: 6px 8px; margin-bottom: 9px; line-height: 1.45;
+}
+.np-local {
+  font-family: var(--mono); font-size: 9px; color: var(--text-soft);
+  border: 1px dashed var(--border); border-radius: 6px; padding: 7px 8px; margin-bottom: 9px;
+}
+
+.np-prompt {
+  width: 100%; min-height: 62px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); padding: 8px 9px; font-size: 12px; color: var(--text);
+  font-family: var(--body-font); line-height: 1.45; margin-bottom: 9px; resize: vertical;
+}
+.np-prompt:focus { outline: none; border-color: var(--accent-dim); }
+
+.np-params { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 10px; }
+.np-param { display: flex; gap: 5px; }
+.np-chip {
+  font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 3px 8px; color: var(--text-soft); background: none; cursor: pointer;
+}
+.np-chip.on { color: var(--accent-ink); background: var(--accent-dim); border-color: var(--accent-dim); }
+.np-pop {
+  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+  background: var(--bg); margin-bottom: 9px;
+}
+.np-pop-empty { font-family: var(--mono); font-size: 9px; color: var(--text-soft); }
+.np-ref {
+  width: 34px; height: 34px; border-radius: 5px; overflow: hidden; padding: 0;
+  border: 1px solid var(--border); background: none; cursor: pointer;
+}
+.np-ref.on { border-color: var(--accent); }
+.np-ref img { width: 100%; height: 100%; object-fit: cover; display: block; }

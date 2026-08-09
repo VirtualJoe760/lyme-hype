@@ -345,6 +345,33 @@ export interface TimelineState {
   clips: TimelineClip[]
 }
 
+/**
+ * One generated result held in a creative node's preview, before it is committed.
+ * Generating is cheap and reversible; putting something on the canvas is the deliberate
+ * act — so takes live here until Finish, and page in place inside the preview.
+ */
+export interface StagedTake {
+  id: string
+  mediaType: MediaType
+  status: NodeStatus
+  label: string
+  prompt: string
+  src?: string
+  error?: string
+  /** Catalog model id that produced it, for provenance in the preview. */
+  modelId?: string
+  createdAt: number
+}
+
+export interface NodeStage {
+  takes: StagedTake[]
+  activeIndex: number
+  /** Which manifest tool is lit — decides the capability, and therefore the model row. */
+  toolId: string
+  /** Catalog model id the user picked for the active tool. */
+  modelId?: string
+}
+
 export interface Session {
   id: string
   name: string
@@ -354,6 +381,9 @@ export interface Session {
   /** Legacy pre-multitrack shape; migrated into `timeline` on load. */
   cutRoom?: CutClip[]
   scripting?: ScriptingState
+  /** Uncommitted work per creative node, keyed by manifest id. Survives navigating
+   *  away from a node and dies with the session (build-plan Phase 14). */
+  stages?: Record<string, NodeStage>
   view: StudioView
 }
 

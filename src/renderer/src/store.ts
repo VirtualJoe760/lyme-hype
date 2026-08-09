@@ -11,9 +11,11 @@ import type {
   ExportClip,
   MediaNodeData,
   MediaType,
+  NodeStage,
   PersistedState,
   Session,
   SourceMethod,
+  StagedTake,
   StudioView,
   ThemeId,
   TimelineClip,
@@ -307,6 +309,40 @@ interface StudioStore {
      *  screens can track the node's rendering → ready/error lifecycle. */
   }): string
 
+  /** Staged, uncommitted work per creative node (docs/build-plan.md Phase 16).
+   *  Generating fills the node's preview; only commitStage reaches the canvas. */
+  nodeStage(manifestId: string): NodeStage
+  setNodeTool(manifestId: string, toolId: string): void
+  setNodeModel(manifestId: string, modelId: string | undefined): void
+  selectTake(manifestId: string, index: number): void
+  clearStage(manifestId: string): void
+  stageGenerate(
+    manifestId: string,
+    input: {
+      label: string
+      mediaType: MediaType
+      prompt: string
+      takes?: number
+      modelId?: string
+      aspectRatio?: string
+      durationSec?: number
+      resolution?: string
+      connectorId?: string
+      connectorIds?: string[]
+      modelHint?: string
+      referenceImagePaths?: string[]
+      startFramePath?: string
+      endFramePath?: string
+      referenceAudioPaths?: string[]
+      sourceMediaPath?: string
+      extendVideoPath?: string
+      extendVideoDurationSec?: number
+    }
+  ): void
+  /** Active take → a real canvas node. Returns its id, or null when there is
+   *  nothing ready to commit. */
+  commitStage(manifestId: string): string | null
+
   /** Canvas pans to this node (CanvasArea consumes and clears it). */
   focusNodeId: string | null
   focusNode(nodeId: string): void
@@ -461,6 +497,54 @@ export const useStudio = create<StudioStore>((set, get) => {
 
   function scheduleStubReady(nodeId: string): void {
     setTimeout(() => patchNodeAnywhere(nodeId, { status: 'ready' }), STUB_RENDER_MS)
+  }
+
+  const EMPTY_STAGE: NodeStage = { takes: [], activeIndex: 0, toolId: 'generate' }
+
+  function readStage(manifestId: string): NodeStage {
+    const session = get().sessions.find((s) => s.id === get().activeSessionId)
+    return session?.stages?.[manifestId] ?? EMPTY_STAGE
+  }
+
+  function writeStage(manifestId: string, update: (stage: NodeStage) => NodeStage): void {
+    const activeId = get().activeSessionId
+    if (!activeId) return
+    set({
+      sessions: get().sessions.map((session) =>
+        session.id === activeId
+          ? {
+              ...session,
+              stages: {
+                ...(session.stages ?? {}),
+                [manifestId]: update(session.stages?.[manifestId] ?? EMPTY_STAGE)
+              }
+            }
+          : session
+      )
+    })
+    persist()
+  }
+
+  /** A take can resolve after the user has navigated away or switched sessions, so
+   *  patch by id across every session rather than assuming the active one. */
+  function patchTake(manifestId: string, takeId: string, patch: Partial<StagedTake>): void {
+    set({
+      sessions: get().sessions.map((session) => {
+        const stage = session.stages?.[manifestId]
+        if (!stage?.takes.some((t) => t.id === takeId)) return session
+        return {
+          ...session,
+          stages: {
+            ...(session.stages ?? {}),
+            [manifestId]: {
+              ...stage,
+              takes: stage.takes.map((t) => (t.id === takeId ? { ...t, ...patch } : t))
+            }
+          }
+        }
+      })
+    })
+    persist()
   }
 
   return {
@@ -1169,6 +1253,110 @@ export const useStudio = create<StudioStore>((set, get) => {
       } else {
         scheduleStubReady(nodeId)
       }
+    },
+
+    nodeStage(manifestId) {
+      return readStage(manifestId)
+    },
+
+    setNodeTool(manifestId, toolId) {
+      writeStage(manifestId, (stage) => ({ ...stage, toolId }))
+    },
+
+    setNodeModel(manifestId, modelId) {
+      writeStage(manifestId, (stage) => ({ ...stage, modelId }))
+    },
+
+    selectTake(manifestId, index) {
+      writeStage(manifestId, (stage) => ({
+        ...stage,
+        activeIndex: Math.max(0, Math.min(index, stage.takes.length - 1))
+      }))
+    },
+
+    clearStage(manifestId) {
+      writeStage(manifestId, () => ({ takes: [], activeIndex: 0, toolId: readStage(manifestId).toolId }))
+    },
+
+    stageGenerate(manifestId, input) {
+      const count = Math.max(1, input.takes ?? 1)
+      const fresh: StagedTake[] = Array.from({ length: count }, (_, i) => ({
+        id: nextId('take'),
+        mediaType: input.mediaType,
+        status: 'rendering' as const,
+        label: count > 1 ? `${input.label} ${i + 1}` : input.label,
+        prompt: input.prompt,
+        modelId: input.modelId,
+        createdAt: Date.now()
+      }))
+
+      writeStage(manifestId, (stage) => ({
+        ...stage,
+        takes: [...stage.takes, ...fresh],
+        activeIndex: stage.takes.length
+      }))
+
+      for (const take of fresh) {
+        void (async () => {
+          let result: Awaited<ReturnType<typeof bridge.generate.run>> = null
+          try {
+            result = await bridge.generate.run({
+              mediaType: input.mediaType,
+              prompt: input.prompt,
+              aspectRatio: input.aspectRatio,
+              durationSec: input.durationSec,
+              resolution: input.resolution,
+              connectorId: input.connectorId,
+              connectorIds: input.connectorIds,
+              modelHint: input.modelHint,
+              referenceImagePaths: input.referenceImagePaths,
+              startFramePath: input.startFramePath,
+              endFramePath: input.endFramePath,
+              referenceAudioPaths: input.referenceAudioPaths,
+              sourceMediaPath: input.sourceMediaPath,
+              extendVideoPath: input.extendVideoPath,
+              extendVideoDurationSec: input.extendVideoDurationSec
+            })
+          } catch (error) {
+            result = {
+              ok: false,
+              mediaType: input.mediaType,
+              error: error instanceof Error ? error.message : String(error)
+            }
+          }
+
+          patchTake(manifestId, take.id,
+            result?.ok && result.src
+              ? { status: 'ready', src: result.src, error: undefined }
+              : { status: 'error', error: result?.error ?? 'Generation failed.' }
+          )
+        })()
+      }
+    },
+
+    commitStage(manifestId) {
+      const stage = readStage(manifestId)
+      const take = stage.takes[stage.activeIndex]
+      if (!take || take.status !== 'ready' || !take.src) return null
+
+      const id = nextId('node')
+      const node: MediaFlowNode = {
+        id,
+        type: 'media',
+        position: { x: 80 + Math.random() * 300, y: 80 + Math.random() * 220 },
+        data: {
+          label: take.label,
+          mediaType: take.mediaType,
+          source: 'generate',
+          status: 'ready',
+          src: take.src,
+          swatch: pickSwatch()
+        }
+      }
+      set({ nodes: [...get().nodes, node] })
+      writeStage(manifestId, (s) => ({ ...s, takes: [], activeIndex: 0 }))
+      persist()
+      return id
     },
 
     generateMedia(input) {
