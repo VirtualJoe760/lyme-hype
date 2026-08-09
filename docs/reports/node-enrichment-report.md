@@ -1276,3 +1276,58 @@ commits and this report together, then merge what looks good.
 Flagship analysis already done by hand (see the strategy doc): the Deepfake node currently makes
 one opaque Yapper call and touches neither LoRA (identity) nor ElevenLabs (voice) despite both
 already being wired into the app for other tiles. That's queue item #1.
+
+---
+
+## 2026-08-09 — Recommendations (queue fully done, no more rows to invent)
+
+All ten queue rows are `done` as of the twentieth run above. Per the routine's own guardrail, an
+empty-looking queue isn't a reason to invent busywork rows — instead, here's what's genuinely worth
+considering next, in roughly the order I'd tackle them. None of this is scoped or built; it's a
+starting point for whoever plans the next phase of enrichment (human or routine).
+
+1. **The `asset-upload` cross-cutting helper is still the single biggest unblocked gap.** It's been
+   flagged since the first run (see "Cross-cutting plumbing" above) and still blocks real muapi/fal
+   i2v paths on rows 1, 3, and 7 — those tiles fall back to Gemini for image-conditioned generation
+   today, not because Gemini is the best fit, but because it's the only connector whose reference
+   image handling doesn't require a hosted URL first. A local-file/`lyme-asset://` → provider-hosted
+   URL helper, shared by muapi's `upload_file`, fal's storage REST, and Yapper's signed-upload REST
+   (already half-built for Deepfake's own path — see `yapper-rest.ts`), would unlock i2v choice
+   across three tiles at once instead of three separate one-off wire-ups. Worth being the first
+   thing a future pass tackles precisely because it's cross-cutting, not node-specific.
+
+2. **ChatRealty's CMS tools are completely untouched and low-risk.** `create_article` /
+   `create_landing_page` (both DRAFT-only — `update_article`/`update_landing_page`'s `status:
+   'published'` transition is the actual publish step, and that's explicitly out of scope per
+   AGENTS.md rule 6 regardless) sit next to the creative-rendering chain this queue just finished,
+   completely unused. A "turn this Storyboard script into a market-insight article draft" action
+   would reuse the same Scripting-panel CMA-context plumbing row 10 step 2 just built
+   (`plan_listing_carousel`'s real numbers) as the article's factual backbone instead of an agent
+   inventing stats — and since it only ever produces a draft, never a publish, it carries none of
+   the live-billed-call caution every generation tile needs. Genuinely lower-risk than most of what
+   this queue already shipped.
+
+3. **Veo video-extension** (`+7s` chained, 720p, mentioned in `capability-map.md`'s open-items list
+   since early in this queue) is a natural "extend this clip" action on any Gemini-sourced video
+   node — the wrapper capability already exists per the reference doc, nothing in the UI surfaces
+   it. Small, contained, similar shape to the starting-frame picker row 3 already shipped.
+
+4. **Yapper's voice library** (`GET /audio/voices`) has been "left for later" since row 5's first
+   pass shipped the free-tier TTS fallback with one hardcoded default voice. Worth revisiting now
+   that the fallback path itself is proven — browsing/picking a Yapper voice is a smaller lift than
+   building the fallback was.
+
+5. **muapi's image-edit tool as Motion graphics' second batch source** — flagged as real,
+   separately-scoped work back in row 2's very first pass and never picked back up since (every
+   later pass on that row found nothing else buildable blind). Still genuinely open: a different
+   generation path, not a parameter wire-up, so it needs its own design pass rather than a quick
+   slice.
+
+6. **The bigger picture beyond node enrichment specifically:** `AGENTS.md`'s own status line still
+   marks Phases 8–9 (live *billed* generation verification across every connector this queue has
+   been wiring blind, plus the Instagram publish port from `docs/connectors/publishing.md`) as not
+   started. Everything this routine has built across twenty runs is real wiring that compiles and
+   follows the connector reference docs faithfully, but none of it has been exercised against a
+   live API key — that's explicitly joint-session scope, not something an unattended routine should
+   ever attempt, but it's the natural next phase once a human is at the keyboard with real
+   credentials to hand.

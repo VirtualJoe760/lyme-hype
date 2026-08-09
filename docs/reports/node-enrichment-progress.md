@@ -29,6 +29,10 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twentieth autonomous run, follow-up) — with the queue now fully `done` (all ten
+  rows), added a dated Recommendations section to the bottom of `node-enrichment-report.md` per
+  the standing guardrail against inventing new rows once the queue is empty, rather than stop
+  silently. No code changes this pass.
 - 2026-08-09 (twentieth autonomous run) — collided with the nineteenth run on row 10, independently:
   it took step 3 (carousel slide builder), this run took step 4 (agent-in-photo staging picker) —
   complementary, not duplicate, work, so instead of deferring to whichever pushed first, this pass
