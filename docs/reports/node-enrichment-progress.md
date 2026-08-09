@@ -11,7 +11,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 | # | Node | Status | Notes |
 |---|---|---|---|
-| 1 | Deepfake | pending | Flagship — chain LoRA (identity) + ElevenLabs (voice clone + TTS) + Yapper lipsync / muapi face-swap. Build order written in the strategy doc §Flagship. Start with the shared asset-upload helper — it unblocks this node and #3. |
+| 1 | Deepfake | in-progress | Reference person (TrainedStyle.voiceName) + staged Speech→Face UI shipped; Stage 2 chains muapi's own upload tool into edit_lipsync/face_swap via new `GenerationParams.connectorIds`/`referenceAudioPaths`/`sourceMediaPath` instead of a standalone asset-upload helper. resume: (a) build the Yapper REST signed-upload path (`yap_live_…` key — a second, non-OAuth credential ConnectorDef doesn't model yet) so the Yapper-only fallback can actually ingest local media, not just URL imports; (b) live-verify the muapi upload→lipsync chain once real keys exist (joint session); (c) voice_clone isn't wired into the Reference person flow yet — TrainedStylesTab only lets you *attach* an existing ElevenLabs voice by name, not clone a new one from the LoRA's training photos/a sample. |
 | 2 | Motion graphics | pending | Deepen reference conditioning (10-image cap, not 3), add Veo model choice (lite vs full), consider muapi image-edit as a second batch source. |
 | 3 | Generate video | pending | Add i2v from a canvas image node; surface Yapper's ~20-model catalog as a routing option. |
 | 4 | Generate image | pending | Extend lora-use to production tier; add Krea 2 direct styles param as a second LoRA route. |
@@ -29,4 +29,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (first autonomous run) — Deepfake: Reference person concept + staged Speech/Face UI
+  + `connectorIds`/`referenceAudioPaths`/`sourceMediaPath` plumbing. Left in-progress — see row 1's
+  resume note (Yapper REST upload credential + live verification still open).
 - 2026-08-09 06:2x UTC — seeded by main session ahead of the first autonomous run.

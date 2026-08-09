@@ -53,7 +53,7 @@ const DANGEROUS_TOOLS_BY_SERVER: Record<string, string[]> = {
   elevenlabs: ['make_outbound_call', 'create_agent', 'add_knowledge_base_to_agent']
 }
 
-async function buildMcpServers(restrictId?: string): Promise<{
+async function buildMcpServers(restrictIds?: string[]): Promise<{
   servers: Record<string, McpServerConfig>
   allowedTools: string[]
   disallowedTools: string[]
@@ -67,7 +67,7 @@ async function buildMcpServers(restrictId?: string): Promise<{
   const skipped: string[] = []
 
   for (const def of listConnectors()) {
-    if (restrictId && def.id !== restrictId) continue
+    if (restrictIds && restrictIds.length > 0 && !restrictIds.includes(def.id)) continue
     const needsKey = def.authType !== 'none'
     const token = needsKey ? readSecretValue(def.id) : null
     if (needsKey && !token) {
@@ -145,6 +145,21 @@ function buildPrompt(params: GenerationParams): string {
       `Last-frame image on disk: ${params.endFramePath} — pass it as the tool's end_frame_path parameter.`
     )
   }
+  if (params.sourceMediaPath) {
+    lines.push(
+      `Source face/performance media on disk: ${params.sourceMediaPath} — the video or photo to drive/transform.`
+    )
+  }
+  if (params.referenceAudioPaths?.length) {
+    lines.push(
+      `Audio file(s) on disk to use as-is (do not regenerate speech, it already exists): ${params.referenceAudioPaths.join(' | ')}.`
+    )
+  }
+  if (params.sourceMediaPath || params.referenceAudioPaths?.length) {
+    lines.push(
+      "If the target generation tool needs a hosted URL rather than a local path, and one of your attached connectors exposes its own file-upload tool (e.g. a *_upload_file tool), call that first to get a URL, then pass the returned URL to the generation tool."
+    )
+  }
   lines.push(
     'Use exactly one connected generation tool that produces this media type. Wait for it to finish.',
     'If the tool returns a request/job id instead of a result (async services like muapi do), poll its matching result/status tool until the job completes and you have the final output URL or file.',
@@ -176,16 +191,24 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       ?.map(toDiskPath)
       .filter((p): p is string => p !== null),
     startFramePath: params.startFramePath ? (toDiskPath(params.startFramePath) ?? undefined) : undefined,
-    endFramePath: params.endFramePath ? (toDiskPath(params.endFramePath) ?? undefined) : undefined
+    endFramePath: params.endFramePath ? (toDiskPath(params.endFramePath) ?? undefined) : undefined,
+    referenceAudioPaths: params.referenceAudioPaths
+      ?.map(toDiskPath)
+      .filter((p): p is string => p !== null),
+    sourceMediaPath: params.sourceMediaPath ? (toDiskPath(params.sourceMediaPath) ?? undefined) : undefined
   }
 
-  const { servers, allowedTools, disallowedTools, attached, skipped } = await buildMcpServers(
-    params.connectorId
-  )
+  const restrictIds =
+    params.connectorIds && params.connectorIds.length > 0
+      ? params.connectorIds
+      : params.connectorId
+        ? [params.connectorId]
+        : undefined
+  const { servers, allowedTools, disallowedTools, attached, skipped } = await buildMcpServers(restrictIds)
   if (attached.length === 0) {
     return fail(
-      params.connectorId
-        ? 'That connector is not a ready stdio generation connector (missing command or credential).'
+      restrictIds
+        ? `None of the requested connector(s) (${restrictIds.join(', ')}) are ready stdio/http generation connectors (missing command, credential, or transport support).`
         : skipped.length > 0
           ? 'No usable generation connector. Installed connectors are http-only or missing a credential — add a stdio generation connector (e.g. muapi) with a key in Settings › Connectors.'
           : 'No generation connector installed. Add one in Settings › Connectors.'

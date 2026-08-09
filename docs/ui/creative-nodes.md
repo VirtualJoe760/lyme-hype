@@ -74,9 +74,33 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Motion graphics** | references + instruction (wizard below) | image nodes + video node + alpha webm node | `image-gen`, `image-ref-conditioning`, `video-frame-conditioning`, local ffmpeg alpha |
 | **Isolate audio** | video node / file / direct URL | audio node | none — local ffmpeg (standing principle: local beats paid) |
 | **Create a LoRA** | trainer pick + style/subject + images + steps + trigger | trained style (Settings › Trained styles; `loraUrl`) | `lora-train` |
-| **Deepfake** | who talks + script | video node | `lipsync` (+ `audio-tts` chained by the agent) |
+| **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
 | **Listing photos** | listing query | image nodes (with MLS provenance) | `data-mls` |
+
+## Reference person (Deepfake's identity + voice pairing)
+
+A `TrainedStyle` (Settings › Trained styles) can carry an optional `voiceName` — an ElevenLabs
+voice paired with the trained likeness, turning a plain LoRA record into a reusable "who talks"
+identity. Deepfake picks one, but the pairing itself is edited in Settings (not the Create panel)
+since it's account-level state, not a one-off generation input.
+
+## Deepfake (stages as nodes)
+
+Same "each stage its own visible node" pattern as the Motion graphics wizard below, not one
+opaque call:
+
+1. **Reference person + script** — pick a trained identity (optional) and its paired voice
+   (or type a voice name), write the script.
+2. **Speech** — direct ElevenLabs `text_to_speech` call (no agent turn, same plumbing as the
+   Generate audio · Voice job) → an audio node lands on the canvas.
+3. **Face** — an agent turn restricted to exactly the connected `yapper`/`muapi` pair
+   (`GenerationParams.connectorIds`), given the local speech-audio path and the chosen
+   source-video/photo canvas node's path (`referenceAudioPaths`/`sourceMediaPath`). The prompt
+   tells it to prefer muapi's self-contained chain (its own upload tool → `muapi_edit_lipsync`,
+   or `muapi_enhance_face_swap` when only a still photo exists) since that needs no extra
+   credentials; Yapper is the fallback path when only Yapper is connected. **Unverified live** —
+   no API keys are configured to fire this chain yet; the wiring is real, the call itself isn't.
 
 ## Motion graphics wizard (stages as nodes)
 

@@ -14,7 +14,7 @@ import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
 import { exportTimeline } from './ffmpeg'
-import { deleteTrainedStyle, listTrainedStyles, trainStyle } from './fal-training'
+import { deleteTrainedStyle, listTrainedStyles, setTrainedStyleVoice, trainStyle } from './fal-training'
 import { isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
@@ -242,6 +242,10 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.loraDelete, (e, id: string) => {
     if (!isMainSender(e)) return
     deleteTrainedStyle(id)
+  })
+  ipcMain.handle(IPC.loraSetVoice, (e, id: string, voiceName: string) => {
+    if (!isMainSender(e)) return null
+    return setTrainedStyleVoice(id, voiceName)
   })
 
   ipcMain.handle(IPC.generateRun, (e, params: GenerationParams) => {

@@ -60,6 +60,34 @@ sequence, each step independently shippable):
    video exists (Yapper) — offer both modes once asset-upload exists, restoring the face-swap
    mode the Deepfake screen dropped when Yapper turned out not to have it.
 
+**Status (2026-08-09 enrichment run — steps 1, 2 and a variant of 3/4 shipped):**
+
+- Step 1 done: `TrainedStyle.voiceName` (shared/types.ts), `setTrainedStyleVoice`
+  (fal-training.ts) + `lora:set-voice` IPC, and an inline voice field on each Settings › Trained
+  styles card.
+- Step 2 done: `DeepfakeScreen` (AsidePanel.tsx) is now Reference person → script → **Stage 1
+  "Generate speech"** (direct `textToSpeech` call, lands as its own audio node) → **Stage 2
+  "Lip-sync / face"** (agent call, source video/photo node picker).
+- Steps 3/4, pivoted rather than built as spec'd: no standalone `uploadLocalAssetTo` helper.
+  Instead `GenerationParams` gained `connectorIds` (restrict the agent to an exact SET of
+  connectors, not just one — `buildMcpServers` in generation.ts now takes `restrictIds: string[]`)
+  plus `referenceAudioPaths`/`sourceMediaPath` (local paths resolved and handed to the agent the
+  same way `referenceImagePaths` already was). Stage 2 restricts to exactly the connected
+  `yapper`/`muapi` pair and instructs the agent to prefer muapi's *own* `muapi_upload_file` tool
+  chained into `muapi_edit_lipsync` (or `muapi_enhance_face_swap` for a stills-only reference) —
+  both tools it already has — falling back to Yapper's `video-lipsync` process when only Yapper
+  is connected. This reuses tools the agent already holds instead of Lyme Hype owning a second
+  upload implementation per connector; it only works where an attached connector exposes its own
+  upload tool (muapi does, stdio-side) or the source is already a URL. A real
+  `uploadLocalAssetTo` helper — specifically for Yapper's REST signed-upload flow, which needs a
+  *second*, non-OAuth `yap_live_…` credential Lyme Hype doesn't model yet — is still open; see the
+  progress queue's resume note.
+- **Not run live** — no connector API keys are configured in this sandbox, and live generation
+  spend is explicitly out of scope for the autonomous routine (`AGENTS.md` §0). `npm run
+  typecheck` passes; the actual tool-chain prompt (does the agent really call
+  `muapi_upload_file` → `muapi_edit_lipsync` in that order, correctly) is unverified until a
+  joint session with real keys.
+
 ---
 
 ## Node queue (priority order — the routine works top to bottom, one per run)

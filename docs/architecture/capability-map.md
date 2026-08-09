@@ -86,7 +86,8 @@ deny-list alongside muapi's Stripe/keys tools.
 | Audio · clone | `voice-clone` | ElevenLabs | — |
 | Motion gfx · batch/final | `image-gen`, `image-ref-conditioning` | gemini/openai pick | — |
 | Motion gfx · animate | `video-frame-conditioning` | gemini (Veo 3.1) | — |
-| Deepfake | `lipsync` | yapper (restricted) | — |
+| Deepfake · speech | `audio-tts` | ElevenLabs direct call | — |
+| Deepfake · face | `lipsync` / `face-swap` | muapi+yapper chain (both restricted via `connectorIds`) | either alone |
 | Create a LoRA | `lora-train` | fal trainer pick | — |
 | Storyboard promote (image) | `image-gen` | per-panel choice | agent-pick |
 | Listing photos | `data-mls` | chatrealty | — |
@@ -99,10 +100,13 @@ several connectors can satisfy one node.
 
 ## 4. Known unwired paths worth planning around (the ○ cells)
 
-- **muapi image-edit / video-from-image / lipsync / face-swap / upscale / bg-remove tools** —
-  the installed connector already exposes them; no creative node drives them yet (Combine's
-  real design should start here, and `muapi_enhance_face_swap` could revive the Deepfake
-  tile's face-swap mode that Yapper couldn't serve).
+- **muapi image-edit / video-from-image / upscale / bg-remove tools** — the installed connector
+  already exposes them; no creative node drives them yet (Combine's real design should start
+  here). `muapi_edit_lipsync` / `muapi_enhance_face_swap` are now wired into the Deepfake tile's
+  Stage 2 prompt (2026-08-09 enrichment run) — `GenerationParams.connectorIds` restricts the
+  agent to exactly the connected `yapper`/`muapi` pair so it can chain muapi's own upload tool
+  into either tool, or fall back to Yapper's `video-lipsync` process when only Yapper is
+  connected. **Unverified live** — no keys configured to fire it yet.
 - **i2v everywhere except Gemini** needs `asset-upload` first (muapi has it stdio-side; fal has
   it; Yapper imports by URL) — the missing plumbing is "give a local node a provider-visible
   URL", one mechanism reusable across all three.

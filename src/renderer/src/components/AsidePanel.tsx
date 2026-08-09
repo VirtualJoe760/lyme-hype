@@ -33,7 +33,7 @@ const TILES: { key: Screen; glyph: string; label: string; blurb: string }[] = [
   { key: 'motion', glyph: '✦', label: 'Motion graphics', blurb: 'References → reveal animation → alpha' },
   { key: 'isolate', glyph: '⏏', label: 'Isolate audio', blurb: 'Extract a track locally — free, no tokens' },
   { key: 'lora', glyph: '◈', label: 'Create a LoRA', blurb: "Train a reusable style on fal's Krea trainers" },
-  { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Lip-sync / talking avatars via Yapper' },
+  { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Reference person → speech → lip-sync/face' },
   { key: 'upload', glyph: '↑', label: 'Upload', blurb: 'A file from this machine' },
   { key: 'link', glyph: '⛓', label: 'Link', blurb: 'Download a direct media URL' },
   { key: 'pull', glyph: '⌂', label: 'Listing photos', blurb: 'Pull real MLS photos (ChatRealty)' }
@@ -63,7 +63,7 @@ const TILE_NEEDS: Partial<Record<Screen, { anyOf: string[]; label: string }>> = 
   audio: { anyOf: ['elevenlabs'], label: 'elevenlabs' },
   motion: { anyOf: ['gemini', 'openai'], label: 'gemini/openai' },
   lora: { anyOf: ['fal'], label: 'fal' },
-  deepfake: { anyOf: ['yapper'], label: 'yapper' },
+  deepfake: { anyOf: ['yapper', 'muapi'], label: 'yapper/muapi' },
   pull: { anyOf: ['chatrealty'], label: 'chatrealty' }
 }
 
@@ -763,43 +763,169 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
   )
 }
 
-function DeepfakeScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
+/**
+ * Staged, per docs/ui/node-enrichment-strategy.md's flagship build order: a
+ * Reference person (trained identity + ElevenLabs voice, paired in Settings ›
+ * Trained styles) speaks a script — Stage 1 renders the speech directly via
+ * ElevenLabs (each stage its own visible node, same pattern as the Motion
+ * graphics wizard), Stage 2 drives a source video/photo with it through
+ * whichever of Yapper/muapi are connected, restricted with `connectorIds` so
+ * the agent can chain an upload tool into a lip-sync/face-swap tool without
+ * opening every installed connector.
+ */
+function DeepfakeScreen(props: { connectors: ConnectorView[]; styles: TrainedStyle[] }): React.JSX.Element {
+  const nodes = useStudio((s) => s.nodes)
+  const addNode = useStudio((s) => s.addNode)
   const generateMedia = useStudio((s) => s.generateMedia)
-  const [prompt, setPrompt] = useState('')
-  const [resultId, setResultId] = useState<string | null>(null)
-  const ready = connectorReady(props.connectors, 'yapper')
 
-  // Yapper's real API surface (verified): lip-sync/talking-avatar only — no
-  // face-swap process type exists, so no face-swap mode is offered.
+  const [personId, setPersonId] = useState('')
+  const [voiceName, setVoiceName] = useState('')
+  const [script, setScript] = useState('')
+  const [faceNodeId, setFaceNodeId] = useState('')
+  const [speechBusy, setSpeechBusy] = useState(false)
+  const [speechStatus, setSpeechStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const [speechSrc, setSpeechSrc] = useState<string | null>(null)
+  const [resultId, setResultId] = useState<string | null>(null)
+
+  const person = props.styles.find((s) => s.id === personId)
+  const elevenlabsReady = connectorReady(props.connectors, 'elevenlabs')
+  const faceConnectorIds = ['yapper', 'muapi'].filter((id) => connectorReady(props.connectors, id))
+  const ready = faceConnectorIds.length > 0
+  const effectiveVoice = voiceName.trim() || person?.voiceName || ''
+
+  const faceNodes = nodes.filter(
+    (n) =>
+      (n.data.mediaType === 'video' || n.data.mediaType === 'image') &&
+      n.data.status === 'ready' &&
+      n.data.src &&
+      !n.data.panel
+  )
+  const faceNode = faceNodes.find((n) => n.id === faceNodeId)
+
+  async function generateSpeech(): Promise<void> {
+    setSpeechBusy(true)
+    setSpeechStatus(null)
+    try {
+      const result = await bridge.audioTools.tts({ text: script, voiceName: effectiveVoice || undefined })
+      if (result?.ok && result.src) {
+        addNode({
+          label: labelFromPrompt(script, 'df-speech'),
+          mediaType: 'audio',
+          source: 'generate',
+          src: result.src,
+          startRendering: false
+        })
+        setSpeechSrc(result.src)
+        setSpeechStatus({ kind: 'ok', text: 'Speech generated — audio node added to the canvas.' })
+      } else {
+        setSpeechStatus({ kind: 'error', text: result?.error ?? 'Speech generation failed.' })
+      }
+    } finally {
+      setSpeechBusy(false)
+    }
+  }
+
+  function generateFace(): void {
+    const faceSrc = faceNode?.data.src
+    if (!speechSrc || !faceSrc) return
+    const chainNote =
+      faceConnectorIds.includes('muapi') && faceConnectorIds.includes('yapper')
+        ? 'Preferred route: muapi — call its own upload tool on the source media and the speech audio to get hosted URLs (if not already URLs), then muapi_edit_lipsync with those URLs. If the source is only a still photo (no source performance video), use muapi_enhance_face_swap in image mode instead — that swaps identity but will not move the mouth to match speech. Yapper is the fallback: import the same hosted URLs as Yapper assets (yapper_import_asset), then start a video-lipsync process with model "max".'
+        : faceConnectorIds.includes('muapi')
+          ? 'Use muapi: call its own upload tool on the source media and the speech audio to get hosted URLs, then muapi_edit_lipsync with those URLs (or muapi_enhance_face_swap in image mode if the source is only a still photo, no source video).'
+          : 'Use Yapper: if the source media and speech audio are not already Yapper assets, import each by URL with yapper_import_asset (they need to already be hosted somewhere reachable — this connector has no local-file-upload tool), then start a video-lipsync process with model "max".'
+
+    setResultId(
+      generateMedia({
+        label: labelFromPrompt(script, 'df'),
+        mediaType: 'video',
+        prompt: [
+          'Talking-avatar lip-sync: drive the source face/performance media with the already-generated speech audio — do not regenerate the speech.',
+          person ? `Reference person: "${person.name}".` : undefined,
+          `Script that was spoken: "${script.trim()}"`,
+          chainNote
+        ]
+          .filter(Boolean)
+          .join(' '),
+        connectorIds: faceConnectorIds,
+        sourceMediaPath: faceSrc,
+        referenceAudioPaths: [speechSrc]
+      })
+    )
+  }
+
   return (
     <>
-      <RunLine ok={ready} label={ready ? 'yapper · max lip-sync' : 'Yapper not connected'} cost="credits" />
+      <RunLine
+        ok={ready}
+        label={ready ? `${faceConnectorIds.join(' + ')} · lip-sync/face` : 'Yapper or muapi not connected'}
+        cost="credits"
+      />
       <p className="aside-help">
-        Talking-avatar / lip-sync via Yapper's Max model. Describe who talks (an asset in your
-        Yapper library, or one the agent imports by URL) and the script — the agent chains speech
-        generation and lip-sync.
+        Staged talking-avatar: pick a Reference person (identity + voice, paired in Settings ›
+        Trained styles), write the script, generate the speech, then drive a source video or photo
+        with it.
       </p>
+
+      {props.styles.length > 0 && (
+        <select
+          className="cr-input create-select"
+          value={personId}
+          onChange={(e) => setPersonId(e.target.value)}
+        >
+          <option value="">Reference person: none (type a voice name below)</option>
+          {props.styles.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+              {s.voiceName ? ` · voice: ${s.voiceName}` : ' · no voice yet'}
+            </option>
+          ))}
+        </select>
+      )}
+      <input
+        className="cr-input create-select"
+        placeholder="ElevenLabs voice name (from the person above, or type one)"
+        value={voiceName}
+        onChange={(e) => setVoiceName(e.target.value)}
+      />
       <textarea
         className="prompt-area"
-        placeholder="Who talks, and the script they deliver…"
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
+        placeholder="The script they deliver…"
+        value={script}
+        onChange={(e) => setScript(e.target.value)}
       />
       <button
-        className="generate-btn"
-        disabled={!prompt.trim()}
-        onClick={() =>
-          setResultId(
-            generateMedia({
-              label: labelFromPrompt(prompt, 'df'),
-              mediaType: 'video',
-              prompt: `Talking-avatar lip-sync job (generate the speech audio first if needed, then lip-sync): ${prompt.trim()}`,
-              connectorId: 'yapper'
-            })
-          )
-        }
+        className="action-btn"
+        disabled={!elevenlabsReady || speechBusy || !script.trim()}
+        title={elevenlabsReady ? undefined : 'ElevenLabs not connected'}
+        onClick={() => void generateSpeech()}
       >
-        Generate via Yapper
+        {speechBusy ? 'Generating speech…' : '1 · Generate speech (ElevenLabs)'}
+      </button>
+      {speechStatus && (
+        <p className={`cr-msg ${speechStatus.kind === 'ok' ? 'done' : 'error'}`}>{speechStatus.text}</p>
+      )}
+
+      {faceNodes.length > 0 ? (
+        <select
+          className="cr-input create-select"
+          value={faceNodeId}
+          onChange={(e) => setFaceNodeId(e.target.value)}
+        >
+          <option value="">Face/performance media: pick a canvas node…</option>
+          {faceNodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              ({n.data.mediaType}) {n.data.label}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="aside-note">
+          No ready video/image node on the canvas yet — upload or generate one first.
+        </p>
+      )}
+      <button className="generate-btn" disabled={!ready || !speechSrc || !faceNode} onClick={generateFace}>
+        2 · Lip-sync / face
       </button>
       <ResultRow nodeId={resultId} />
     </>
@@ -951,7 +1077,7 @@ export function AsidePanel(): React.JSX.Element {
         {screen === 'audio' && <AudioScreen connectors={connectors} />}
         {screen === 'isolate' && <IsolateScreen />}
         {screen === 'lora' && <LoraScreen connectors={connectors} />}
-        {screen === 'deepfake' && <DeepfakeScreen connectors={connectors} />}
+        {screen === 'deepfake' && <DeepfakeScreen connectors={connectors} styles={styles} />}
         {screen === 'upload' && <UploadScreen done={home} />}
         {screen === 'link' && <LinkScreen done={home} />}
         {screen === 'motion' && <MotionGraphicsWizard />}

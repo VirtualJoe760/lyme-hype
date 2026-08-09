@@ -34,6 +34,7 @@ export const IPC = {
   loraTrain: 'lora:train',
   loraList: 'lora:list',
   loraDelete: 'lora:delete',
+  loraSetVoice: 'lora:set-voice',
 
   generateRun: 'generate:run',
 

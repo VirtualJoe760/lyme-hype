@@ -89,6 +89,7 @@ export interface Bridge {
     }): Promise<TrainStyleResult | null>
     list(): Promise<TrainedStyle[]>
     delete(id: string): Promise<void>
+    setVoice(id: string, voiceName: string): Promise<TrainedStyle | null>
   }
   generate: {
     run(params: GenerationParams): Promise<GenerationResult | null>
@@ -235,7 +236,8 @@ function createBrowserMock(): Bridge {
         error: 'Krea training runs in the Electron main process — unavailable in browser preview.'
       }),
       list: async () => [],
-      delete: async () => {}
+      delete: async () => {},
+      setVoice: async () => null
     },
     generate: {
       run: async (params) => ({

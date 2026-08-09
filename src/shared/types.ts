@@ -104,8 +104,13 @@ export interface GenerationParams {
   aspectRatio?: string
   durationSec?: number
   resolution?: string
-  /** Restrict to a single connector by id; omit to let the agent choose. */
+  /** Restrict to a single connector by id; omit to let the agent choose.
+   *  Superseded by `connectorIds` when both are set. */
   connectorId?: string
+  /** Restrict to a specific SET of connectors — lets the agent chain tools
+   *  across exactly those (e.g. muapi + yapper for Deepfake's upload-then-
+   *  lipsync handoff) without opening every installed connector. */
+  connectorIds?: string[]
   /** Nudge toward a specific model within a connector (e.g. "Midjourney" on
    *  muapi for production-tier image) — advisory, included in the prompt. */
   modelHint?: string
@@ -117,6 +122,13 @@ export interface GenerationParams {
   startFramePath?: string
   /** Frame conditioning for video: last frame (same as start = seamless loop). */
   endFramePath?: string
+  /** Local audio file(s) to hand the agent (e.g. Deepfake's generated speech
+   *  clip) — lyme-asset:// URLs or absolute paths, resolved main-side the
+   *  same way as referenceImagePaths. */
+  referenceAudioPaths?: string[]
+  /** The face/performance media to drive (Deepfake's source video or still
+   *  photo) — lyme-asset:// URL or absolute path, resolved main-side. */
+  sourceMediaPath?: string
 }
 
 export interface LocalToolResult {
@@ -152,6 +164,11 @@ export interface TrainedStyle {
   loraUrl?: string
   trainedAt: string
   referenceImageCount: number
+  /** ElevenLabs voice name paired with this identity — turns a plain trained
+   *  LoRA into a "Reference person" (likeness + voice in one record) that the
+   *  Deepfake tile can pick from. Matches elevenlabs-tools.ts's `voiceName`
+   *  param (the MCP tool takes voice_name, not an id). */
+  voiceName?: string
 }
 
 export interface TrainStyleResult {

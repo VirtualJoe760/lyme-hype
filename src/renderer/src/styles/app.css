@@ -2527,6 +2527,17 @@
   color: var(--danger);
 }
 
+.settings-card-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.settings-card-voice .cr-input {
+  flex: 1;
+}
+
 .settings-add {
   max-width: 720px;
   margin-top: 12px;

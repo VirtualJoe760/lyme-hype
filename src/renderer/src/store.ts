@@ -255,10 +255,15 @@ interface StudioStore {
     nodeId?: string
     /** Restrict to one connector (tier routing); omit = agent picks freely. */
     connectorId?: string
+    /** Restrict to a specific set of connectors (e.g. Deepfake's muapi+yapper
+     *  upload-then-lipsync chain) — takes precedence over connectorId. */
+    connectorIds?: string[]
     modelHint?: string
     referenceImagePaths?: string[]
     startFramePath?: string
     endFramePath?: string
+    referenceAudioPaths?: string[]
+    sourceMediaPath?: string
     /** Returns the node id IMMEDIATELY (generation continues async) so Create
      *  screens can track the node's rendering → ready/error lifecycle. */
   }): string
@@ -1053,10 +1058,13 @@ export const useStudio = create<StudioStore>((set, get) => {
             durationSec: input.durationSec,
             resolution: input.resolution,
             connectorId: input.connectorId,
+            connectorIds: input.connectorIds,
             modelHint: input.modelHint,
             referenceImagePaths: input.referenceImagePaths,
             startFramePath: input.startFramePath,
-            endFramePath: input.endFramePath
+            endFramePath: input.endFramePath,
+            referenceAudioPaths: input.referenceAudioPaths,
+            sourceMediaPath: input.sourceMediaPath
           })
         } catch (error) {
           result = {

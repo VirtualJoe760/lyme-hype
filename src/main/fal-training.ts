@@ -89,6 +89,18 @@ export function deleteTrainedStyle(id: string): void {
   writeTrainedStyles(listTrainedStyles().filter((s) => s.id !== id))
 }
 
+/** Pairs an ElevenLabs voice with an existing trained identity — the
+ *  "Reference person" concept (docs/ui/node-enrichment-strategy.md). Pass an
+ *  empty/whitespace name to detach the voice. */
+export function setTrainedStyleVoice(id: string, voiceName: string): TrainedStyle | null {
+  const styles = listTrainedStyles()
+  const style = styles.find((s) => s.id === id)
+  if (!style) return null
+  style.voiceName = voiceName.trim() || undefined
+  writeTrainedStyles(styles)
+  return style
+}
+
 /* ---------- store-only ZIP writer (no dependency) ---------- */
 
 const CRC_TABLE = (() => {

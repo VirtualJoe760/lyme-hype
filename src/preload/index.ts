@@ -121,7 +121,9 @@ const api = {
       kind?: 'style' | 'subject'
     }): Promise<TrainStyleResult | null> => ipcRenderer.invoke(IPC.loraTrain, input),
     list: (): Promise<TrainedStyle[]> => ipcRenderer.invoke(IPC.loraList),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.loraDelete, id)
+    delete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.loraDelete, id),
+    setVoice: (id: string, voiceName: string): Promise<TrainedStyle | null> =>
+      ipcRenderer.invoke(IPC.loraSetVoice, id, voiceName)
   },
   generate: {
     run: (params: GenerationParams): Promise<GenerationResult | null> =>
