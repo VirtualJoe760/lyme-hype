@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { ConnectorDef, ConnectorTestResult, ConnectorView } from '@shared/types'
+import { hasChatRealtyToken } from './chatrealty'
 import { readSecretValue } from './credential-vault'
 import { httpAuthHeaders, probeHttpMcp } from './mcp-http'
 import { getOAuthAccessToken } from './mcp-oauth'
@@ -47,7 +48,11 @@ export function listConnectors(): ConnectorView[] {
   return readUserConnectors().map((def) => ({
     ...def,
     builtin: false,
-    hasCredential: readSecretValue(def.id) !== null
+    // ChatRealty's token may live in the dev .env.local fallback rather than
+    // the vault — that still counts as credentialed (it's what pulls use).
+    hasCredential:
+      readSecretValue(def.id) !== null ||
+      (def.id === 'chatrealty' && hasChatRealtyToken())
   }))
 }
 

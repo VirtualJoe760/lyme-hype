@@ -260,14 +260,30 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     const added = listConnectors().some((c) => c.id === 'selftest-conn' && !c.builtin)
     deleteConnector('selftest-conn')
     const removed = !listConnectors().some((c) => c.id === 'selftest-conn')
-    // Add-from-suggestion installs muapi (stdio), then clean it up.
-    const installedDef = addSuggestion('muapi')
-    const muapiInstalled = listConnectors().some((c) => c.id === 'muapi')
-    deleteConnector('muapi')
-    // Add-from-suggestion installs krea as an http connector, then clean it up.
-    const kreaDef = addSuggestion('krea')
-    const kreaHttp = kreaDef?.kind === 'http' && !!kreaDef.url
-    deleteConnector('krea')
+    // Add-from-suggestion round-trips — ONLY on ids not already installed:
+    // deleting a real install's def (while its key stayed in the vault) is
+    // exactly the split the reconcile path now heals, and this test used to
+    // cause it. An already-installed id passes by existence.
+    const preInstalled = new Set(installedConnectorIds())
+    let installedDefOk: boolean
+    let muapiInstalled: boolean
+    if (preInstalled.has('muapi')) {
+      installedDefOk = true
+      muapiInstalled = true
+    } else {
+      const installedDef = addSuggestion('muapi')
+      installedDefOk = installedDef?.id === 'muapi'
+      muapiInstalled = listConnectors().some((c) => c.id === 'muapi')
+      deleteConnector('muapi')
+    }
+    let kreaHttp: boolean
+    if (preInstalled.has('krea')) {
+      kreaHttp = listConnectors().some((c) => c.id === 'krea' && c.kind === 'http' && !!c.url)
+    } else {
+      const kreaDef = addSuggestion('krea')
+      kreaHttp = kreaDef?.kind === 'http' && !!kreaDef.url
+      deleteConnector('krea')
+    }
     if (
       hasMuapi &&
       hasKrea &&
@@ -277,15 +293,15 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
       kreaHttp &&
       added &&
       removed &&
-      installedDef?.id === 'muapi' &&
+      installedDefOk &&
       muapiInstalled
     ) {
       log(
-        `connectors: PASS (${suggestions.length} suggestions, all installable; stdio + http add-from-suggestion round-trip; all removable)`
+        `connectors: PASS (${suggestions.length} suggestions, all installable; add-from-suggestion verified without touching real installs)`
       )
     } else {
       fail(
-        `connectors: muapi=${hasMuapi} krea=${hasKrea} gemini=${hasGemini} yapper=${hasYapper} openai=${hasOpenai} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDef=${installedDef?.id} muapiInstalled=${muapiInstalled}`
+        `connectors: muapi=${hasMuapi} krea=${hasKrea} gemini=${hasGemini} yapper=${hasYapper} openai=${hasOpenai} kreaHttp=${kreaHttp} added=${added} removed=${removed} installedDefOk=${installedDefOk} muapiInstalled=${muapiInstalled}`
       )
     }
   } catch (error) {

@@ -21,7 +21,7 @@ import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
 import { deleteConnector, installedConnectorIds, listConnectors, saveConnector, testConnector } from './connectors-store'
-import { addSuggestion, listSuggestions, openSuggestionKeyPage } from './connector-suggestions'
+import { addSuggestion, listSuggestions, openSuggestionKeyPage, reconcileInstalledConnectors } from './connector-suggestions'
 import { deleteSecret, listSecretReports } from './credential-vault'
 import {
   deleteModelProvider,
@@ -266,7 +266,13 @@ export function registerIpc(window: BrowserWindow): void {
     return pullListingPhotos(typeof query === 'string' ? query : '')
   })
 
-  ipcMain.handle(IPC.connectorsList, (e) => (isMainSender(e) ? listConnectors() : []))
+  ipcMain.handle(IPC.connectorsList, (e) => {
+    if (!isMainSender(e)) return []
+    // Heal any credential-without-def split before answering (see the
+    // reconcile function's comment for how that state arises).
+    reconcileInstalledConnectors()
+    return listConnectors()
+  })
   ipcMain.handle(IPC.connectorsSave, (e, def: ConnectorDef) => {
     if (!isMainSender(e)) return
     saveConnector(def)

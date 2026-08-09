@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, app, shell } from 'electron'
 import { registerAssetProtocol, registerAssetSchemePrivileges } from './asset-store'
+import { reconcileInstalledConnectors } from './connector-suggestions'
 import { registerIpc } from './ipc'
 import { runSelfTest } from './selftest'
 
@@ -76,6 +77,10 @@ function createMainWindow(): BrowserWindow {
 app.whenReady().then(() => {
   hardenNavigation()
   registerAssetProtocol()
+  // Boot-time heal so generation and direct tool calls see every connector
+  // whose credential exists, even if its def went missing (selftest cleanup
+  // used to delete real defs and leave the key).
+  reconcileInstalledConnectors()
 
   const mainWindow = createMainWindow()
   registerIpc(mainWindow)

@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { app, shell } from 'electron'
 import type { ConnectorDef, ConnectorSuggestion } from '@shared/types'
 import { CHATREALTY_CONNECTOR_ID, chatRealtyConnectorDef, hasChatRealtyToken } from './chatrealty'
-import { saveConnector } from './connectors-store'
+import { installedConnectorIds, saveConnector } from './connectors-store'
 import { readSecretValue } from './credential-vault'
 
 interface CatalogEntry {
@@ -179,6 +179,25 @@ function isInstalled(entry: CatalogEntry, installedIds: Set<string>): boolean {
   if (installedIds.has(entry.id)) return true
   if (entry.id === CHATREALTY_CONNECTOR_ID) return hasChatRealtyToken()
   return readSecretValue(entry.id) !== null
+}
+
+/**
+ * Self-heal the "credential exists but no connector def" split: a catalog
+ * tool whose key is in the vault (or ChatRealty's env-fallback token) but
+ * whose def is missing from connectors.json gets its template re-installed.
+ * The state arises when a def is deleted without its secret (the selftest's
+ * old add/delete round-trip did exactly this to real installs) or when a key
+ * predates the def — either way the suggestion tile said "✓ installed" while
+ * the Installed list, generation, and direct tool calls couldn't see it.
+ */
+export function reconcileInstalledConnectors(): void {
+  const installed = new Set(installedConnectorIds())
+  for (const entry of CATALOG) {
+    if (installed.has(entry.id) || !entry.available) continue
+    if (!isInstalled(entry, installed)) continue
+    const def = entry.template()
+    if (def) saveConnector(def)
+  }
 }
 
 export function listSuggestions(installedIds: string[]): ConnectorSuggestion[] {
