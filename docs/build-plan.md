@@ -128,11 +128,12 @@ Not started. Full spec: [ui/scripting-panel.md](ui/scripting-panel.md). A third 
 
 - **Done when:** see [ui/scripting-panel.md](ui/scripting-panel.md)'s own done-criteria.
 
-## Phase 12 — Resizable, collapsible panels
+## Phase 12 — Resizable, collapsible panels ✅ (built 2026-08-08)
 
-Not started. Full spec: [ui/layout-and-panels.md](ui/layout-and-panels.md). Drag-to-resize on the three panel boundaries (Sessions rail, aside, timeline height), collapse-on-overdrag, sizes persisted. Independent of Phase 10/11 — can be built in any order relative to them.
+Full spec: [ui/layout-and-panels.md](ui/layout-and-panels.md). Drag-to-resize on the three panel boundaries (Sessions rail, aside, timeline height), collapse-on-overdrag, sizes persisted.
 
-- **Done when:** see [ui/layout-and-panels.md](ui/layout-and-panels.md)'s own done-criteria.
+- [x] `PanelResizeHandle.tsx` (PlayView's proven pointer-drag shape), clamps per spec, collapse-on-overdrag firing the same toggle actions as the buttons, sizes in `PersistedState`. The Cut Room gained the collapse toggle it never had. Verified end-to-end in the browser preview (drag, clamps, collapse, reopen, restore).
+- **Done criteria met** — see the doc's own done-when note.
 
 ## Phase 13 — Create panel (aside redesign)
 

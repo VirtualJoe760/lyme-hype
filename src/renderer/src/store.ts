@@ -40,6 +40,14 @@ function pickSwatch(): number {
 /** Stub-generation latency so the Rendering… state is visible (real jobs land in Phase 4). */
 const STUB_RENDER_MS = 2500
 
+/** Panel size defaults + clamps (docs/ui/layout-and-panels.md). Timeline max is
+ *  a viewport fraction, so it's resolved at drag time, not stored here. */
+export const PANEL_SIZES = {
+  rail: { default: 224, min: 160, max: 400 },
+  aside: { default: 304, min: 220, max: 480 },
+  timeline: { default: 132, min: 80, maxViewportFraction: 0.45 }
+} as const
+
 interface AgentUiState {
   status: 'idle' | 'running' | 'ok' | 'error'
   transcript: string
@@ -61,6 +69,10 @@ interface StudioStore {
   nodes: MediaFlowNode[]
   railCollapsed: boolean
   asideCollapsed: boolean
+  timelineCollapsed: boolean
+  railWidth: number
+  asideWidth: number
+  timelineHeight: number
   settingsOpen: boolean
   settingsTab: SettingsTab
   theme: ThemeId
@@ -127,6 +139,8 @@ interface StudioStore {
 
   toggleRail(): void
   toggleAside(): void
+  toggleTimeline(): void
+  setPanelSize(panel: 'rail' | 'aside' | 'timeline', px: number): void
   openSettings(tab?: SettingsTab): void
   closeSettings(): void
   setSettingsTab(tab: SettingsTab): void
@@ -166,12 +180,22 @@ export const useStudio = create<StudioStore>((set, get) => {
     )
   }
 
+  function persistedSnapshot(): PersistedState {
+    const { activeSessionId, theme, railWidth, asideWidth, timelineHeight } = get()
+    return {
+      sessions: syncedSessions(),
+      activeSessionId,
+      theme,
+      railWidth,
+      asideWidth,
+      timelineHeight
+    }
+  }
+
   function persist(): void {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(() => {
-      const { activeSessionId, theme } = get()
-      const state: PersistedState = { sessions: syncedSessions(), activeSessionId, theme }
-      void bridge.sessions.save(state)
+      void bridge.sessions.save(persistedSnapshot())
     }, 500)
   }
 
@@ -224,6 +248,10 @@ export const useStudio = create<StudioStore>((set, get) => {
     nodes: [],
     railCollapsed: false,
     asideCollapsed: false,
+    timelineCollapsed: false,
+    railWidth: PANEL_SIZES.rail.default,
+    asideWidth: PANEL_SIZES.aside.default,
+    timelineHeight: PANEL_SIZES.timeline.default,
     settingsOpen: false,
     settingsTab: 'connectors',
     theme: 'lime-cut',
@@ -264,7 +292,10 @@ export const useStudio = create<StudioStore>((set, get) => {
         sessions,
         activeSessionId,
         nodes: active.nodes.map(toFlowNode),
-        theme
+        theme,
+        railWidth: persisted?.railWidth ?? PANEL_SIZES.rail.default,
+        asideWidth: persisted?.asideWidth ?? PANEL_SIZES.aside.default,
+        timelineHeight: persisted?.timelineHeight ?? PANEL_SIZES.timeline.default
       })
     },
 
@@ -689,6 +720,17 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({ asideCollapsed: !get().asideCollapsed })
     },
 
+    toggleTimeline() {
+      set({ timelineCollapsed: !get().timelineCollapsed })
+    },
+
+    setPanelSize(panel, px) {
+      if (panel === 'rail') set({ railWidth: px })
+      else if (panel === 'aside') set({ asideWidth: px })
+      else set({ timelineHeight: px })
+      persist()
+    },
+
     openSettings(tab) {
       set({ settingsOpen: true, ...(tab ? { settingsTab: tab } : {}) })
     },
@@ -781,11 +823,7 @@ export const useStudio = create<StudioStore>((set, get) => {
         clearTimeout(persistTimer)
         persistTimer = null
       }
-      const state: PersistedState = {
-        sessions: syncedSessions(),
-        activeSessionId: get().activeSessionId,
-        theme: get().theme
-      }
+      const state = persistedSnapshot()
       // Synchronous — this runs during beforeunload, when there's no time to
       // await. Falls back to async save under the browser-preview mock.
       if (bridge.isElectron) bridge.sessions.saveSync(state)

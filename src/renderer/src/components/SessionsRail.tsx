@@ -25,8 +25,13 @@ export function SessionsRail(): React.JSX.Element {
     setEditingId(null)
   }
 
+  const width = useStudio((s) => s.railWidth)
+
   return (
-    <div className={`side-panel rail${collapsed ? ' collapsed' : ''}`}>
+    <div
+      className={`side-panel rail${collapsed ? ' collapsed' : ''}`}
+      style={collapsed ? undefined : { width }}
+    >
       <div className="panel-head">
         <span>Sessions</span>
         <div className="btns">

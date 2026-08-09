@@ -13,6 +13,9 @@ export function CutRoom(): React.JSX.Element {
   const moveClip = useStudio((s) => s.moveClip)
   const exportTimeline = useStudio((s) => s.exportTimeline)
   const nodes = useStudio((s) => s.nodes)
+  const collapsed = useStudio((s) => s.timelineCollapsed)
+  const height = useStudio((s) => s.timelineHeight)
+  const toggleTimeline = useStudio((s) => s.toggleTimeline)
   const clips = session?.cutRoom ?? []
 
   const [exp, setExp] = useState<ExportState>({ status: 'idle' })
@@ -36,8 +39,18 @@ export function CutRoom(): React.JSX.Element {
   }
 
   return (
-    <div className="cutroom">
+    <div
+      className={`cutroom${collapsed ? ' collapsed' : ''}`}
+      style={collapsed ? undefined : { height }}
+    >
       <div className="head">
+        <button
+          className="panel-btn"
+          title={collapsed ? 'Expand timeline' : 'Collapse timeline'}
+          onClick={toggleTimeline}
+        >
+          {collapsed ? '⌃' : '⌄'}
+        </button>
         <span className="cut-title">Cut room — timeline</span>
         <span className="cut-spacer" />
         {exp.status === 'ok' && <span className="cut-status ok" title={exp.outPath}>Exported ✓</span>}

@@ -129,6 +129,11 @@ export interface PersistedState {
   sessions: Session[]
   activeSessionId: string | null
   theme?: ThemeId
+  /** Panel sizes are a workspace preference like theme, not session content —
+   *  global, restored across restarts (docs/ui/layout-and-panels.md). */
+  railWidth?: number
+  asideWidth?: number
+  timelineHeight?: number
 }
 
 export interface AgentStreamEvent {

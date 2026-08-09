@@ -1,6 +1,11 @@
 # Resizable, collapsible panels
 
-**Not built yet.** Every panel that currently has a fixed size gets a drag handle on its shared edge; dragging far enough toward zero collapses it, matching (and replacing, not just supplementing) the existing collapse-toggle-button behavior.
+**Built (2026-08-08).** Every panel that had a fixed size has a drag handle on its shared edge (`PanelResizeHandle.tsx`); dragging far enough toward zero collapses it, matching (and replacing, not just supplementing) the existing collapse-toggle-button behavior. Implementation calls made during the build, where this spec left room:
+
+- **The Cut Room gained a collapse toggle** (⌄/⌃ in its header) — it had neither resize nor collapse before, and collapse-on-overdrag needs a way back open, so the timeline now has the same toggle-button affordance the rail and aside always had. Collapsed = header row only, Export still reachable.
+- **The collapse width animation (`transition: width`) was removed** from `.side-panel` — it fought live dragging (every pointermove would ease instead of track). Collapse/expand now snaps; an animation could come back scoped to a non-drag class if it's missed.
+- **Handles disappear while their panel is collapsed** (a collapsed panel has no edge worth grabbing — reopening is the toggle button's job, as decided below).
+- **Live drag updates go through the store** (same as PlayView's trim handles writing `setTrim` per move) rather than a CSS-variable fast path — three panels re-rendering at pointermove rate is well within budget, and one state path is simpler than two.
 
 ## What's fixed-size today
 
@@ -32,4 +37,4 @@ Panel sizes are a workspace preference, not session content — global, like `th
 
 ## Done when
 
-Every one of the three handles can be dragged to resize, overdragging toward zero collapses the panel the same way clicking its toggle button does, and the resulting sizes survive an app restart.
+Every one of the three handles can be dragged to resize, overdragging toward zero collapses the panel the same way clicking its toggle button does, and the resulting sizes survive an app restart. *(Met 2026-08-08 — drag, clamp (rail maxes at 400, etc.), collapse-on-overdrag, reopen-restores-size, and the timeline toggle all verified in the browser preview; sizes ride `PersistedState.railWidth/asideWidth/timelineHeight` through the same debounced persist + beforeunload flush as everything else.)*

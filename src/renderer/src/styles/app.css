@@ -159,13 +159,59 @@
   min-height: 0;
 }
 
+/* ---------- panel resize handles ---------- */
+
+.resize-handle {
+  flex: none;
+  position: relative;
+  z-index: 7;
+  touch-action: none;
+}
+
+.resize-handle.vertical {
+  width: 7px;
+  margin: 0 -3px;
+  cursor: col-resize;
+}
+
+.resize-handle.horizontal {
+  height: 7px;
+  margin: -3px 0;
+  cursor: row-resize;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.resize-handle.vertical::after {
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+}
+
+.resize-handle.horizontal::after {
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
+}
+
+.resize-handle:hover::after,
+.resize-handle.dragging::after {
+  background: var(--accent);
+}
+
 /* ---------- side panels (shared) ---------- */
 
 .side-panel {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  transition: width 0.15s ease;
 }
 
 .side-panel.rail {
@@ -1089,11 +1135,22 @@
 /* ---------- cut room ---------- */
 
 .cutroom {
-  height: 132px;
+  height: 132px; /* overridden by the resizable inline height */
   border-top: 1px solid var(--border);
   background: var(--panel);
   padding: 8px 12px;
   flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cutroom.collapsed {
+  height: auto;
+}
+
+.cutroom.collapsed .clips {
+  display: none;
 }
 
 .cutroom .head {
@@ -1131,7 +1188,11 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  overflow-y: auto;
   padding-bottom: 4px;
+  flex: 1;
+  min-height: 0;
+  align-content: flex-start;
 }
 
 .cut-clip {

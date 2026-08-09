@@ -109,8 +109,13 @@ export function AsidePanel(): React.JSX.Element {
     }
   }
 
+  const width = useStudio((s) => s.asideWidth)
+
   return (
-    <div className={`side-panel aside${collapsed ? ' collapsed' : ''}`}>
+    <div
+      className={`side-panel aside${collapsed ? ' collapsed' : ''}`}
+      style={collapsed ? undefined : { width }}
+    >
       <div className="panel-head">
         <div className="btns">
           <button className="panel-btn" title={collapsed ? 'Expand' : 'Collapse'} onClick={toggle}>
