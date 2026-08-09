@@ -445,9 +445,12 @@ export function CutRoom(): React.JSX.Element {
   const videoGhosts = Math.ceil(ghostDeficit / 2)
   const audioGhosts = Math.floor(ghostDeficit / 2)
   type RowItem = { kind: 'track'; track: TimelineTrack } | { kind: 'ghost'; type: 'video' | 'audio' }
+  // Video stacks UPWARD (a new track composites above the others, so its row
+  // belongs on top), audio stacks downward — ghosts follow the same growth
+  // directions: video ghosts above the video group, audio ghosts below audio.
   const rowItems: RowItem[] = [
-    ...videoTracks.map((t): RowItem => ({ kind: 'track', track: t })),
     ...Array.from({ length: videoGhosts }, (): RowItem => ({ kind: 'ghost', type: 'video' })),
+    ...videoTracks.map((t): RowItem => ({ kind: 'track', track: t })),
     ...audioTracks.map((t): RowItem => ({ kind: 'track', track: t })),
     ...Array.from({ length: audioGhosts }, (): RowItem => ({ kind: 'ghost', type: 'audio' }))
   ]
