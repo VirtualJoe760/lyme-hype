@@ -217,10 +217,13 @@ export function registerIpc(window: BrowserWindow): void {
     return cloneVoice(input)
   })
 
-  ipcMain.handle(IPC.loraTrain, (e, input: { name: string; imagePaths: string[]; steps?: number }) => {
-    if (!isMainSender(e)) return null
-    return trainStyle(input)
-  })
+  ipcMain.handle(
+    IPC.loraTrain,
+    (e, input: { name: string; imagePaths: string[]; steps?: number; triggerWord?: string }) => {
+      if (!isMainSender(e)) return null
+      return trainStyle(input)
+    }
+  )
   ipcMain.handle(IPC.loraList, (e) => (isMainSender(e) ? listTrainedStyles() : []))
   ipcMain.handle(IPC.loraDelete, (e, id: string) => {
     if (!isMainSender(e)) return

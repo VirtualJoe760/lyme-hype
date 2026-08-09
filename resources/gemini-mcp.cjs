@@ -23,10 +23,18 @@ const { tmpdir } = require('node:os')
 const { join, extname } = require('node:path')
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
-const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
-const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || 'veo-3.0-generate-001'
+// Model succession (verified against Google's deprecations page, 2026-08):
+// veo-3.0-generate-001 was SHUT DOWN 2026-06-30 — the veo-3.1 family is
+// current and carries lastFrame across all variants. gemini-2.5-flash-image
+// works until 2026-10-02; gemini-3.1-flash-image (Nano Banana 2) is the
+// recommended successor, so it's tried first with 2.5 as an automatic
+// fallback in case the GA id differs.
+const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image'
+const IMAGE_MODEL_FALLBACK = 'gemini-2.5-flash-image'
+const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || 'veo-3.1-generate-preview'
 const VIDEO_POLL_MS = 10_000
 const VIDEO_TIMEOUT_MS = 6 * 60_000
+const MAX_REFERENCE_IMAGES = 3
 
 function apiKey() {
   const key = process.env.GEMINI_API_KEY
@@ -85,13 +93,29 @@ async function generateImage(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
   // Reference-conditioned generation: image parts ride alongside the text
-  // (Nano Banana composes/edits from input images natively).
-  const refs = Array.isArray(args.reference_image_paths) ? args.reference_image_paths.filter(Boolean) : []
+  // (Nano Banana composes/edits from input images natively; the current guide
+  // says up to 3 input images work best — extras are dropped).
+  const refs = Array.isArray(args.reference_image_paths)
+    ? args.reference_image_paths.filter(Boolean).slice(0, MAX_REFERENCE_IMAGES)
+    : []
   const requestParts = refs.map(inlineImagePart)
   requestParts.push({ text: prompt })
-  const resp = await api(`models/${IMAGE_MODEL}:generateContent`, {
-    contents: [{ parts: requestParts }]
-  })
+  let resp
+  try {
+    resp = await api(`models/${IMAGE_MODEL}:generateContent`, {
+      contents: [{ parts: requestParts }]
+    })
+  } catch (err) {
+    // Model-id churn guard: if the preferred id isn't recognized on this
+    // account yet, fall back to the still-live legacy model.
+    if (/404|not found|is not supported/i.test(String(err && err.message)) && IMAGE_MODEL !== IMAGE_MODEL_FALLBACK) {
+      resp = await api(`models/${IMAGE_MODEL_FALLBACK}:generateContent`, {
+        contents: [{ parts: requestParts }]
+      })
+    } else {
+      throw err
+    }
+  }
   const parts =
     (resp.candidates && resp.candidates[0] && resp.candidates[0].content && resp.candidates[0].content.parts) || []
   const inline = parts.map((p) => p.inlineData || p.inline_data).find(Boolean)
@@ -109,13 +133,17 @@ async function generateVideo(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
   const instance = { prompt }
-  // Frame conditioning (Veo supports it natively): start frame drives
-  // image-to-video; adding a last frame yields a start→end interpolation —
-  // the Motion graphics reveal/loop mechanism.
+  // Frame conditioning (whole veo-3.1 family): instance.image is the start
+  // frame, instance.lastFrame the end frame — a start→end interpolation, the
+  // Motion graphics reveal/loop mechanism.
   if (args.start_frame_path) instance.image = frameImage(String(args.start_frame_path))
   if (args.end_frame_path) instance.lastFrame = frameImage(String(args.end_frame_path))
   const body = { instances: [instance] }
-  if (args.aspectRatio) body.parameters = { aspectRatio: String(args.aspectRatio) }
+  const parameters = {}
+  if (args.aspectRatio) parameters.aspectRatio = String(args.aspectRatio)
+  // lastFrame interpolation requires an 8-second duration per current docs.
+  if (instance.lastFrame) parameters.durationSeconds = 8
+  if (Object.keys(parameters).length > 0) body.parameters = parameters
   const op = await api(`models/${VIDEO_MODEL}:predictLongRunning`, body)
   if (!op.name) throw new Error('No operation returned for video generation')
 

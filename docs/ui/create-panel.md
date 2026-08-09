@@ -36,7 +36,7 @@ Prompt box, aspect ratio / duration / resolution chips, model select — the con
 ### Generate audio
 Per the original ask — this isn't one prompt box, it's a small set of ElevenLabs-backed jobs, most of which are direct tool calls (cheap, deterministic, no full agent turn needed) rather than agent-driven generation:
 
-- **Voice (text-to-speech)** — browse/preview the ElevenLabs voice library (`list_voices` / `search_voices` / `search_voice_library` — real tools on the `elevenlabs-mcp` package this connector already installs), pick one, type the line, get audio back. The voice browser is a direct tool call pattern, same shape as `ChatRealtyPull`'s deterministic `search_listings` call — not routed through the full agent-driven `generation.ts` path.
+- **Voice (text-to-speech)** — browse/preview the ElevenLabs voice library (`search_voices` / `search_voice_library` — verified against the official server's live schemas; there is NO `list_voices` tool, an empty `search_voices` is the listing call), pick one, type the line, get audio back. The voice browser is a direct tool call pattern, same shape as `ChatRealtyPull`'s deterministic `search_listings` call — not routed through the full agent-driven `generation.ts` path.
 - **Clone a voice** — "create their own audio LoRA," confirmed real and API-reachable: ElevenLabs' `create_voice_from_preview` / `create_voice_from_confirmed_audio` / `voice_clone` tools. Needs sample audio (upload or record) and produces a new voice usable in the picker above.
 - **Music** — `compose_music`, prompt-driven.
 - **Sound effects** — `text_to_sound_effects`, prompt-driven.

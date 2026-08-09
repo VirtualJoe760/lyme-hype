@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create panel v2 — concept</title>
+<style>
+  @font-face {
+    font-family: "Bitcount Prop Single";
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("fonts/BitcountPropSingle-variable.woff2") format("woff2");
+  }
+  :root {
+    /* Lime Cut (light) — matched to the running app */
+    --bg: #f2f7e6;
+    --panel: #fbfdf3;
+    --panel-raised: #ffffff;
+    --border: #d9e4c2;
+    --text: #333d28;
+    --text-soft: #7a8567;
+    --accent: #7cb518;
+    --accent-dim: #a4cf5e;
+    --accent-ink: #1d2a06;
+    --pink: #e5457a;
+    --danger: #d64545;
+    --ok: #4d9e43;
+    --mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, sans-serif;
+    --heading: "Bitcount Prop Single", var(--mono);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); padding: 3rem 1rem 6rem; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-family: var(--heading); font-weight: 600; color: var(--accent); font-size: 1.7rem; letter-spacing: .03em; }
+  .sub { color: var(--text-soft); font-size: .95rem; max-width: 62ch; margin: .6rem 0 2.2rem; }
+  h2 { font-family: var(--heading); font-size: 1.05rem; margin: 2.6rem 0 .4rem; letter-spacing: .04em; }
+  h2 .num { color: var(--pink); }
+  .principle { color: var(--text-soft); font-size: .9rem; max-width: 70ch; margin-bottom: 1.1rem; }
+  .principle strong { color: var(--text); }
+
+  .stage { display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: flex-start; }
+  .device {
+    width: 330px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px; box-shadow: 0 18px 40px -28px rgba(60,80,20,.45);
+    flex: none;
+  }
+  .device .dhead {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--mono); font-size: .62rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--text-soft); padding: 2px 4px 10px;
+  }
+  .annot { flex: 1; min-width: 240px; font-size: .88rem; color: var(--text-soft); }
+  .annot li { margin-bottom: .55rem; }
+  .annot strong { color: var(--text); }
+  .annot .tag { font-family: var(--mono); font-size: .68rem; color: var(--pink); }
+
+  /* --- shared mock atoms --- */
+  .backrow {
+    display: block; width: 100%; text-align: left; background: none; border: 1px solid var(--border);
+    border-radius: 7px; color: var(--text-soft); font-size: .78rem; padding: 7px 10px; margin-bottom: 10px; cursor: pointer;
+  }
+  .backrow:hover { color: var(--accent); border-color: var(--accent-dim); }
+  .runline {
+    display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: .62rem;
+    color: var(--text-soft); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 7px; padding: 6px 9px; margin-bottom: 10px;
+  }
+  .runline .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+  .runline .dot.warn { background: var(--danger); }
+  .runline .cost { margin-left: auto; color: var(--pink); }
+  .prompt {
+    width: 100%; min-height: 74px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel-raised); padding: 9px 10px; font-size: .8rem; color: var(--text);
+    font-family: var(--sans); resize: vertical;
+  }
+  .chips { display: flex; gap: 5px; margin: 9px 0; flex-wrap: wrap; }
+  .chip {
+    font-family: var(--mono); font-size: .62rem; border: 1px solid var(--border); border-radius: 6px;
+    padding: 3px 8px; color: var(--text-soft); background: none; cursor: pointer;
+  }
+  .chip.on { color: var(--accent-ink); background: var(--accent-dim); border-color: var(--accent-dim); }
+  .more {
+    font-family: var(--mono); font-size: .66rem; color: var(--text-soft); background: none; border: none;
+    cursor: pointer; padding: 4px 0; display: block;
+  }
+  .more:hover { color: var(--accent); }
+  .advanced { border-left: 2px solid var(--border); margin: 4px 0 8px 4px; padding: 4px 0 2px 10px; display: none; }
+  .advanced.open { display: block; }
+  .advanced label { display: flex; justify-content: space-between; align-items: center; font-size: .72rem; color: var(--text-soft); margin-bottom: 6px; }
+  .advanced select, .advanced input {
+    font-family: var(--mono); font-size: .66rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel-raised); color: var(--text); padding: 3px 6px; max-width: 150px;
+  }
+  .go {
+    display: block; width: 100%; background: var(--accent); color: var(--accent-ink); font-weight: 700;
+    border: none; border-radius: 8px; padding: 11px; font-size: .85rem; cursor: pointer; margin-top: 8px;
+  }
+  .go:hover { filter: brightness(1.05); }
+  .toast {
+    display: flex; align-items: center; gap: 8px; margin-top: 10px; background: var(--panel-raised);
+    border: 1px solid var(--accent-dim); border-radius: 8px; padding: 8px 10px; font-size: .74rem;
+  }
+  .toast .spin { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: pulse 1.3s infinite; flex: none; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .toast a { color: var(--accent); margin-left: auto; font-size: .7rem; text-decoration: none; font-family: var(--mono); }
+
+  /* --- home tiles --- */
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .tile {
+    background: var(--panel-raised); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; cursor: pointer; text-align: left; padding: 0; position: relative;
+  }
+  .tile:hover { border-color: var(--accent-dim); }
+  .thumb { aspect-ratio: 2/1; display: grid; place-items: center; font-size: 17px; color: rgba(255,255,255,.94); text-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .t1 { background: linear-gradient(135deg,#2b3a67,#5b8dd6); } .t2 { background: linear-gradient(135deg,#46237a,#a06cd5); }
+  .t3 { background: linear-gradient(135deg,#6b2d5c,#d05f8a); } .t4 { background: linear-gradient(135deg,#1f4d3d,#4aa87d); }
+  .t5 { background: linear-gradient(135deg,#703c1f,#d08b45); } .t6 { background: linear-gradient(135deg,#3d4a1f,#97b73e); }
+  .tlabel { padding: 6px 8px 7px; font-size: .72rem; display: flex; align-items: center; gap: 6px; }
+  .status { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-left: auto; }
+  .status.ok { background: var(--ok); } .status.off { background: #c9c9b4; } .status.warn { background: var(--danger); }
+  .tile .need {
+    position: absolute; top: 6px; right: 6px; font-family: var(--mono); font-size: .5rem; text-transform: uppercase;
+    letter-spacing: .05em; background: rgba(0,0,0,.45); color: #fff; border-radius: 4px; padding: 2px 5px;
+  }
+  .tile.dim .thumb { filter: saturate(.25) brightness(1.05); }
+
+  /* --- voice rows --- */
+  .voices { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 8px 0; }
+  .vrow { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-bottom: 1px solid var(--border); background: var(--panel-raised); }
+  .vrow:last-child { border-bottom: none; }
+  .vrow.sel { box-shadow: inset 2px 0 0 var(--accent); }
+  .vplay {
+    width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); background: none;
+    color: var(--text-soft); font-size: .55rem; cursor: pointer; flex: none; display: grid; place-items: center;
+  }
+  .vplay:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+  .vname { font-size: .76rem; }
+  .vtags { font-family: var(--mono); font-size: .58rem; color: var(--text-soft); margin-left: auto; }
+
+  /* --- wizard stepper --- */
+  .steps { display: flex; align-items: center; gap: 0; margin: 4px 0 12px; }
+  .step { display: flex; align-items: center; gap: 5px; }
+  .sdot {
+    width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-raised);
+    font-family: var(--mono); font-size: .55rem; display: grid; place-items: center; color: var(--text-soft); flex: none;
+  }
+  .step.done .sdot { background: var(--accent-dim); border-color: var(--accent-dim); color: var(--accent-ink); }
+  .step.now .sdot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .sbar { width: 14px; height: 1px; background: var(--border); flex: none; }
+  .slabel { font-family: var(--mono); font-size: .6rem; color: var(--text-soft); margin-bottom: 10px; }
+  .slabel b { color: var(--text); font-weight: 600; }
+  .refgrid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 8px; }
+  .ref { aspect-ratio: 1; border-radius: 7px; border: 2px solid var(--border); }
+  .ref.sel { border-color: var(--accent); }
+  .r1 { background: linear-gradient(160deg,#d05f8a,#46237a);} .r2 { background: linear-gradient(20deg,#4aa87d,#1f4d3d);}
+  .r3 { background: linear-gradient(90deg,#d08b45,#703c1f);}
+
+  .note { font-size: .72rem; color: var(--text-soft); margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Create panel — v2 concept</h1>
+  <p class="sub">One direction, four screens. The idea in a sentence: <b>every task answers three questions before you type anything — will this work, what will it run on, what will it cost — and every screen is the same skeleton</b>: back → run-line → one big input → smart-default chips → “More” for everything else → one button. Robust underneath, one obvious path on top.</p>
+
+  <h2><span class="num">01</span> · Home — tiles that tell you their state</h2>
+  <p class="principle">Same grid, but each tile carries a <strong>readiness dot</strong> and unready tiles say what they need. No more clicking Deepfake to find out Yapper was never connected. Tiles stay 3/2/1-responsive.</p>
+  <div class="stage">
+    <div class="device">
+      <div class="dhead"><span>› </span><span>create</span></div>
+      <div class="tiles">
+        <button class="tile"><div class="thumb t1">▶</div><div class="tlabel">Generate video <span class="status ok"></span></div></button>
+        <button class="tile"><div class="thumb t2">▦</div><div class="tlabel">Generate image <span class="status ok"></span></div></button>
+        <button class="tile"><div class="thumb t3">♪</div><div class="tlabel">Generate audio <span class="status ok"></span></div></button>
+        <button class="tile"><div class="thumb t4">✦</div><div class="tlabel">Motion graphics <span class="status ok"></span></div></button>
+        <button class="tile"><div class="thumb t5">⏏</div><div class="tlabel">Isolate audio <span class="status ok"></span></div></button>
+        <button class="tile dim"><div class="thumb t6">◈</div><span class="need">needs krea</span><div class="tlabel">Create a LoRA <span class="status off"></span></div></button>
+        <button class="tile dim"><div class="thumb t1">☺</div><span class="need">needs yapper</span><div class="tlabel">Deepfake <span class="status off"></span></div></button>
+        <button class="tile"><div class="thumb t2">↑</div><div class="tlabel">Upload <span class="status ok"></span></div></button>
+        <button class="tile"><div class="thumb t3">⛓</div><div class="tlabel">Link <span class="status ok"></span></div></button>
+        <button class="tile"><div class="thumb t4">⌂</div><div class="tlabel">Listing photos <span class="status ok"></span></div></button>
+      </div>
+    </div>
+    <ul class="annot">
+      <li><span class="tag">status dots</span> — green: connector present and credentialed. Grey + “needs X”: tile still opens, but its screen leads with a one-tap “Connect Krea →” that jumps straight to Settings › Connectors.</li>
+      <li><span class="tag">free tools stay green always</span> — Isolate audio, Upload, Link run on local ffmpeg/disk and never depend on a connector.</li>
+      <li><span class="tag">no agent card here</span> — the link-check diagnostic moves to Settings; Home is tasks only.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">02</span> · Task screen skeleton — the run-line</h2>
+  <p class="principle">Every generate screen opens with a <strong>run-line</strong>: which connector/model this will run on and the cost tier, resolved live from what's installed. The prompt is the hero. Everything else — resolution, duration, connector override — folds into <strong>More options</strong>. After Generate, the screen doesn't vanish: a progress row confirms the node landed on the canvas, with a jump link.</p>
+  <div class="stage">
+    <div class="device">
+      <div class="dhead"><span>‹ back</span><span>generate video</span></div>
+      <button class="backrow">← Back to Create</button>
+      <div class="runline"><span class="dot"></span> runs on muapi · seedance <span class="cost">$$ paid</span></div>
+      <textarea class="prompt">lantern spirit rising from a river of flames, chorus swell, wide shot</textarea>
+      <div class="chips">
+        <button class="chip on">9:16</button><button class="chip">1:1</button><button class="chip">16:9</button>
+        <button class="chip">6s</button><button class="chip on">12s</button><button class="chip">15s</button>
+      </div>
+      <button class="more" onclick="this.nextElementSibling.classList.toggle('open')">▸ More options</button>
+      <div class="advanced">
+        <label>Resolution <select><option>1080p</option><option>720p</option></select></label>
+        <label>Connector <select><option>muapi (default)</option><option>agent picks</option><option>gemini · veo</option></select></label>
+        <label>Model hint <input placeholder="e.g. Kling"/></label>
+      </div>
+      <button class="go">Generate</button>
+      <div class="toast"><span class="spin"></span> clip_lantern rendering on canvas <a href="#">view →</a></div>
+    </div>
+    <ul class="annot">
+      <li><span class="tag">run-line</span> — resolves the tier routing visibly: video defaults to muapi, production image says “midjourney via muapi · $$$”, storyboard image says “gemini · $”. The routing stops being invisible policy and becomes a label.</li>
+      <li><span class="tag">smart defaults up top</span> — only the two choices that change every time (aspect, length). Resolution, connector override, model hint live in More options.</li>
+      <li><span class="tag">result row</span> — Generate no longer silently returns home; the row tracks rendering → ready → failed (with the reason), and “view” pans the canvas to the node.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">03</span> · Generate audio — a real voice picker</h2>
+  <p class="principle">Voice rows parsed into a list — name, tags, a ▶ preview per row, tap to select. Search filters the user's ElevenLabs library (that's what <code>search_voices</code> actually searches). Music and SFX gain the two knobs their tools really have: length, and 0.5–5s duration.</p>
+  <div class="stage">
+    <div class="device">
+      <div class="dhead"><span>‹ back</span><span>generate audio · voice</span></div>
+      <button class="backrow">← Back to Create</button>
+      <div class="runline"><span class="dot"></span> elevenlabs · eleven_multilingual_v2 <span class="cost">$ per char</span></div>
+      <div class="chips">
+        <button class="chip on">Voice</button><button class="chip">Music</button><button class="chip">SFX</button><button class="chip">Clone</button>
+      </div>
+      <div class="voices">
+        <div class="vrow sel"><button class="vplay">▶</button><span class="vname">Rachel</span><span class="vtags">narration · calm</span></div>
+        <div class="vrow"><button class="vplay">▶</button><span class="vname">Adam</span><span class="vtags">deep · promo</span></div>
+        <div class="vrow"><button class="vplay">▶</button><span class="vname">Joey (cloned)</span><span class="vtags">◈ yours</span></div>
+      </div>
+      <textarea class="prompt" style="min-height:56px">Sixty seconds. One listing. Let's go.</textarea>
+      <button class="go">♪ Generate voiceover</button>
+    </div>
+    <ul class="annot">
+      <li><span class="tag">preview ▶</span> — plays a short sample before spending on the real line (needs a small preview step main-side; the tool surface supports it).</li>
+      <li><span class="tag">cloned voices float up</span> — a voice made in the Clone tab appears here tagged “yours”, closing the clone → use loop the spec promised.</li>
+      <li><span class="tag">honest fallback</span> — if the listing can't be parsed into rows, the raw text view stays as the degraded mode rather than a dead screen.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">04</span> · Motion graphics — a stepper you can walk</h2>
+  <p class="principle">The six stages become a visible dot-stepper: done stages are green and <strong>clickable to go back</strong>, the current stage is bold, future stages are grey. No dead ends, and you always know where you are in the workflow.</p>
+  <div class="stage">
+    <div class="device">
+      <div class="dhead"><span>‹ back</span><span>motion graphics</span></div>
+      <button class="backrow">← Back to Create</button>
+      <div class="steps">
+        <span class="step done"><span class="sdot">✓</span></span><span class="sbar"></span>
+        <span class="step done"><span class="sdot">✓</span></span><span class="sbar"></span>
+        <span class="step now"><span class="sdot">3</span></span><span class="sbar"></span>
+        <span class="step"><span class="sdot">4</span></span><span class="sbar"></span>
+        <span class="step"><span class="sdot">5</span></span><span class="sbar"></span>
+        <span class="step"><span class="sdot">6</span></span>
+      </div>
+      <div class="slabel">refs ✓ · prompts ✓ · <b>batch review</b> · final · animate · alpha</div>
+      <div class="refgrid">
+        <div class="ref r1"></div><div class="ref r2 sel"></div><div class="ref r3"></div>
+        <div class="ref r2"></div><div class="ref r3 sel"></div><div class="ref r1"></div>
+      </div>
+      <button class="go">→ Final pass with references</button>
+      <p class="note">Multi-select carries several favorites forward; the final pass runs once per pick.</p>
+    </div>
+    <ul class="annot">
+      <li><span class="tag">clickable history</span> — any green dot returns to that stage with its state intact; “iterate” stops being a special button and becomes plain navigation.</li>
+      <li><span class="tag">stage labels</span> — the mono strip names all six so the workflow teaches itself.</li>
+      <li><span class="tag">busy discipline</span> — while anything renders, the stepper locks with a pulse on the active dot.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">05</span> · What this costs to build</h2>
+  <p class="principle">Nothing here is architectural — the plumbing from this round already supports all of it. Status dots read the existing connectors list; the run-line is a label over routing that already happens; the voice rows need one structured parse with a raw-text fallback; the result row is a store field the generate flow already knows; the stepper is navigation state the wizard already tracks. This is a skin over working machinery, which is exactly where a redesign wants to be.</p>
+</div>
+</body>
+</html>

@@ -41,14 +41,25 @@ function mcpName(connectorId: string): string {
  * A connector that needs a key but has none is skipped rather than attached to
  * fail.
  */
+/** Tools that spend money or mutate credentials, shipped ALONGSIDE generation
+ *  tools on some connectors. The server-level allowlist would pre-authorize
+ *  them, so they're excluded by exact name via disallowedTools (which takes
+ *  precedence over allowedTools in the SDK). muapi's are known concretely;
+ *  the canUseTool regex backstop covers unknown servers' variants. */
+const DANGEROUS_TOOLS_BY_SERVER: Record<string, string[]> = {
+  muapi: ['muapi_account_topup', 'muapi_keys_create', 'muapi_keys_delete']
+}
+
 async function buildMcpServers(restrictId?: string): Promise<{
   servers: Record<string, McpServerConfig>
   allowedTools: string[]
+  disallowedTools: string[]
   attached: string[]
   skipped: string[]
 }> {
   const servers: Record<string, McpServerConfig> = {}
   const allowedTools: string[] = []
+  const disallowedTools: string[] = []
   const attached: string[] = []
   const skipped: string[] = []
 
@@ -80,10 +91,13 @@ async function buildMcpServers(restrictId?: string): Promise<{
     // `mcp__<server>` allows every tool from that server and nothing else — the
     // canUseTool backstop still hard-denies any non-MCP tool.
     allowedTools.push(`mcp__${name}`)
+    for (const tool of DANGEROUS_TOOLS_BY_SERVER[def.id] ?? []) {
+      disallowedTools.push(`mcp__${name}__${tool}`)
+    }
     attached.push(def.id)
   }
 
-  return { servers, allowedTools, attached, skipped }
+  return { servers, allowedTools, disallowedTools, attached, skipped }
 }
 
 function llmAuthEnv(): { env: Record<string, string> | null; model: string | undefined } {
@@ -130,6 +144,7 @@ function buildPrompt(params: GenerationParams): string {
   }
   lines.push(
     'Use exactly one connected generation tool that produces this media type. Wait for it to finish.',
+    'If the tool returns a request/job id instead of a result (async services like muapi do), poll its matching result/status tool until the job completes and you have the final output URL or file.',
     'Then reply with a single line and nothing else: `RESULT_URL: <direct https URL>` for a URL result, `RESULT_FILE: <absolute local path>` if the tool returned a local file path, or `RESULT_ERROR: <short reason>`.'
   )
   return lines.join('\n')
@@ -161,7 +176,9 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     endFramePath: params.endFramePath ? (toDiskPath(params.endFramePath) ?? undefined) : undefined
   }
 
-  const { servers, allowedTools, attached, skipped } = await buildMcpServers(params.connectorId)
+  const { servers, allowedTools, disallowedTools, attached, skipped } = await buildMcpServers(
+    params.connectorId
+  )
   if (attached.length === 0) {
     return fail(
       params.connectorId
@@ -180,16 +197,27 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
   // the attached generation MCP tools — never a built-in (Bash/Write/etc.).
   // allowedTools pre-authorizes the MCP servers so they run without a prompt;
   // anything else reaches canUseTool and is denied. No bypassPermissions.
+  //
+  // Second backstop: some connectors expose tools that SPEND MONEY or mutate
+  // credentials alongside their generation tools (muapi ships account_topup —
+  // a Stripe checkout — plus keys_create/keys_delete). The server-level
+  // allowlist would pre-authorize those too, so deny them by name here.
+  const DENIED_TOOL_RE = /topup|top_up|checkout|payment|billing|purchase|keys_create|keys_delete|key_create|key_delete|delete_account/i
   const canUseTool = async (
     toolName: string,
     input: Record<string, unknown>
   ): Promise<
     | { behavior: 'allow'; updatedInput: Record<string, unknown> }
     | { behavior: 'deny'; message: string }
-  > =>
-    toolName.startsWith('mcp__')
-      ? { behavior: 'allow', updatedInput: input }
-      : { behavior: 'deny', message: `Blocked non-generation tool: ${toolName}` }
+  > => {
+    if (!toolName.startsWith('mcp__')) {
+      return { behavior: 'deny', message: `Blocked non-generation tool: ${toolName}` }
+    }
+    if (DENIED_TOOL_RE.test(toolName)) {
+      return { behavior: 'deny', message: `Blocked spend/credential tool: ${toolName}` }
+    }
+    return { behavior: 'allow', updatedInput: input }
+  }
 
   try {
     const { query } = await loadSdk()
@@ -200,6 +228,7 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
         maxTurns: 12,
         maxBudgetUsd: ORCHESTRATION_BUDGET_USD,
         allowedTools,
+        disallowedTools,
         canUseTool,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         mcpServers: servers as any,

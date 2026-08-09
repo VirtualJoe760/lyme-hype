@@ -22,7 +22,10 @@ const { tmpdir } = require('node:os')
 const { join, extname, basename } = require('node:path')
 
 const API_BASE = 'https://api.openai.com/v1'
-const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1'
+// gpt-image-2 is the current flagship (gpt-image-1 is deprecated with a
+// Dec 2026 shutdown); it supports the same generations + edits-with-references
+// flow and these sizes remain valid (arbitrary WIDTHxHEIGHT in multiples of 16).
+const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2'
 const SIZES = ['1024x1024', '1024x1536', '1536x1024', 'auto']
 
 function apiKey() {

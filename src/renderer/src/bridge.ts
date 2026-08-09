@@ -78,7 +78,12 @@ export interface Bridge {
     clone(input: { name: string; filePaths: string[] }): Promise<AudioToolResult | null>
   }
   lora: {
-    train(input: { name: string; imagePaths: string[]; steps?: number }): Promise<TrainStyleResult | null>
+    train(input: {
+      name: string
+      imagePaths: string[]
+      steps?: number
+      triggerWord?: string
+    }): Promise<TrainStyleResult | null>
     list(): Promise<TrainedStyle[]>
     delete(id: string): Promise<void>
   }

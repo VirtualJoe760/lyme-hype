@@ -101,7 +101,7 @@ const CATALOG: CatalogEntry[] = [
     category: 'video',
     keyPageUrl: 'https://fal.ai/dashboard/keys',
     available: true,
-    note: 'Remote http MCP. Add, set your key, then Test — fal may expect an "Authorization: Key <k>" header; adjust if Test 401s.',
+    note: 'Remote http MCP (verified: plain Bearer auth). Add, set your key, then Test.',
     template: () => ({
       id: 'fal',
       name: 'fal',

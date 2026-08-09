@@ -5,21 +5,30 @@ import { readSecretValue } from './credential-vault'
 
 /**
  * Krea LoRA training client — a deliberate one-off REST exception to the
- * everything-through-MCP model: training is confirmed NOT reachable through
- * Krea's MCP server (docs/connectors/catalog.md), so this posts to the
- * documented endpoint directly. Submit → job id → poll. $0.003/step,
- * 100-step minimum.
+ * everything-through-MCP model: Krea's hosted MCP documents exactly seven
+ * tools (list_models, get_model_schema, generate, execute_node_app, get_job,
+ * cancel_job, get_upload_url) and training is not among them.
  *
- * The exact request/response schema hasn't been exercised against a live
- * token (that class of live-spend verification is joint-session work, same as
- * generation calls) — so every non-2xx response surfaces its body verbatim
- * instead of being reinterpreted, and the poller accepts any {status}-shaped
- * reply.
+ * Verified against Krea's API reference (2026-08):
+ * - POST https://api.krea.ai/styles/train — JSON body, NOT multipart:
+ *   { name, urls[], model?, type?, trigger_word?, max_train_steps? (1-2000) }
+ *   where urls entries are external URLs, base64 data URIs, or uploaded asset
+ *   URLs. Success returns { job_id, status, ... }.
+ * - Progress is polled at GET https://api.krea.ai/jobs/{id} (there is no
+ *   /styles/train/{id}); status enum includes backlogged/queued/scheduled/
+ *   processing/sampling/intermediate-complete/completed/failed/cancelled.
+ * - Pricing is NOT the once-claimed $0.003/step (that's fal.ai's hosted
+ *   krea-2-trainer) — Krea bills the workspace's API balance at an
+ *   unpublished per-job rate; a 402 surfaces when the balance is short.
+ * - A trained style is used at generation time via styles: [{ id, strength }].
+ *
+ * Live-token verification of the exact wire behavior stays joint-session
+ * work; every non-2xx body surfaces verbatim.
  */
 
-const TRAIN_URL = 'https://api.krea.ai/styles/train'
+const API_BASE = 'https://api.krea.ai'
 const POLL_INTERVAL_MS = 10_000
-const POLL_TIMEOUT_MS = 15 * 60_000
+const POLL_TIMEOUT_MS = 20 * 60_000
 
 export interface TrainedStyle {
   id: string
@@ -73,32 +82,67 @@ function authHeader(): string | null {
   return token.startsWith('Bearer ') ? token : `Bearer ${token}`
 }
 
-async function pollJob(jobId: string, auth: string): Promise<{ done: boolean; error?: string }> {
+/** Local training images become uploaded assets (POST /assets, multipart) so
+ *  the train call's urls[] can reference them; a failed upload falls back to a
+ *  base64 data URI, which the train endpoint also documents accepting. */
+async function toTrainUrl(path: string, auth: string): Promise<string> {
+  const mime = IMG_MIME[extname(path).toLowerCase()] ?? 'image/png'
+  const bytes = readFileSync(path)
+  try {
+    const form = new FormData()
+    form.append('file', new Blob([bytes], { type: mime }), basename(path))
+    const res = await net.fetch(`${API_BASE}/assets`, {
+      method: 'POST',
+      headers: { Authorization: auth },
+      body: form
+    })
+    if (res.ok) {
+      const json = (await res.json()) as { url?: string; asset_url?: string; id?: string }
+      const url = json.url ?? json.asset_url
+      if (url) return url
+    }
+  } catch {
+    /* fall through to data URI */
+  }
+  return `data:${mime};base64,${bytes.toString('base64')}`
+}
+
+async function pollJob(jobId: string, auth: string): Promise<{ done: boolean; styleId?: string; error?: string }> {
   const deadline = Date.now() + POLL_TIMEOUT_MS
   let lastStatus = 'submitted'
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
-    const res = await net.fetch(`${TRAIN_URL}/${jobId}`, { headers: { Authorization: auth } })
+    const res = await net.fetch(`${API_BASE}/jobs/${jobId}`, { headers: { Authorization: auth } })
     const body = await res.text()
-    if (!res.ok) return { done: false, error: `Status check HTTP ${res.status}: ${body.slice(0, 300)}` }
+    if (!res.ok) return { done: false, error: `Job check HTTP ${res.status}: ${body.slice(0, 300)}` }
     try {
-      const json = JSON.parse(body) as { status?: string; error?: string }
+      const json = JSON.parse(body) as {
+        status?: string
+        error?: string
+        result?: { id?: string; style_id?: string } | null
+      }
       lastStatus = json.status ?? lastStatus
-      if (/completed|succeeded|ready/i.test(lastStatus)) return { done: true }
-      if (/failed|error|cancel/i.test(lastStatus)) {
+      if (/^completed$/i.test(lastStatus)) {
+        return { done: true, styleId: json.result?.style_id ?? json.result?.id }
+      }
+      if (/failed|cancel/i.test(lastStatus)) {
         return { done: false, error: json.error ?? `Training ${lastStatus}.` }
       }
     } catch {
       /* non-JSON poll reply — keep polling */
     }
   }
-  return { done: false, error: `Training still "${lastStatus}" after ${POLL_TIMEOUT_MS / 60000} minutes — check Krea's dashboard.` }
+  return {
+    done: false,
+    error: `Training still "${lastStatus}" after ${POLL_TIMEOUT_MS / 60000} minutes — check Krea's dashboard.`
+  }
 }
 
 export async function trainStyle(input: {
   name: string
   imagePaths: string[]
   steps?: number
+  triggerWord?: string
 }): Promise<TrainResult> {
   const auth = authHeader()
   if (!auth) {
@@ -107,26 +151,26 @@ export async function trainStyle(input: {
   if (!input.name.trim()) return { ok: false, error: 'Name the style first.' }
   if (input.imagePaths.length === 0) return { ok: false, error: 'Pick at least one training image.' }
 
-  const form = new FormData()
-  form.append('name', input.name.trim())
-  form.append('steps', String(Math.max(100, input.steps ?? 300)))
-  for (const p of input.imagePaths) {
-    const mime = IMG_MIME[extname(p).toLowerCase()] ?? 'image/png'
-    form.append('images', new Blob([readFileSync(p)], { type: mime }), basename(p))
-  }
-
   let jobId: string
   try {
-    const res = await net.fetch(TRAIN_URL, {
+    const urls: string[] = []
+    for (const p of input.imagePaths) urls.push(await toTrainUrl(p, auth))
+    const body: Record<string, unknown> = {
+      name: input.name.trim(),
+      urls,
+      max_train_steps: Math.min(2000, Math.max(1, input.steps ?? 300))
+    }
+    if (input.triggerWord?.trim()) body['trigger_word'] = input.triggerWord.trim()
+    const res = await net.fetch(`${API_BASE}/styles/train`, {
       method: 'POST',
-      headers: { Authorization: auth },
-      body: form
+      headers: { Authorization: auth, 'content-type': 'application/json' },
+      body: JSON.stringify(body)
     })
-    const body = await res.text()
-    if (!res.ok) return { ok: false, error: `Krea HTTP ${res.status}: ${body.slice(0, 300)}` }
-    const json = JSON.parse(body) as { id?: string; job_id?: string; style_id?: string }
-    const id = json.id ?? json.job_id ?? json.style_id
-    if (!id) return { ok: false, error: `No job id in Krea's reply: ${body.slice(0, 300)}` }
+    const text = await res.text()
+    if (!res.ok) return { ok: false, error: `Krea HTTP ${res.status}: ${text.slice(0, 300)}` }
+    const json = JSON.parse(text) as { job_id?: string; id?: string }
+    const id = json.job_id ?? json.id
+    if (!id) return { ok: false, error: `No job id in Krea's reply: ${text.slice(0, 300)}` }
     jobId = String(id)
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -136,7 +180,10 @@ export async function trainStyle(input: {
   if (!polled.done) return { ok: false, error: polled.error }
 
   const style: TrainedStyle = {
-    id: jobId,
+    // The style id (used at generation via styles: [{id, strength}]) comes
+    // from the completed job's result when present; the job id is the
+    // fallback handle.
+    id: polled.styleId ?? jobId,
     name: input.name.trim(),
     connectorId: 'krea',
     trainedAt: new Date().toISOString(),

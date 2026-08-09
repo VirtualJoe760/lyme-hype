@@ -463,6 +463,7 @@ function LoraScreen(): React.JSX.Element {
   const [name, setName] = useState('')
   const [files, setFiles] = useState<string[]>([])
   const [steps, setSteps] = useState('300')
+  const [triggerWord, setTriggerWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
@@ -470,7 +471,12 @@ function LoraScreen(): React.JSX.Element {
     setBusy(true)
     setStatus(null)
     try {
-      const result = await bridge.lora.train({ name, imagePaths: files, steps: parseInt(steps, 10) })
+      const result = await bridge.lora.train({
+        name,
+        imagePaths: files,
+        steps: parseInt(steps, 10),
+        triggerWord: triggerWord.trim() || undefined
+      })
       if (result?.ok && result.style) {
         setStatus({
           kind: 'ok',
@@ -489,14 +495,20 @@ function LoraScreen(): React.JSX.Element {
   return (
     <>
       <p className="aside-help">
-        Teach Krea a reusable style/subject from example images. $0.003 per step, 100-step minimum
-        (~$0.30; 1000 steps ≈ $3).
+        Teach Krea a reusable style/subject from example images. Billed to your Krea API balance
+        per job (Krea doesn't publish a per-step price); a short balance errors clearly.
       </p>
       <input
         className="cr-input create-select"
         placeholder="Style name"
         value={name}
         onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        className="cr-input create-select"
+        placeholder="Trigger word (optional — e.g. LYMESTYLE)"
+        value={triggerWord}
+        onChange={(e) => setTriggerWord(e.target.value)}
       />
       <button
         className="action-btn"
@@ -519,27 +531,23 @@ function LoraScreen(): React.JSX.Element {
 
 function DeepfakeScreen(props: { installedIds: string[]; done: () => void }): React.JSX.Element {
   const generateMedia = useStudio((s) => s.generateMedia)
-  const [mode, setMode] = useState<'lipsync' | 'faceswap'>('lipsync')
   const [prompt, setPrompt] = useState('')
   const yapperReady = props.installedIds.includes('yapper')
 
+  // Yapper's real API surface (verified against its OpenAPI + MCP docs) is
+  // lip-sync/talking-avatar generation: script → speech → video-lipsync over
+  // an asset in the user's Yapper library. There is NO face-swap process type
+  // at the API layer, so no face-swap mode is offered here.
   return (
     <>
-      <div className="tab-row">
-        <button className={mode === 'lipsync' ? 'active' : ''} onClick={() => setMode('lipsync')}>
-          Lip-sync
-        </button>
-        <button className={mode === 'faceswap' ? 'active' : ''} onClick={() => setMode('faceswap')}>
-          Face swap
-        </button>
-      </div>
+      <p className="aside-help">
+        Talking-avatar / lip-sync via Yapper's Max model. Describe who talks (an asset in your
+        Yapper library, or one the agent imports by URL) and the script they deliver — the agent
+        chains speech generation and lip-sync.
+      </p>
       <textarea
         className="prompt-area"
-        placeholder={
-          mode === 'lipsync'
-            ? 'Who talks, and the script they deliver…'
-            : 'Whose face, into which template/scene…'
-        }
+        placeholder="Who talks, and the script they deliver…"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
       />
@@ -550,7 +558,7 @@ function DeepfakeScreen(props: { installedIds: string[]; done: () => void }): Re
           void generateMedia({
             label: labelFromPrompt(prompt, 'df'),
             mediaType: 'video',
-            prompt: `${mode === 'lipsync' ? 'Lip-sync / talking avatar' : 'Face-swap template'} job: ${prompt.trim()}`,
+            prompt: `Talking-avatar lip-sync job (generate the speech audio first if needed, then lip-sync): ${prompt.trim()}`,
             // Specialty routing: likeness work goes to Yapper specifically,
             // never a general video model (catalog.md).
             connectorId: 'yapper'
