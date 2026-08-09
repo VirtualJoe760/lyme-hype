@@ -212,3 +212,8 @@ lyme-hype/
 - No comments explaining *what* code does — name things so the code reads on its own. Comments
   earn their place only for a non-obvious *why* (a workaround, a constraint, a rule this file
   states and the code has to satisfy).
+- **Buttons are components, not class-name recipes.** Use `src/renderer/src/components/ui/Button.tsx`
+  (`Button` with its variants, `StatusChip` for non-interactive state) instead of hand-picking
+  `conn-mini`/`generate-btn`/etc. classes; and never hardcode accent-ink hexes — use
+  `var(--accent-ink, …)` so all three themes stay correct. (Both rules exist because the
+  Connectors tab shipped an invisible clipped "added" span and 12 wrong-in-Zest inks.)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ModelProviderView } from '@shared/types'
 import { bridge } from '../../bridge'
 import { AgentCard } from '../AgentCard'
+import { Button } from '../ui/Button'
 
 const CLAUDE_API_KEY_CREDENTIAL_ID = 'anthropic-claude-api-key'
 const CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID = 'anthropic-claude-oauth-token'
@@ -135,17 +136,17 @@ export function ModelsTab(): React.JSX.Element {
             <div className="conn-actions">
               {p.kind === 'claude-default' ? (
                 <>
-                  <button className="conn-mini" onClick={() => void setClaudeOverride('oauthToken')}>
+                  <Button onClick={() => void setClaudeOverride('oauthToken')}>
                     Set setup-token
-                  </button>
-                  <button className="conn-mini" onClick={() => void setClaudeOverride('apiKey')}>
+                  </Button>
+                  <Button onClick={() => void setClaudeOverride('apiKey')}>
                     Set API key
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button className="conn-mini" onClick={() => void setProviderKey(p)}>
+                <Button onClick={() => void setProviderKey(p)}>
                   {p.hasCredential ? 'Replace key' : 'Set key'}
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -153,9 +154,9 @@ export function ModelsTab(): React.JSX.Element {
       </div>
 
       {!adding ? (
-        <button className="action-btn settings-add" onClick={() => setAdding(true)}>
+        <Button variant="block" className="settings-add" onClick={() => setAdding(true)}>
           + Add model provider
-        </button>
+        </Button>
       ) : (
         <div className="add-connector">
           <div className="sheet-section-label">New Anthropic-compatible provider</div>
@@ -188,16 +189,16 @@ export function ModelsTab(): React.JSX.Element {
             (LM Studio 0.4.1+, LiteLLM, or claude-code-proxy) in front.
           </p>
           <div className="btn-row" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT) }}>
+            <Button variant="dialog" onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT) }}>
               Cancel
-            </button>
-            <button
-              className="btn primary"
+            </Button>
+            <Button
+              variant="dialog-primary"
               disabled={!draft.name.trim() || !draft.baseUrl.trim() || !draft.model.trim()}
               onClick={() => void saveDraft()}
             >
               Save + set key
-            </button>
+            </Button>
           </div>
         </div>
       )}

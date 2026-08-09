@@ -6,6 +6,7 @@ import type {
   ConnectorView
 } from '@shared/types'
 import { bridge } from '../../bridge'
+import { Button, StatusChip } from '../ui/Button'
 
 interface DraftConnector {
   name: string
@@ -223,19 +224,19 @@ export function ConnectorsTab(): React.JSX.Element {
             </div>
             <div className="conn-actions">
               {c.authType === 'oauth' ? (
-                <button className="conn-mini" disabled={busyId === c.id} onClick={() => void connectAccount(c.id)}>
+                <Button disabled={busyId === c.id} onClick={() => void connectAccount(c.id)}>
                   {c.hasCredential ? 'Reconnect account' : 'Connect account'}
-                </button>
+                </Button>
               ) : (
                 c.authType !== 'none' && (
-                  <button className="conn-mini" onClick={() => void setCredential(c)}>
+                  <Button onClick={() => void setCredential(c)}>
                     {c.hasCredential ? 'Replace credential' : 'Set credential'}
-                  </button>
+                  </Button>
                 )
               )}
-              <button className="conn-mini" disabled={busyId === c.id} onClick={() => void runTest(c.id)}>
+              <Button disabled={busyId === c.id} onClick={() => void runTest(c.id)}>
                 Test
-              </button>
+              </Button>
             </div>
             {testResult[c.id] && <div className="conn-test">{testResult[c.id]}</div>}
           </div>
@@ -265,21 +266,20 @@ export function ConnectorsTab(): React.JSX.Element {
               <div className="settings-blurb">{s.blurb}</div>
             </div>
             <div className="tile-actions">
-              <button
-                className="conn-mini"
+              <Button
                 title={`Open ${s.name}'s setup page`}
                 onClick={() => void bridge.connectors.openKeyPage(s.id)}
               >
                 ↗ Setup page
-              </button>
+              </Button>
               {s.installed ? (
-                <span className="tile-status">added</span>
+                <StatusChip kind="ok">✓ Added</StatusChip>
               ) : s.available ? (
-                <button className="conn-mini primary-mini" onClick={() => void addSuggestion(s)}>
+                <Button variant="mini-primary" onClick={() => void addSuggestion(s)}>
                   + Add
-                </button>
+                </Button>
               ) : (
-                <span className="tile-status" title={s.note}>coming</span>
+                <StatusChip title={s.note}>coming</StatusChip>
               )}
             </div>
           </div>
@@ -288,9 +288,9 @@ export function ConnectorsTab(): React.JSX.Element {
 
       <div className="sheet-section-label" style={{ marginTop: 20 }}>Custom</div>
       {!adding ? (
-        <button className="action-btn settings-add" onClick={() => setAdding(true)}>
+        <Button variant="block" className="settings-add" onClick={() => setAdding(true)}>
           + Add custom connector
-        </button>
+        </Button>
       ) : (
         <div className="add-connector">
           <div className="sheet-section-label">New connector</div>
@@ -369,13 +369,13 @@ export function ConnectorsTab(): React.JSX.Element {
             </>
           )}
           <div className="btn-row" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT) }}>
+            <Button variant="dialog" onClick={() => { setAdding(false); setDraft(EMPTY_DRAFT) }}>
               Cancel
-            </button>
-            <button className="btn primary" disabled={!draft.name.trim()} onClick={() => void saveDraft()}>
+            </Button>
+            <Button variant="dialog-primary" disabled={!draft.name.trim()} onClick={() => void saveDraft()}>
               Save
               {draft.authType === 'oauth' ? ' + connect account' : draft.authType !== 'none' ? ' + set credential' : ''}
-            </button>
+            </Button>
           </div>
         </div>
       )}

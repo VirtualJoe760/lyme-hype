@@ -153,7 +153,7 @@
 }
 
 .pill.mode {
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   background: var(--accent);
   border-color: var(--accent);
   font-weight: 600;
@@ -612,7 +612,7 @@
 
 .media-node .src-badge.generate {
   background: var(--accent-dim);
-  color: #0f1403;
+  color: var(--accent-ink, #0f1403);
 }
 
 .media-node .src-badge.link {
@@ -636,13 +636,13 @@
 }
 
 .media-node .send-btn:hover {
-  color: #0f1403;
+  color: var(--accent-ink, #0f1403);
   background: var(--accent);
   border-color: var(--accent);
 }
 
 .media-node .send-btn.sent {
-  color: #0f1403;
+  color: var(--accent-ink, #0f1403);
   background: var(--accent-dim);
   border-color: var(--accent-dim);
   cursor: default;
@@ -950,7 +950,7 @@
 
 .scripting-msg.user .scripting-bubble {
   background: var(--accent);
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   border-bottom-right-radius: 3px;
 }
 
@@ -1660,7 +1660,7 @@
   padding: 10px;
   border-radius: 8px;
   background: var(--accent);
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   font-weight: 700;
   font-size: 13px;
 }
@@ -1850,7 +1850,7 @@
 
 .agent-card .ping-btn:hover {
   background: var(--accent);
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
 }
 
 .agent-card .ping-btn:disabled {
@@ -2385,7 +2385,7 @@
 .dialog .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   font-weight: 700;
 }
 
@@ -2593,7 +2593,7 @@
 }
 
 .active-tag {
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -2738,7 +2738,7 @@
   font-size: 8.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   background: var(--accent);
   border-radius: 4px;
   padding: 1px 5px;
@@ -2764,16 +2764,35 @@
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px 12px;
+  min-width: 0;
 }
 
-.tile-status {
+.tile-actions > * {
+  flex: none;
+}
+
+/* Visible state chip — replaces the bare tile-status text span that nearly
+ * vanished (and clipped) in dark themes. */
+.status-chip {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.status-chip.ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
 }
 
 .conn-mini.primary-mini {
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
   background: var(--accent);
   border-color: var(--accent);
   font-weight: 600;
@@ -2781,7 +2800,7 @@
 
 .conn-mini.primary-mini:hover {
   filter: brightness(1.06);
-  color: #16240a;
+  color: var(--accent-ink, #16240a);
 }
 
 /* ---------- connections panel ---------- */
