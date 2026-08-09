@@ -40,6 +40,41 @@ function writeUserConnectors(defs: ConnectorDef[]): void {
   renameSync(tmp, file)
 }
 
+/**
+ * Step 1 of connector intake (docs/architecture/connector-intake.md): keep the tool
+ * schemas the probe already returns instead of dropping them. Nothing reads these
+ * yet — they exist so capability classification can be designed against real
+ * observed servers rather than a guess at what they publish.
+ *
+ * Best-effort by design: a connector must still test green if this write fails.
+ */
+function recordObservedTools(id: string, probe: McpProbeResult): void {
+  try {
+    const dir = join(app.getPath('userData'), 'connector-tools')
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, `${id}.json`)
+    const tmp = `${file}.tmp`
+    writeFileSync(
+      tmp,
+      JSON.stringify(
+        {
+          connectorId: id,
+          observedAt: new Date().toISOString(),
+          serverName: probe.serverInfo?.name,
+          serverVersion: probe.serverInfo?.version,
+          tools: probe.tools
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    )
+    renameSync(tmp, file)
+  } catch {
+    /* observation is diagnostic; never fail a connection test over it */
+  }
+}
+
 /** Installed connectors are exactly what the user added — from the suggested
  *  catalog or custom. All removable; each tagged with whether a credential is
  *  stored (never the value). Known tools live in the suggestions catalog, not
@@ -92,6 +127,7 @@ export async function testConnector(id: string): Promise<ConnectorTestResult> {
   }
 
   if (!probe.ok) return { ok: false, error: probe.error ?? 'Connection failed.' }
+  recordObservedTools(id, probe)
   return {
     ok: true,
     serverName: probe.serverInfo?.name,

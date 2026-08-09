@@ -149,6 +149,93 @@ Full spec + build-decision record: [ui/create-panel.md](ui/create-panel.md).
 - [x] The four architecture gaps closed: reference-image input (both wrappers), frame conditioning (Gemini/Veo wrapper), batch-and-compare UI, alpha-capable codec path (verified `alpha_mode=1` against the real binary).
 - **Done criteria structurally met** — live billed calls (real batch, real frame-conditioned render, real Krea training, live ElevenLabs/Yapper shapes) are joint-session work, per the doc's done-when note.
 
+---
+
+# Part two — the creative-node redesign (2026-08-09)
+
+Phases 1–13 built the studio. This part rebuilds how a creative node *works*: panel as workbench
+rather than form, models chosen by name, tools that re-frame what can run, artifacts that move
+between nodes. Concept + annotated mockups:
+[concepts/creative-node-redesign.html](concepts/creative-node-redesign.html). The registry it
+runs on: [`src/shared/model-catalog.ts`](../src/shared/model-catalog.ts).
+
+## Phase 14 — Decisions closed ✅ (2026-08-09)
+
+Answered to unblock the build; each is cheap to revisit, and the reasoning is recorded so
+revisiting is an argument rather than a coin flip.
+
+- [x] **Leaving without Finish → staged takes persist per node, for the session.** Discarding punishes a cheap, exploratory action, and a confirm dialog taxes every exit to protect the rare one. Staging lives in session state so it survives navigation and dies with the session.
+- [x] **Finish commits the take on screen.** "The artifact is the subject" — one preview, one commit. Committing all N would dump three rejected takes on the canvas every time.
+- [x] **Settings squares stay three: Style / Refs / Takes.** Seed is per-model (Krea 2 has it, Veo 3.1 explicitly does not), so it belongs in the manifest's parameter list where it can appear conditionally — not as a fixed square that lies on half the models.
+- [x] **Erase survives, renamed "remove bg".** One model and background-only, but it needs no mask and no prompt, so a one-click tool is genuinely the right shape. Object erase is a masked edit and lives in Inpaint. The honest label is the fix, not deletion.
+- [x] **Expand and Reframe become modes of the canvas editor.** All three are direct manipulation of the image at size; three surfaces for one interaction would be the clutter the redesign exists to remove.
+- [x] **A pill is a model.** One pill per model, connector implied and shown as secondary text. Mixing the two levels is the same category error as the old tier tabs.
+
+## Phase 15 — Merge `overnight/node-enrichment` first
+
+Not redesign work, but a hard prerequisite: the branch is **+6,977/−247 across 31 files** and
+rewrites `AsidePanel.tsx` by +878 lines — the exact file every phase below touches. Reconciling
+two rewrites of it afterwards costs more than reviewing it now.
+
+- [ ] Review the branch against [reports/node-enrichment-report.md](reports/node-enrichment-report.md); merge, cherry-pick, or drop.
+- [ ] Re-baseline the registry against whatever lands (the branch added muapi image-edit and fal i2v paths the registry should reflect).
+
+## Phase 16 — Node manifest + staging state
+
+The architectural precondition. Without it, every node is hand-written TSX and none of this scales.
+
+- [ ] **Node manifest type** — `{ id, title, media, tools, settings, parameters, commit }`. One renderer, many declared nodes. The four nodes in the concept's §05 differ only in those fields.
+- [ ] **Staging state** — generated takes live in panel state; the canvas only receives a node on Finish. Today `generateMedia` creates a canvas node immediately, so this is a real `store.ts` change, not a component one.
+- [ ] `commit` varies per node — image/video/audio land on the canvas; **a LoRA saves a person instead.** The manifest carries the target.
+- [ ] Wire `IMAGE_TOOL_CAPABILITY` + `reconcileModel()` (both built) into the manifest's tool list.
+
+## Phase 17 — Rebuild the image node on the shell
+
+Reference implementation for everything after it. Rows per the concept's §01.
+
+- [x] Model registry + capability keys + picker ordering — `model-catalog.ts`, 74 models.
+- [x] Tool→capability reconciliation with a stated handoff when the model must change.
+- [ ] Panel shell: preview → toolbar → settings squares → model pills → prompt → dimensions → Generate → Finish.
+- [ ] Take paging inside the preview (`‹ take 3 ›`), replacing the single result line.
+- [ ] Refuse-when-empty on the primary button — the Inpaint-with-only-muapi case (**zero** available models) is the one most likely to be missed.
+- [ ] Reference-image input on the tile (Gemini takes 10; `MotionGraphicsWizard` already ships the picker to copy).
+
+## Phase 18 — Artifact handoffs between nodes
+
+- [x] `ARTIFACT_HANDOFFS` + `handoffsFor()` — 12 routes, capability-gated.
+- [ ] "Continue in" pill row, appearing only once an artifact exists.
+- [ ] Target node opens pre-loaded with the artifact in the named role (`startFrame`, `trainingImage`, `faceSource`…).
+- [ ] Handing off implies committing — which is one answer to Phase 14's first question.
+
+## Phase 19 — The canvas editor takeover
+
+The largest single item, and the one with real UI risk.
+
+- [ ] `editNodeId` beside the existing `playNodeId`/`playFrom` — `App.tsx` already swaps the middle pane and hides the rail for Play view, so this reuses a proven path rather than adding a layout mode.
+- [ ] Mask brush on a canvas overlay: brush/erase/clear, size, zoom + pan, export as a mask image.
+- [ ] Mask upload into the generation call (`fal-ai/flux-krea-lora/inpainting` or `gpt-image-2`).
+- [ ] Panel keeps prompt + model pills + action; only the artifact surface moves.
+- [ ] Pending Phase 14: whether Expand (edge drag) and Reframe (crop handles) become modes of this same surface.
+
+## Phase 20 — Roll the shell out to the other nodes
+
+- [ ] **Generate audio** — the existing voice/music/sfx/clone switcher becomes the toolbar; each is a distinct capability and re-frames the model row. Closest to free of the four.
+- [ ] **Generate video** — start/end-frame settings squares, Extend tool (**only 4 models**), lipsync handoff.
+- [ ] **Create a LoRA** — preview holds the training set; Finish saves a person.
+- [ ] **Deepfake** — toolbar as a left-to-right chain (Speech → Lipsync → Face swap), preview carries stage state. Face swap is **one model, muapi** — same refuse-when-empty case.
+- [ ] Style local-only tools (audio Isolate, video Reframe) distinctly — no model, no row, no network, no spend.
+
+## Phase 21 — Connector intake, steps 2–5
+
+Spec: [architecture/connector-intake.md](architecture/connector-intake.md).
+
+- [x] Step 1 — retain `inputSchema` from `tools/list`; observed tools recorded to `userData/connector-tools/<id>.json`. *Built, not yet exercised against a live server.*
+- [ ] Step 2 — schema→capability classification, emitting proposals rather than live edits.
+- [ ] Step 3 — model harvest from reference docs, with `retiresOn`/`unavailable` populated.
+- [ ] Step 4 — residue review: tools matching no capability become new-capability candidates.
+- [ ] Step 5 — node proposals from clustered residue (needs Phase 16's manifest).
+- [ ] Default-deny on side-effecting verbs for newly observed tools — `DANGEROUS_TOOLS_BY_SERVER` is a hand-maintained blocklist and cannot cover unseen connectors.
+
 ## Cross-cutting, ongoing
 
 Update the relevant spec doc in the same change that implements it. Decisions made mid-build belong back in the `architecture/`, `connectors/`, or `ui/` docs, not just in code — that's how this project's planning has worked so far, and drifting from it is exactly how README's Status section went stale once already.

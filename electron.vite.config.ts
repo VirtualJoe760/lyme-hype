@@ -24,6 +24,9 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
+    // Honour an assigned PORT so the dev server is findable when 5173 is taken by
+    // another project; main reads ELECTRON_RENDERER_URL, so no port is hardcoded.
+    server: process.env.PORT ? { port: Number(process.env.PORT), strictPort: true } : undefined,
     resolve: {
       alias: {
         '@shared': resolve(__dirname, 'src/shared'),

@@ -8,6 +8,17 @@ import { runSelfTest } from './selftest'
 // Must run before app is ready — privileged custom schemes register at this point.
 registerAssetSchemePrivileges()
 
+// Without an explicit AppUserModelId, Windows attributes the running process to
+// electron.exe — the taskbar shows Electron's icon and won't group the window
+// with the Start-menu shortcut that launched it.
+const APP_USER_MODEL_ID = 'com.josephsardella.lymehype'
+
+function appIconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'icon.ico')
+    : join(__dirname, '../../resources/icon.ico')
+}
+
 /**
  * Lyme Hype's own documents (studio + secure modal) are the only navigation
  * targets any window may load. A dropped file/link, a stray window.open, or a
@@ -54,6 +65,7 @@ function createMainWindow(): BrowserWindow {
     minHeight: 700,
     show: false,
     frame: false,
+    icon: appIconPath(),
     backgroundColor: '#15171A',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -74,28 +86,44 @@ function createMainWindow(): BrowserWindow {
   return window
 }
 
-app.whenReady().then(() => {
-  hardenNavigation()
-  registerAssetProtocol()
-  // Boot-time heal so generation and direct tool calls see every connector
-  // whose credential exists, even if its def went missing (selftest cleanup
-  // used to delete real defs and leave the key).
-  reconcileInstalledConnectors()
+function focusExistingWindow(): void {
+  const [existing] = BrowserWindow.getAllWindows()
+  if (!existing) return
+  if (existing.isMinimized()) existing.restore()
+  existing.focus()
+}
 
-  const mainWindow = createMainWindow()
-  registerIpc(mainWindow)
+// Launching from the Start menu while the app is already open must raise the
+// running window, not boot a second studio against the same sessions store.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', focusExistingWindow)
 
-  if (process.env['LYME_SELFTEST']) {
-    mainWindow.webContents.once('did-finish-load', () => void runSelfTest(mainWindow))
-  }
+  app.whenReady().then(() => {
+    app.setAppUserModelId(APP_USER_MODEL_ID)
+    hardenNavigation()
+    registerAssetProtocol()
+    // Boot-time heal so generation and direct tool calls see every connector
+    // whose credential exists, even if its def went missing (selftest cleanup
+    // used to delete real defs and leave the key).
+    reconcileInstalledConnectors()
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      const win = createMainWindow()
-      registerIpc(win)
+    const mainWindow = createMainWindow()
+    registerIpc(mainWindow)
+
+    if (process.env['LYME_SELFTEST']) {
+      mainWindow.webContents.once('did-finish-load', () => void runSelfTest(mainWindow))
     }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        const win = createMainWindow()
+        registerIpc(win)
+      }
+    })
   })
-})
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

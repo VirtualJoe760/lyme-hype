@@ -162,7 +162,11 @@ export async function probeHttpMcp(
     const listId = 2
     const listed = await postRpc(spec, session, { jsonrpc: '2.0', id: listId, method: 'tools/list', params: {} }, listId)
     const toolList = (listed.message?.['result'] as { tools?: McpToolInfo[] } | undefined)?.tools ?? []
-    const tools: McpToolInfo[] = toolList.map((t) => ({ name: t.name, description: t.description }))
+    const tools: McpToolInfo[] = toolList.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema
+    }))
 
     let verify: McpProbeResult['verify']
     if (verifyTool) {

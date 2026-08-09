@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creative nodes — panel redesign concept</title>
+<style>
+  @font-face {
+    font-family: "Bitcount Prop Single";
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("fonts/BitcountPropSingle-variable.woff2") format("woff2");
+  }
+  :root {
+    --bg: #15171a;
+    --panel: #1d2023;
+    --panel-raised: #242830;
+    --border: #30343a;
+    --text: #edeff1;
+    --text-soft: #9aa0a8;
+    --accent: #c6f135;
+    --accent-dim: #7c9421;
+    --accent-ink: #16240a;
+    --pink: #e5457a;
+    --danger: #e2543a;
+    --ok: #4ade80;
+    --mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, sans-serif;
+    --heading: "Bitcount Prop Single", var(--mono);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); padding: 2.4rem 1rem 6rem; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-family: var(--heading); font-weight: 600; color: var(--accent); font-size: 1.7rem; letter-spacing: .03em; }
+  .sub { color: var(--text-soft); font-size: .95rem; max-width: 68ch; margin: .6rem 0 2rem; line-height: 1.55; }
+  h2 { font-family: var(--heading); font-size: 1.05rem; margin: 3rem 0 .4rem; letter-spacing: .04em; }
+  h2 .num { color: var(--pink); }
+  .principle { color: var(--text-soft); font-size: .9rem; max-width: 76ch; margin-bottom: 1.2rem; line-height: 1.6; }
+  .principle strong { color: var(--text); font-weight: 600; }
+  code { font-family: var(--mono); font-size: .82em; color: var(--accent); }
+
+  .stage { display: flex; gap: 1.6rem; flex-wrap: wrap; align-items: flex-start; }
+  .device { width: 330px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; flex: none; }
+  .annot { flex: 1; min-width: 280px; font-size: .88rem; color: var(--text-soft); line-height: 1.55; }
+  .annot li { margin-bottom: .7rem; }
+  .annot strong { color: var(--text); font-weight: 600; }
+  .annot .tag { font-family: var(--mono); font-size: .66rem; color: var(--pink); }
+  .annot .num2 { font-family: var(--mono); font-size: .66rem; color: var(--accent); }
+
+  /* top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+  .topbar .sq { width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 6px; color: var(--text-soft); display: grid; place-items: center; font-size: .72rem; }
+  .topbar .ttl { font-family: var(--heading); letter-spacing: .12em; font-size: .66rem; text-transform: uppercase; color: var(--text); }
+
+  /* preview */
+  .preview { position: relative; width: 100%; aspect-ratio: 9/16; max-height: 232px; margin: 0 auto 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); overflow: hidden; display: grid; place-items: center; }
+  .preview.filled { border-color: var(--accent-dim); background: linear-gradient(150deg,#2c3a17,#4a6b1e 45%,#1e2a12); }
+  .preview .empty { font-family: var(--mono); font-size: .62rem; color: var(--text-soft); text-align: center; line-height: 1.7; }
+  .preview .nav { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(10,12,8,.72); border-radius: 20px; padding: 3px 9px; font-family: var(--mono); font-size: .58rem; color: var(--text); }
+  .preview .badge { position: absolute; top: 6px; right: 6px; background: rgba(10,12,8,.72); border-radius: 5px; padding: 2px 6px; font-family: var(--mono); font-size: .56rem; color: var(--accent); }
+  .preview .maskhint { position: absolute; inset: 26% 18% 42% 22%; border: 1.5px dashed var(--accent); border-radius: 6px; background: rgba(198,241,53,.12); }
+
+  /* toolbar */
+  .toolbar { display: flex; gap: 4px; margin-bottom: 10px; }
+  .tool { flex: 1; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 7px; background: none; color: var(--text-soft); display: grid; place-items: center; }
+  .tool.on { border-color: var(--accent); color: var(--accent); background: rgba(198,241,53,.08); }
+  .tool.off { opacity: .34; }
+  .tool svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* model pills — horizontal scroll, sits directly above the prompt */
+  .models { position: relative; margin-bottom: 8px; }
+  .models .track { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .models .track::-webkit-scrollbar { display: none; }
+  .models .fade { position: absolute; top: 0; right: 0; width: 26px; height: 100%; pointer-events: none;
+    background: linear-gradient(90deg, rgba(29,32,35,0), var(--panel) 78%); }
+  .pill { flex: none; white-space: nowrap; font-family: var(--mono); font-size: .6rem; border: 1px solid var(--border);
+    border-radius: 20px; padding: 5px 11px; color: var(--text-soft); background: var(--bg); }
+  .pill.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .pill.dim { opacity: .38; border-style: dashed; }
+  .models .lbl { font-family: var(--mono); font-size: .52rem; letter-spacing: .1em; color: var(--text-soft); margin-bottom: 5px; }
+
+  /* settings squares */
+  .settings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
+  .set { aspect-ratio: 1; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; }
+  .set svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--text-soft); }
+  .set b { font-family: var(--mono); font-size: .5rem; color: var(--text-soft); font-weight: 400; letter-spacing: .04em; line-height: 1.2; }
+  .set em { font-family: var(--mono); font-size: .52rem; color: var(--text); font-style: normal; line-height: 1.15; }
+  .set.on { border-color: var(--accent-dim); }
+  .set.on em { color: var(--accent); }
+  .set.on svg { color: var(--accent); }
+  .set.bad { border-color: var(--danger); }
+  .set.bad em, .set.bad svg { color: var(--danger); }
+
+  .prompt { width: 100%; min-height: 62px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 8px 9px; font-size: .78rem; color: var(--text-soft); font-family: var(--sans); line-height: 1.45; margin-bottom: 9px; }
+
+  .dims { display: flex; align-items: flex-end; gap: 9px; margin-bottom: 10px; }
+  .shape { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .shape i { display: block; border: 1px solid var(--border); border-radius: 2px; }
+  .shape.on i { border: 1.5px solid var(--accent); }
+  .shape b { font-family: var(--mono); font-size: .54rem; color: var(--text-soft); font-weight: 400; }
+  .shape.on b { color: var(--accent); }
+  .dims .res { margin-left: auto; font-family: var(--mono); font-size: .58rem; border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; color: var(--text-soft); }
+
+  .go { display: block; width: 100%; background: var(--accent); color: var(--accent-ink); font-weight: 700; border: none; border-radius: 8px; padding: 10px; font-size: .82rem; text-align: center; }
+  .go .cost { font-weight: 400; opacity: .72; font-family: var(--mono); font-size: .64rem; }
+  .go.off { background: var(--panel-raised); color: var(--text-soft); border: 1px solid var(--border); font-weight: 500; }
+  .finish { display: block; width: 100%; margin-top: 6px; background: none; border: 1px solid var(--accent-dim); color: var(--accent); border-radius: 8px; padding: 9px; font-size: .78rem; text-align: center; }
+  .finish.off { border-color: var(--border); color: var(--text-soft); opacity: .5; }
+
+  .wave { display: flex; align-items: center; justify-content: center; gap: 2px; height: 100%; padding: 0 10px; }
+  .wave i { display: block; width: 3px; border-radius: 2px; background: var(--accent-dim); }
+  .wave i.hot { background: var(--accent); }
+  .imggrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; width: 100%; }
+  .imggrid i { display: block; aspect-ratio: 1; border-radius: 4px; background: var(--panel-raised); border: 1px solid var(--border); }
+  .imggrid i.on { border-color: var(--accent-dim); background: #2c3a17; }
+  .imggrid i.add { border-style: dashed; display: grid; place-items: center; color: var(--text-soft); font-style: normal; font-size: 13px; }
+  .cont { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .cont .lbl { font-family: var(--mono); font-size: .52rem; letter-spacing: .1em; color: var(--text-soft); margin-bottom: 5px; }
+
+  .appmock { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); overflow: hidden; display: grid;
+    grid-template-columns: 92px 1fr 220px; min-height: 330px; }
+  .appmock .col { padding: 9px; }
+  .appmock .rail { background: var(--bg); border-right: 1px solid var(--border); }
+  .appmock .mid { border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .appmock .aside { background: var(--bg); }
+  .appmock .colhead { font-family: var(--mono); font-size: .52rem; letter-spacing: .1em; color: var(--text-soft); margin-bottom: 8px; }
+  .appmock .canvasimg { flex: 1; border-radius: 8px; border: 1px solid var(--accent-dim);
+    background: linear-gradient(150deg,#2c3a17,#4a6b1e 45%,#1e2a12); position: relative; min-height: 210px; }
+  .appmock .canvasimg .mask { position: absolute; inset: 30% 26% 34% 22%; border: 2px dashed var(--accent);
+    border-radius: 8px; background: rgba(198,241,53,.16); }
+  .appmock .canvasimg .zoom { position: absolute; bottom: 8px; right: 8px; background: rgba(10,12,8,.75); border-radius: 20px;
+    padding: 3px 9px; font-family: var(--mono); font-size: .56rem; color: var(--text); }
+  .appmock .brushbar { display: flex; gap: 5px; align-items: center; }
+  .appmock .dim { opacity: .3; }
+  .appmock .ghost { border: 1px dashed var(--border); border-radius: 7px; height: 26px; margin-bottom: 5px; }
+
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: .7rem 1.6rem; margin-top: .8rem; }
+  .rule-item { font-size: .86rem; color: var(--text-soft); line-height: 1.5; border-left: 2px solid var(--accent-dim); padding-left: .8rem; border-radius: 0; }
+  .rule-item b { color: var(--text); display: block; font-size: .82rem; margin-bottom: .15rem; }
+
+  .switched { font-family: var(--mono); font-size: .58rem; color: var(--accent); background: rgba(198,241,53,.08);
+    border: 1px solid var(--accent-dim); border-radius: 6px; padding: 6px 8px; margin-bottom: 9px; line-height: 1.45; }
+  .norow { font-family: var(--mono); font-size: .58rem; color: var(--text-soft); border: 1px dashed var(--border);
+    border-radius: 6px; padding: 7px 8px; line-height: 1.45; }
+
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 1rem; }
+  .flow .device { width: auto; }
+  .caption { font-family: var(--mono); font-size: .62rem; color: var(--text-soft); margin: 8px 2px 0; letter-spacing: .04em; }
+  .caption b { color: var(--accent); font-weight: 400; }
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; margin-top: .6rem; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--mono); font-size: .62rem; letter-spacing: .08em; color: var(--text-soft); font-weight: 400; text-transform: uppercase; }
+  td { color: var(--text-soft); }
+  td strong { color: var(--text); font-weight: 600; }
+  .rule { border: none; border-top: 1px solid var(--border); margin: 3rem 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Creative nodes — panel redesign</h1>
+  <p class="sub">
+    Every creative node rebuilt as a workbench rather than a form. Dark Lime Cut, matched to
+    <code>theme.css</code>. Lime stays rationed: active tool, active setting, Generate, live dot.
+  </p>
+
+  <h2><span class="num">00.</span> The philosophy</h2>
+  <p class="principle">
+    These came out of redesigning the image panel, but none of them are about images. They are the
+    rules every creative node follows — §05 applies them to the rest.
+  </p>
+  <div class="rules">
+    <div class="rule-item"><b>The artifact is the subject</b>The thing you're making sits at the top at full size. The panel is a workbench, not a form that happens to output something.</div>
+    <div class="rule-item"><b>Tools act on the artifact</b>The toolbar edits what's in the preview. Dark until something exists to edit.</div>
+    <div class="rule-item"><b>The tool picks the capability</b>Which tool is lit decides which models can run — so the model row rebuilds when the tool changes.</div>
+    <div class="rule-item"><b>Models are pills, not a hierarchy</b>You pick "midjourney", never "muapi". Unreachable models stay visible and dim rather than hidden.</div>
+    <div class="rule-item"><b>One text area</b>Its meaning changes with the tool; a second box would mean the panel doesn't know what it's asking for.</div>
+    <div class="rule-item"><b>Settings are squares that show their value</b>The panel answers "what will this do" without opening anything.</div>
+    <div class="rule-item"><b>The primary button is a verb</b>It states the tool and the count. It refuses when the route can't run, instead of failing after the click.</div>
+    <div class="rule-item"><b>Finish commits</b>Generating is cheap and reversible; committing to the canvas is the deliberate act.</div>
+    <div class="rule-item"><b>Never lie</b>No control that does nothing, no button enabled over a broken route, no silent reroute. Every claim on screen is true or absent.</div>
+    <div class="rule-item"><b>No prices</b>They go stale, they nag, and they're not the decision being made here.</div>
+  </div>
+
+  <h2><span class="num">01.</span> The layout you specified</h2>
+  <p class="principle">
+    Eight rows, top to bottom, exactly as ordered. The big move is that <strong>the image is the subject of the
+    panel, not the output of a form</strong> — which means Generate stops being the last step and
+    <strong>Finish</strong> becomes the thing that commits.
+  </p>
+
+  <div class="stage">
+    <div class="device">
+      <div class="topbar">
+        <span class="sq">←</span>
+        <span class="ttl">Generate image</span>
+        <span class="sq">›</span>
+      </div>
+
+      <div class="preview filled">
+        <span class="badge">3 / 4</span>
+        <span class="nav">‹ &nbsp;take 3&nbsp; ›</span>
+      </div>
+
+      <div class="toolbar">
+        <span class="tool on" title="Inpaint"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="M13.5 6.5 17.5 10.5"/></svg></span>
+        <span class="tool" title="Expand"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></span>
+        <span class="tool" title="Erase"><svg viewBox="0 0 24 24"><path d="M4 16 12 8l6 6-6 6H6Z"/><path d="M10 20h10"/></svg></span>
+        <span class="tool" title="Upscale"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/><path d="M4 21h16"/></svg></span>
+        <span class="tool" title="Reframe"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/><path d="M3 7h14v14"/></svg></span>
+      </div>
+
+      <div class="settings">
+        <span class="set on">
+          <svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.6L20 10l-4.4 3.4L17 20l-5-3.2L7 20l1.4-6.6L4 10l5.6-1.4Z"/></svg>
+          <b>STYLE</b><em>joey-face</em>
+        </span>
+        <span class="set">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M21 8v11H9"/></svg>
+          <b>REFS</b><em>2</em>
+        </span>
+        <span class="set">
+          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg>
+          <b>TAKES</b><em>4</em>
+        </span>
+      </div>
+
+      <div class="models">
+        <div class="lbl">MODEL</div>
+        <div class="track">
+          <span class="pill on">krea 2</span>
+          <span class="pill">gemini</span>
+          <span class="pill">openai</span>
+          <span class="pill">midjourney</span>
+          <span class="pill">flux</span>
+          <span class="pill dim">seedream</span>
+          <span class="pill dim">nano banana</span>
+        </div>
+        <span class="fade"></span>
+      </div>
+
+      <div class="prompt">citrus-slice vinyl record spinning in fog, studio light</div>
+
+      <div class="dims">
+        <span class="shape on"><i style="width:15px;height:26px"></i><b>9:16</b></span>
+        <span class="shape"><i style="width:22px;height:22px"></i><b>1:1</b></span>
+        <span class="shape"><i style="width:30px;height:17px"></i><b>16:9</b></span>
+        <span class="res">1024 ×</span>
+      </div>
+
+      <div class="go">Generate 4</div>
+      <div class="finish">Finish → add to canvas</div>
+    </div>
+
+    <ul class="annot">
+      <li><span class="num2">1</span> <strong>Top bar</strong> — back, title, collapse. Unchanged.</li>
+      <li><span class="num2">2</span> <strong>Preview.</strong> Holds the working image at its real aspect. Takes page
+        through it in place <em>(‹ take 3 ›)</em> — this replaces the recents strip you cut, without adding a row.</li>
+      <li><span class="num2">3</span> <strong>Toolbar acts on the preview:</strong> inpaint, expand, erase, upscale,
+        reframe. Greyed until an image exists. All five map to real endpoints — see §03.</li>
+      <li><span class="num2">4</span> <strong>Settings as squares.</strong> Three, not a stack of selects. Each shows its
+        <em>current value</em>, so the panel answers "what will this do" without opening anything. Tap opens a small
+        popover.</li>
+      <li><span class="num2">5</span> <strong>Model pills, scrolling horizontally,</strong> directly above the prompt.
+        The row grows as connectors are added rather than forcing a redesign — and it puts the model next to the words
+        it will interpret, which is where the choice actually gets made.</li>
+      <li><span class="num2">6</span> <strong>One text area.</strong> You were right — the old mock had the prompt box
+        and a Route box reading as two.</li>
+      <li><span class="num2">7</span> <strong>Dimensions</strong> as proportion, with resolution parked at the right.</li>
+      <li><span class="num2">8</span> <strong>Generate</strong> carries the count.</li>
+      <li><span class="num2">9</span> <strong>Finish</strong> commits to the canvas and ends the session.</li>
+      <li style="margin-top:1.1rem"><span class="tag">HONESTY</span> <strong>The pill row is now the routing answer.</strong>
+        The lit pill <em>is</em> what will run — no status line needed. Unconnected models stay in the row, dashed and
+        dimmed, so the panel shows what you could reach rather than hiding it. That kills the dead tier tabs and the
+        live-but-broken Generate in one control.</li>
+      <li><span class="tag">NOTE</span> <strong>The tier idea is gone.</strong> "Storyboard vs Production" was a proxy
+        for model choice; with models named directly there's nothing left for it to mean.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">02.</span> The flow</h2>
+  <p class="principle">
+    The panel now has a beginning and an end. This is the real consequence of putting Finish at the bottom, and it is
+    the part I would want you to confirm before I build anything.
+  </p>
+  <div class="flow">
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Generate image</span><span class="sq">›</span></div>
+        <div class="preview"><span class="empty">nothing yet<br>describe it below</span></div>
+        <div class="toolbar">
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M4 16 12 8l6 6-6 6H6Z"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="track">
+            <span class="pill on">krea 2</span>
+            <span class="pill">gemini</span>
+            <span class="pill">openai</span>
+            <span class="pill">midjourney</span>
+            <span class="pill dim">seedream</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt" style="color:#5f666d">describe the image…</div>
+        <div class="go">Generate 4</div>
+        <div class="finish off">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>EMPTY</b> — tools dark, Finish dead</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Generate image</span><span class="sq">›</span></div>
+        <div class="preview filled"><span class="badge">3 / 4</span><span class="nav">‹ &nbsp;take 3&nbsp; ›</span></div>
+        <div class="toolbar">
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 16 12 8l6 6-6 6H6Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="track">
+            <span class="pill on">krea 2</span>
+            <span class="pill">gemini</span>
+            <span class="pill">openai</span>
+            <span class="pill">midjourney</span>
+            <span class="pill dim">seedream</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt">citrus-slice vinyl record spinning in fog, studio light</div>
+        <div class="go">Generate 4</div>
+        <div class="finish">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>GENERATED</b> — page takes, tools live</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Inpaint</span><span class="sq">›</span></div>
+        <div class="preview filled"><span class="maskhint"></span><span class="nav">brush 32 · clear</span></div>
+        <div class="toolbar">
+          <span class="tool on"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 16 12 8l6 6-6 6H6Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="track">
+            <span class="pill on">krea 2</span>
+            <span class="pill">gemini</span>
+            <span class="pill">openai</span>
+            <span class="pill">midjourney</span>
+            <span class="pill dim">seedream</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt">replace the label with a lime wedge</div>
+        <div class="go">Inpaint</div>
+        <div class="finish">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>EDITING</b> — same prompt box, verb changes</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Generate image</span><span class="sq">›</span></div>
+        <div class="preview filled"><span class="badge">on canvas</span></div>
+        <div class="toolbar">
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M4 16 12 8l6 6-6 6H6Z"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="track">
+            <span class="pill on">krea 2</span>
+            <span class="pill">gemini</span>
+            <span class="pill">openai</span>
+            <span class="pill">midjourney</span>
+            <span class="pill dim">seedream</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt" style="color:#5f666d">describe the next one…</div>
+        <div class="go">Generate 4</div>
+        <div class="finish off">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>FINISHED</b> — node lands, panel resets</p>
+    </div>
+  </div>
+
+  <h2><span class="num">03.</span> Every tool maps to something real</h2>
+  <p class="principle">
+    I checked <code>docs/connectors/reference/</code> before drawing the toolbar. None of these are invented.
+  </p>
+  <table>
+    <tr><th>Tool</th><th>Runs on</th><th>Reality check</th></tr>
+    <tr><td><strong>Inpaint</strong></td><td><code>fal-ai/flux-krea-lora/inpainting</code></td><td>Verified schema, and it takes <code>loras:[{path,scale}]</code> — so a trained style survives the edit.</td></tr>
+    <tr><td><strong>Expand</strong></td><td>same two models as Inpaint</td><td class="bad">Correction: <strong>no connector in the catalog exposes a dedicated outpaint endpoint.</strong> Expanding is a masked edit against a larger canvas, so it inherits inpainting's two-model limit.</td></tr>
+    <tr><td><strong>Erase</strong></td><td>muapi <code>muapi_enhance_bg_remove</code></td><td>Background removal only. Object erase is a masked edit and belongs to Inpaint.</td></tr>
+    <tr><td><strong>Upscale</strong></td><td>Krea <code>enhance/topaz/standard-enhance</code> (+ muapi, Yapper)</td><td>Faithful upscale up to 32×, face-enhance and denoise knobs. Six models across three connectors — the best-supported tool here.</td></tr>
+    <tr><td><strong>Reframe</strong></td><td class="bad">local ffmpeg — no model</td><td>A crop is a crop. Free, instant, offline, and it should never open a pill row at all.</td></tr>
+  </table>
+
+  <h2><span class="num">04.</span> Picking a tool re-frames the model row</h2>
+  <p class="principle">
+    The tool decides the capability; the capability decides the pills. Generating in Midjourney and then
+    reaching for Inpaint is the case that proves it — <strong>Midjourney cannot inpaint at all</strong>, so the row
+    has to rebuild and the panel has to say so rather than quietly rerouting your edit to another model.
+  </p>
+  <div class="flow">
+    <div>
+      <div class="device">
+        <div class="toolbar">
+          <span class="tool on"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 15l5-5 4 4 3-3 4 4"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 25 available</div>
+          <div class="track">
+            <span class="pill on">midjourney v8</span>
+            <span class="pill">nano banana 2</span>
+            <span class="pill">gpt-image-2</span>
+            <span class="pill">krea 2</span>
+            <span class="pill">flux krea lora</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="go">Generate 4</div>
+      </div>
+      <p class="caption"><b>GENERATE</b> — image-gen · every model</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="toolbar">
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 15l5-5 4 4 3-3 4 4"/></svg></span>
+          <span class="tool on"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 2 can inpaint</div>
+          <div class="track">
+            <span class="pill on">flux krea lora</span>
+            <span class="pill">gpt-image-2</span>
+          </div>
+        </div>
+        <div class="switched">
+          midjourney v8 can’t inpaint — switched to flux krea lora
+        </div>
+        <div class="go">Inpaint</div>
+      </div>
+      <p class="caption"><b>INPAINT</b> — row collapses, handoff stated</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="toolbar">
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 15l5-5 4 4 3-3 4 4"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool on"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 6 can upscale</div>
+          <div class="track">
+            <span class="pill on">topaz upscale</span>
+            <span class="pill">krea enhance</span>
+            <span class="pill">muapi upscale</span>
+            <span class="pill dim">topaz video</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="go">Upscale</div>
+      </div>
+      <p class="caption"><b>UPSCALE</b> — different row entirely</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="toolbar">
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 15l5-5 4 4 3-3 4 4"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="8" height="8" rx="1"/></svg></span>
+          <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool on"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · none needed</div>
+          <div class="norow">runs locally on ffmpeg — a crop isn’t a generation</div>
+        </div>
+        <div class="go">Reframe</div>
+      </div>
+      <p class="caption"><b>REFRAME</b> — no row at all</p>
+    </div>
+  </div>
+
+  <ul class="annot" style="max-width:78ch; margin-top:1.6rem">
+    <li><span class="tag">RULE</span> The row never shows a model that can't run the selected tool. Filtering
+      happens on capability, not on connector.</li>
+    <li><span class="tag">RULE</span> If the current model survives the tool change, <strong>nothing moves</strong> —
+      picking Inpaint while on gpt-image-2 keeps gpt-image-2, no notice, no flicker.</li>
+    <li><span class="tag">RULE</span> If it doesn't survive, the panel replaces it <em>and says which model it left</em>.
+      Silent rerouting is the bug this whole redesign exists to kill.</li>
+    <li><span class="tag">EDGE</span> With only muapi connected, Inpaint has <strong>zero</strong> available models.
+      The row is empty and the button must refuse — this is the state most likely to be missed in build.</li>
+    <li><span class="tag">STYLE</span> A real consequence worth naming: your edit runs on a different model than your
+      generation, so it can drift in look. <code>fal-ai/flux-krea-lora/inpainting</code> accepts
+      <code>loras</code>, so a trained style at least carries across — which is a reason to prefer it as the
+      inpaint default.</li>
+  </ul>
+
+  <h2><span class="num">05.</span> The same shape, the other nodes</h2>
+  <p class="principle">
+    Every node is the same eight rows. What changes is what the preview holds, what the tools do to it,
+    and which capability each tool asks the registry for. Model counts below are live from
+    <code>src/shared/model-catalog.ts</code>, not invented for the mock.
+  </p>
+  <div class="flow">
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Generate video</span><span class="sq">›</span></div>
+        <div class="preview filled" style="aspect-ratio:9/16">
+          <span class="badge">0:08</span><span class="nav">‹ &nbsp;take 2&nbsp; ›</span>
+        </div>
+        <div class="toolbar">
+          <span class="tool on" title="Generate"><svg viewBox="0 0 24 24"><path d="M5 4l14 8-14 8Z"/></svg></span>
+          <span class="tool" title="Extend"><svg viewBox="0 0 24 24"><path d="M4 12h13"/><path d="M13 7l5 5-5 5"/><path d="M21 4v16"/></svg></span>
+          <span class="tool" title="Lipsync"><svg viewBox="0 0 24 24"><path d="M4 12h3l3-7 4 14 3-7h3"/></svg></span>
+          <span class="tool" title="Upscale"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/><path d="M4 21h16"/></svg></span>
+          <span class="tool" title="Reframe"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/><path d="M3 7h14v14"/></svg></span>
+        </div>
+        <div class="settings">
+          <span class="set on"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14"/></svg><b>START</b><em>frame</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M16 5v14"/></svg><b>END</b><em>none</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><b>TAKES</b><em>2</em></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 19 can t2v</div>
+          <div class="track">
+            <span class="pill on">veo 3.1</span><span class="pill">seedance 2</span><span class="pill">kling 3 pro</span><span class="pill">sora 2</span><span class="pill dim">wan 3</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt">lantern spirit rising from a river of flames, wide shot</div>
+        <div class="dims">
+          <span class="shape on"><i style="width:15px;height:26px"></i><b>9:16</b></span>
+          <span class="shape"><i style="width:30px;height:17px"></i><b>16:9</b></span>
+          <span class="res">8s · 1080p</span>
+        </div>
+        <div class="go">Generate 2</div>
+        <div class="finish">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>VIDEO</b> — Extend needs <code>video-extension</code>: only 4 models</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Generate audio</span><span class="sq">›</span></div>
+        <div class="preview filled" style="aspect-ratio:16/9; max-height:120px; background:var(--bg); border-color:var(--accent-dim)">
+          <span class="wave">
+            <i style="height:14%"></i><i style="height:38%"></i><i style="height:62%"></i><i class="hot" style="height:88%"></i><i class="hot" style="height:54%"></i><i style="height:76%"></i><i style="height:30%"></i><i style="height:58%"></i><i style="height:84%"></i><i style="height:44%"></i><i style="height:22%"></i><i style="height:66%"></i><i style="height:40%"></i><i style="height:74%"></i><i style="height:28%"></i><i style="height:52%"></i><i style="height:18%"></i><i style="height:46%"></i>
+          </span>
+          <span class="badge">0:12</span>
+        </div>
+        <div class="toolbar">
+          <span class="tool on" title="Voice"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></span>
+          <span class="tool" title="Music"><svg viewBox="0 0 24 24"><circle cx="7" cy="18" r="3"/><circle cx="18" cy="15" r="3"/><path d="M10 18V5l11-2v13"/></svg></span>
+          <span class="tool" title="SFX"><svg viewBox="0 0 24 24"><path d="M4 12h3l3-7 4 14 3-7h3"/></svg></span>
+          <span class="tool" title="Clone"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <span class="tool" title="Isolate"><svg viewBox="0 0 24 24"><path d="M4 8h6l5-4v16l-5-4H4Z"/><path d="M19 9l-4 6M15 9l4 6"/></svg></span>
+        </div>
+        <div class="settings">
+          <span class="set on"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><b>VOICE</b><em>joey</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M12 3v18"/></svg><b>LANG</b><em>en</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><b>TAKES</b><em>1</em></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 5 can tts</div>
+          <div class="track">
+            <span class="pill on">multilingual v2</span><span class="pill">eleven v3</span><span class="pill">flash v2.5</span><span class="pill dim">sonic 3.5</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt">the lyme doesn’t lie. it just doesn’t care.</div>
+        <div class="dims"><span class="res">mp3 · 44.1k</span></div>
+        <div class="go">Speak</div>
+        <div class="finish">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>AUDIO</b> — the old voice/music/sfx/clone tabs <em>are</em> the toolbar</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Create a LoRA</span><span class="sq">›</span></div>
+        <div class="preview filled" style="aspect-ratio:1/1; max-height:170px; background:var(--bg); border-color:var(--accent-dim)">
+          <span class="imggrid">
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="add">+</i>
+          </span>
+          <span class="badge">7 images</span>
+        </div>
+        <div class="toolbar">
+          <span class="tool on" title="Add images"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M21 8v11H9"/></svg></span>
+          <span class="tool" title="Auto-caption"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/></svg></span>
+          <span class="tool" title="Remove"><svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13"/></svg></span>
+          <span class="tool off" title="Preview"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+        </div>
+        <div class="settings">
+          <span class="set on"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><b>KIND</b><em>subject</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg><b>STEPS</b><em>1000</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><b>CAPTION</b><em>auto</em></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 4 can train</div>
+          <div class="track">
+            <span class="pill on">krea 2 trainer</span><span class="pill">flux krea trainer</span><span class="pill">flux 2 trainer</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt">joeyface — trigger word for this subject</div>
+        <div class="dims"><span class="res">~15 min</span></div>
+        <div class="go">Train</div>
+        <div class="finish">Finish → save as a person</div>
+      </div>
+      <p class="caption"><b>LORA</b> — preview holds the <em>dataset</em>; Finish saves a person, not a node</p>
+    </div>
+
+    <div>
+      <div class="device">
+        <div class="topbar"><span class="sq">←</span><span class="ttl">Deepfake</span><span class="sq">›</span></div>
+        <div class="preview filled" style="aspect-ratio:9/16">
+          <span class="badge">0:11</span><span class="nav">speech ✓ → face</span>
+        </div>
+        <div class="toolbar">
+          <span class="tool" title="Speech"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/></svg></span>
+          <span class="tool on" title="Lipsync"><svg viewBox="0 0 24 24"><path d="M4 12h3l3-7 4 14 3-7h3"/></svg></span>
+          <span class="tool" title="Face swap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8.5 15a5 5 0 0 0 7 0"/></svg></span>
+          <span class="tool" title="Upscale"><svg viewBox="0 0 24 24"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg></span>
+          <span class="tool off"><svg viewBox="0 0 24 24"><path d="M7 3v14h14"/></svg></span>
+        </div>
+        <div class="settings">
+          <span class="set on"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><b>PERSON</b><em>joey</em></span>
+          <span class="set on"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/></svg><b>VOICE</b><em>cloned</em></span>
+          <span class="set"><svg viewBox="0 0 24 24"><path d="M5 4l14 8-14 8Z"/></svg><b>SOURCE</b><em>clip 3</em></span>
+        </div>
+        <div class="models">
+          <div class="lbl">MODEL · 5 can lipsync</div>
+          <div class="track">
+            <span class="pill on">max</span><span class="pill">pro</span><span class="pill">sync v3</span><span class="pill">sync</span><span class="pill">kling v2</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+        <div class="prompt">the lyme doesn’t lie. it just doesn’t care.</div>
+        <div class="dims"><span class="res">reuse trainingId</span></div>
+        <div class="go">Lipsync</div>
+        <div class="finish">Finish → add to canvas</div>
+      </div>
+      <p class="caption"><b>DEEPFAKE</b> — the chain is the toolbar, left to right</p>
+    </div>
+
+  </div>
+
+  <ul class="annot" style="max-width:78ch; margin-top:1.6rem">
+    <li><span class="tag">PROOF</span> <strong>The audio node is the strongest evidence the philosophy generalizes.</strong>
+      Today it has a four-way job switcher — voice / music / sfx / clone. Those aren't settings, they're
+      <em>tools</em>: each maps to its own capability (<code>audio-tts</code>, <code>audio-music</code>,
+      <code>audio-sfx</code>, <code>voice-clone</code>) and each reframes the model row exactly like Inpaint does.
+      The pattern wasn't imposed on it — it was already there wearing tabs.</li>
+    <li><span class="tag">SHIFT</span> <strong>LoRA breaks the "preview holds the output" reading, usefully.</strong>
+      The artifact under construction is the <em>training set</em>, so that's what the preview holds — and Finish
+      saves a reusable person rather than dropping a node on the canvas. The shape survives; what it commits to
+      changes per node.</li>
+    <li><span class="tag">SHIFT</span> <strong>Deepfake's toolbar is a sequence, not a set.</strong> Speech →
+      Lipsync → Face swap runs left to right, with the preview carrying stage state (<code>speech ✓ → face</code>).
+      Same row, read as a chain.</li>
+    <li><span class="tag">THIN</span> <strong>Video's Extend button is thinner than it looks:</strong> only 4 models
+      do <code>video-extension</code>, and Gemini's Veo caps at +7s × 20 requests, 720p. Face swap is thinner still —
+      <strong>one model, muapi</strong>. Both need the same refuse-when-empty state as Inpaint.</li>
+    <li><span class="tag">LOCAL</span> Audio's <strong>Isolate</strong> and video's <strong>Reframe</strong> are local
+      ffmpeg — no model, no pill row, no network. Worth styling differently so it's obvious which tools are free.</li>
+  </ul>
+
+  <h2><span class="num">06.</span> Moving between nodes</h2>
+  <p class="principle">
+    An image is rarely the end of the thought — it's the start frame of a clip, a face to swap, a training
+    image. <strong>Switching to Inpaint is not this</strong>: that's a tool inside the image node and the
+    toolbar already covers it. These are the moves that change which node you're in, and the artifact travels
+    with you as a named input.
+  </p>
+  <div class="stage">
+    <div class="device">
+      <div class="topbar"><span class="sq">←</span><span class="ttl">Generate image</span><span class="sq">›</span></div>
+      <div class="preview filled" style="max-height:150px"><span class="badge">3 / 4</span></div>
+      <div class="go">Generate 4</div>
+      <div class="finish">Finish → add to canvas</div>
+      <div class="cont">
+        <div class="lbl">CONTINUE IN</div>
+        <div class="models">
+          <div class="track">
+            <span class="pill">video · start frame</span>
+            <span class="pill">video · animate</span>
+            <span class="pill">a LoRA · training image</span>
+            <span class="pill dim">deepfake · the face</span>
+          </div>
+          <span class="fade"></span>
+        </div>
+      </div>
+    </div>
+    <ul class="annot">
+      <li><strong>One row, only once an artifact exists</strong> — same rule as the toolbar. Reuses the pill
+        language rather than introducing a fifth kind of control.</li>
+      <li><strong>Each pill names the node <em>and</em> the role</strong> the artifact will fill, because
+        "send to video" is ambiguous — start frame and animate are different generations with different models.</li>
+      <li><strong>Availability is capability-derived</strong>, exactly like the model row.
+        <code>handoffsFor(media, ready)</code> flags each one: "deepfake · the face" needs
+        <code>face-swap</code>, which is <strong>one model on muapi</strong> — so it dims when muapi isn't
+        connected instead of failing after the click.</li>
+      <li><strong>Handing off commits.</strong> The artifact has to exist somewhere to be an input, so
+        continuing implies the Finish step — which quietly answers the "what if I never press Finish"
+        hole from §02.</li>
+      <li><span class="tag">REGISTRY</span> <code>ARTIFACT_HANDOFFS</code> in
+        <code>model-catalog.ts</code> — 12 routes across image/video/audio. The registry now drives three
+        things: which models per tool, which nodes accept an artifact, and which tiles are ready at all.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">07.</span> Inpainting takes the canvas</h2>
+  <p class="principle">
+    A 330px panel is a bad place to brush a mask. It doesn't have to be — <strong>the app already does exactly
+    this for Play view</strong>: <code>playNodeId</code> is set, <code>PlayView</code> replaces the middle
+    area, the sessions rail hides, and <code>playFrom</code> remembers where to go back to. Inpainting reuses
+    that takeover verbatim: <strong>the artifact gets the canvas, the panel keeps the controls.</strong>
+  </p>
+  <div class="appmock">
+    <div class="col rail">
+      <div class="colhead">SESSIONS</div>
+      <div class="ghost dim"></div><div class="ghost dim"></div>
+      <p style="font-family:var(--mono);font-size:.52rem;color:var(--text-soft);line-height:1.6;margin-top:8px">
+        hidden during<br>takeover — same<br>as Play view</p>
+    </div>
+    <div class="col mid">
+      <div class="colhead">CANVAS → IMAGE EDITOR</div>
+      <div class="brushbar">
+        <span class="chip on">brush</span><span class="chip">erase</span><span class="chip">clear</span>
+        <span class="chip" style="margin-left:auto">size 32</span>
+      </div>
+      <div class="canvasimg">
+        <span class="mask"></span>
+        <span class="zoom">fit · 100% · ⌘0</span>
+      </div>
+    </div>
+    <div class="col aside">
+      <div class="colhead">INPAINT</div>
+      <div class="models" style="margin-bottom:9px">
+        <div class="lbl">MODEL · 2 can inpaint</div>
+        <div class="track">
+          <span class="pill on">flux krea lora</span><span class="pill">gpt-image-2</span>
+        </div>
+      </div>
+      <div class="prompt" style="min-height:52px">replace the label with a lime wedge</div>
+      <div class="go">Inpaint</div>
+      <div class="finish">Done → back to canvas</div>
+    </div>
+  </div>
+
+  <ul class="annot" style="max-width:78ch; margin-top:1.4rem">
+    <li><strong>Why this is the right split:</strong> the mask is part of the artifact, so it belongs on the
+      artifact's surface. The prompt, model and action are panel controls and stay put. Nothing new is
+      invented — the panel rows are the same rows.</li>
+    <li><strong>It fixes the preview tension.</strong> The panel preview stops needing to be a work surface
+      and becomes what it always was: a monitor. That's why it can stay small.</li>
+    <li><strong>The takeover already has an owner in the code.</strong> <code>playNodeId</code>/
+      <code>playFrom</code> in <code>store.ts</code>, with <code>App.tsx</code> swapping the middle pane and
+      hiding the rail. An <code>editNodeId</code> alongside it is a small, proven addition rather than a new
+      layout mode — which is the difference between this being a week and being an afternoon.</li>
+    <li><span class="tag">OPEN</span> Does the same takeover serve <strong>Expand</strong> (drag the canvas
+      edges outward) and <strong>Reframe</strong> (crop handles)? Both are direct manipulation of the image at
+      size, so probably yes — which would make this one editor surface with three modes, not three surfaces.</li>
+  </ul>
+
+  <h2><span class="num">08.</span> What this takes to build — and what I need from you</h2>
+  <p class="principle">
+    Being straight about the gap between the mock and the code, because two of these are not UI work.
+  </p>
+  <table>
+    <tr><th>Piece</th><th>Lift</th><th>Note</th></tr>
+    <tr><td><strong>Rows 1, 4, 5, 6, 7</strong></td><td>UI only</td><td>Rearranging what <code>ImageScreen</code> already has. Straightforward.</td></tr>
+    <tr><td><strong>Preview + Finish</strong></td><td><strong>Changes generate semantics</strong></td><td>Today <code>generateMedia</code> creates a canvas node immediately. This needs generated takes to live in panel state first and only become a node on Finish. Real change to the store, not a component.</td></tr>
+    <tr><td><strong>Inpaint mask</strong></td><td><strong>New surface</strong></td><td>A brush-on-canvas mask editor with an image export, plus mask upload. The single biggest item here — worth its own pass.</td></tr>
+    <tr><td><strong>Model pills</strong></td><td>UI + a model list</td><td>Needs a per-connector list of image models to populate the row. That list exists in <code>docs/connectors/reference/</code> but nothing in the app reads it yet.</td></tr>
+  </table>
+
+  <ul class="annot" style="max-width:78ch; margin-top:1.4rem">
+    <li><strong>What happens if you leave without pressing Finish?</strong> Silently discard, keep it for when you come back, or prompt. This is the one hole in the flow as specified.</li>
+    <li><strong>Do the 4 takes each become a node on Finish, or only the one you're looking at?</strong> I've drawn it as "the one you're looking at."</li>
+    <li><strong>Four settings squares — right set?</strong> Model, Style, Refs, Takes. Seed and negative prompt are the obvious candidates for a fifth and sixth.</li>
+  </ul>
+
+  <hr class="rule">
+</div>
+</body>
+</html>

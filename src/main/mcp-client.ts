@@ -22,6 +22,10 @@ export interface McpToolResult {
 export interface McpToolInfo {
   name: string
   description?: string
+  /** The server's own JSON Schema for the tool's arguments. Retained because it is
+   *  ground truth for connector intake (docs/architecture/connector-intake.md) —
+   *  parameter names and enums here beat anything inferred from a provider's prose. */
+  inputSchema?: unknown
 }
 
 /**
@@ -120,7 +124,11 @@ export class McpStdioClient {
       this.rejectAfter(timeoutMs, 'tools/list')
     ])) as Record<string, unknown>
     const result = listed['result'] as { tools?: McpToolInfo[] } | undefined
-    return (result?.tools ?? []).map((t) => ({ name: t.name, description: t.description }))
+    return (result?.tools ?? []).map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema
+    }))
   }
 
   async callTool(

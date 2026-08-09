@@ -9,6 +9,14 @@ creative node gains an input type, add its capability here first. This file is t
 source of truth — code (`TILE_NEEDS`, run-lines, routing defaults) follows it, not the other
 way around.
 
+**Model-level companion:** this file answers "which *connector* can do X". Users don't pick
+connectors, they pick models — "midjourney", not "muapi" — so the model-level half lives in
+[`src/shared/model-catalog.ts`](../../src/shared/model-catalog.ts), a typed registry keyed on
+the same capability vocabulary below. It is curated, not exhaustive (muapi alone lists 591
+models); it feeds the model pill row in every creative node and carries per-model reference
+caps and announced shutdown dates. When a reference doc's model table changes, update the
+registry in the same commit as this file's matrix row.
+
 ---
 
 ## 1. Capability vocabulary
@@ -22,6 +30,8 @@ way around.
 | `image-gen` | text → image (storyboard-cheap acceptable) |
 | `image-production` | Midjourney-class committed-spend image |
 | `image-ref-conditioning` | reference images mixed into generation |
+| `image-edit` | instruction-driven edit of an existing image (no mask) |
+| `image-inpaint` | masked region regenerated in place |
 | `audio-tts` | text → speech |
 | `audio-music` | prompt → music |
 | `audio-sfx` | prompt → sound effect |
