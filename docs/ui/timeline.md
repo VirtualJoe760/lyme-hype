@@ -20,7 +20,7 @@
 
 - **No dead space below the tracks** — leftover panel height fills with **ghost rows**, split evenly video/audio, that become real tracks on click or on dropping a matching-type node. +V/+A stay for explicit adds.
 - **Vertical zoom**: a click-drag **track-height slider** (28–96px) in the header, persisted as a workspace pref (`timelineTrackHeight`) like the panel sizes.
-- **Adobe-convention controls** (the user's stated rule of thumb): **Alt+scroll = horizontal zoom** anywhere over the tracks (ruler plain-scroll zoom also remains), and keyboard shortcuts active while the timeline has focus (click it first): **V** selection, **C** razor, **S** snap toggle, **Space** play/pause, **+ / −** zoom, **\\** fit, **Ctrl+K** add-edit at playhead, **Delete** removes the selected clip (clips click-select now), **Home/End** jump, **← / →** one-frame nudge (**Shift** = 5 frames).
+- **Adobe-convention controls** (the user's stated rule of thumb): over the track area, **Alt+scroll = track height** bigger/smaller and **Ctrl+scroll = move through the tracks** (vertical scroll) — horizontal zoom lives on the ruler's plain wheel and **+ / −**. Keyboard shortcuts active while the timeline has focus (click it first): **V** selection, **C** razor, **S** snap toggle, **Space** play/pause, **+ / −** zoom, **\\** fit, **Ctrl+K** add-edit at playhead, **Delete** removes the selected clip (clips click-select now), **Home/End** jump, **← / →** one-frame nudge (**Shift** = 5 frames).
 - **Monitor aspect toggle**: 9:16 ⇄ 16:9 button in the header (the pane widens for 16:9).
 
 ## Precedent

@@ -210,30 +210,28 @@ export function CutRoom(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pps, collapsed])
 
-  // Alt+scroll anywhere over the track area = horizontal zoom (the Adobe
-  // convention the user asked for); plain scroll keeps scrolling. Non-passive
-  // for the same React-passive-wheel reason as the ruler.
+  // Modifier-wheel over the track area (user-defined convention):
+  //   Alt+scroll  → track HEIGHT bigger/smaller (vertical zoom)
+  //   Ctrl+scroll → move through the tracks (vertical scroll)
+  // Horizontal zoom stays on the ruler's plain wheel and the +/- keys.
+  // Non-passive for the same React-passive-wheel reason as the ruler.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const onWheel = (e: WheelEvent): void => {
-      if (!e.altKey) return
-      e.preventDefault()
-      const anchor = timeAtClientX(e.clientX)
-      const factor = e.deltaY < 0 ? 1.25 : 1 / 1.25
-      const next = Math.min(MAX_PPS, Math.max(MIN_PPS, pps * factor))
-      setPps(next)
-      requestAnimationFrame(() => {
-        const scroll = scrollRef.current
-        if (!scroll) return
-        const rect = scroll.getBoundingClientRect()
-        scroll.scrollLeft = anchor * next - (e.clientX - rect.left - TRACK_HEAD_W)
-      })
+      if (e.altKey) {
+        e.preventDefault()
+        setTrackRowH(trackRowH + (e.deltaY < 0 ? 6 : -6))
+      } else if (e.ctrlKey) {
+        // Also swallows the browser's ctrl-wheel page-zoom gesture.
+        e.preventDefault()
+        el.scrollTop += e.deltaY
+      }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pps, collapsed])
+  }, [trackRowH, collapsed])
 
   if (!session || !timeline) return <div className="cutroom collapsed" />
 
