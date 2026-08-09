@@ -3,7 +3,16 @@
 .app {
   display: grid;
   grid-template-rows: 34px 42px 1fr;
+  /* minmax(0, 1fr) keeps wide content (the timeline's ruler) from inflating
+   * the column track: a scroll container's intrinsic width is its CONTENT's
+   * width, and an auto track grows to fit it — pushing the aside off-screen. */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
+  overflow: hidden;
+}
+
+.body {
+  min-width: 0;
 }
 
 /* Section/panel headers ride the dot-matrix heading font alongside real h-tags. */
