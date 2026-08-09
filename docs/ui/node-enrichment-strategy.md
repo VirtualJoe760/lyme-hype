@@ -296,6 +296,29 @@ as paid-for and unused since the map was first written.
   — see above. Row 10's build order is now fully closed: cover, CMA context, carousel slides, and
   agent staging are all shipped.
 
+**Status (2026-08-09, later pass — a fifth tool beyond the original four-step build order):**
+
+- `create_article` (CMS DRAFT-only blog/market-insight/tips post) was flagged in the enrichment
+  report's Recommendations list as "genuinely lower-risk than most of what this queue already
+  shipped" — a text draft, not a generation call, and the publish step
+  (`update_article {status: 'published'}`) is explicitly out of scope regardless (AGENTS.md rule 6).
+  `createArticleDraft()` in `chatrealty.ts` calls it with `title`/`content`/`category` (+ optional
+  `excerpt`), same deterministic single-call shape as the other four ChatRealty functions. A
+  category picker + title/excerpt/content form on the Listing photos tile, with a "Prefill from
+  listing facts" button that reuses `plan_listing_carousel`'s material via the already-built
+  `bridge.chatRealty.listingContext()` call (the same one the Scripting panel's context enrichment
+  uses) so the draft starts from real numbers rather than a blank box or an invented stat.
+- The response shape is the least-documented of any ChatRealty tool this queue has wired — the
+  reference doc only says "JSON text block (slug)," no field name given — so the parser tries
+  `slug`/`slugId`/`id` in that order before falling back to the raw trimmed text rather than
+  failing a draft that plainly succeeded server-side. Worth a live check once a token exists, same
+  confidence tier as the carousel-slide field-name guesswork.
+- `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install`, no
+  `node_modules` at run start). **Not run live** — no ChatRealty token configured in this sandbox;
+  even with one, this routine would never press the button itself, same posture as every other
+  billed/state-writing ChatRealty call. `creative-nodes.md` and `capability-map.md` updated in the
+  same commit.
+
 ---
 
 ## Node queue (priority order — the routine works top to bottom, one per run)

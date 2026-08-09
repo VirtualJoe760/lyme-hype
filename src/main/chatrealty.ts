@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type {
+  ChatRealtyArticleDraftInput,
+  ChatRealtyArticleDraftResult,
   ChatRealtyCarouselSlideInput,
   ChatRealtyCoverResult,
   ChatRealtyListing,
@@ -345,6 +347,55 @@ export async function stageListingWithAgent(
       images.push({ src: saved.url })
     }
     return { ok: true, images }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    client.stop()
+  }
+}
+
+/**
+ * `create_article` — a DRAFT blog/market-insight/tips post on the agent's own
+ * CMS, never a publish: `update_article`'s `status: 'published'` transition is
+ * the real publish step and is out of scope here (AGENTS.md rule 6). Unlike
+ * every other ChatRealty creative tool above, the result isn't a Cloudinary
+ * URL to ingest as a canvas node — it's a CMS slug, so this stays text-only,
+ * same deterministic single-call shape as `createListingCover`.
+ */
+export async function createArticleDraft(
+  input: ChatRealtyArticleDraftInput
+): Promise<ChatRealtyArticleDraftResult> {
+  const client = new McpStdioClient()
+  try {
+    const token = resolveChatRealtyToken()
+    if (!token) return { ok: false, error: 'No ChatRealty token configured.' }
+    await client.start(serverSpec(token))
+
+    const args: Record<string, unknown> = {
+      title: input.title,
+      content: input.content,
+      category: input.category
+    }
+    if (input.excerpt) args.excerpt = input.excerpt
+    if (input.tags && input.tags.length > 0) args.tags = input.tags
+
+    const result = await client.callTool('create_article', args)
+    if (result.isError) {
+      return { ok: false, error: textOf(result.content).slice(0, 300) }
+    }
+    const text = textOf(result.content)
+    let slug: string | undefined
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>
+      const candidate = parsed.slug ?? parsed.slugId ?? parsed.id
+      if (typeof candidate === 'string') slug = candidate
+    } catch {
+      // The reference doc only documents "JSON text block (slug)" loosely —
+      // fall through to the raw text as a best-effort slug rather than
+      // failing a draft that plainly succeeded server-side.
+      slug = text.trim().slice(0, 120) || undefined
+    }
+    return { ok: true, slug }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {

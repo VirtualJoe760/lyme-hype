@@ -2,13 +2,21 @@ import { useEffect, useState } from 'react'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { Button } from './ui/Button'
-import type { ChatRealtyCarouselSlideInput } from '@shared/types'
+import type { ChatRealtyArticleDraftInput, ChatRealtyCarouselSlideInput } from '@shared/types'
 
 type PullState = 'idle' | 'pulling' | 'done' | 'error'
 type CoverState = 'idle' | 'working' | 'done' | 'error'
 type SlideKind = ChatRealtyCarouselSlideInput['kind']
 type SlideState = 'idle' | 'working' | 'done' | 'error'
 type StageState = 'idle' | 'working' | 'done' | 'error'
+type ArticleCategory = ChatRealtyArticleDraftInput['category']
+type ArticleState = 'idle' | 'prefilling' | 'working' | 'done' | 'error'
+
+const ARTICLE_CATEGORIES: { id: ArticleCategory; label: string }[] = [
+  { id: 'market-insights', label: 'Market insights' },
+  { id: 'articles', label: 'Articles' },
+  { id: 'real-estate-tips', label: 'Real estate tips' }
+]
 
 interface TopListing {
   listingKey: string
@@ -67,6 +75,7 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   const createCover = useStudio((s) => s.createChatRealtyCover)
   const createSlide = useStudio((s) => s.createChatRealtyCarouselSlide)
   const stageListing = useStudio((s) => s.stageChatRealtyListing)
+  const createArticle = useStudio((s) => s.createChatRealtyArticleDraft)
   const [connected, setConnected] = useState<boolean | null>(null)
   const [query, setQuery] = useState('')
   const [state, setState] = useState<PullState>('idle')
@@ -84,6 +93,12 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   const [interiorPicks, setInteriorPicks] = useState<Set<number>>(new Set())
   const [stageState, setStageState] = useState<StageState>('idle')
   const [stageMessage, setStageMessage] = useState('')
+  const [articleTitle, setArticleTitle] = useState('')
+  const [articleCategory, setArticleCategory] = useState<ArticleCategory>('market-insights')
+  const [articleExcerpt, setArticleExcerpt] = useState('')
+  const [articleContent, setArticleContent] = useState('')
+  const [articleState, setArticleState] = useState<ArticleState>('idle')
+  const [articleMessage, setArticleMessage] = useState('')
 
   useEffect(() => {
     let active = true
@@ -117,6 +132,11 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     setInteriorPicks(new Set())
     setStageState('idle')
     setStageMessage('')
+    setArticleTitle('')
+    setArticleExcerpt('')
+    setArticleContent('')
+    setArticleState('idle')
+    setArticleMessage('')
     try {
       const result = await pull(query)
       if (result.ok && result.count > 0) {
@@ -244,6 +264,51 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     } catch (err) {
       setSlideState('error')
       setSlideMessage(err instanceof Error ? err.message : 'The slide render failed.')
+    }
+  }
+
+  async function handlePrefillArticle(): Promise<void> {
+    if (!topListing) return
+    setArticleState('prefilling')
+    setArticleMessage('')
+    try {
+      const result = await bridge.chatRealty.listingContext(topListing.listingKey)
+      if (result?.ok && result.text) {
+        setArticleContent((prev) => (prev.trim() ? prev : result.text ?? ''))
+        setArticleState('idle')
+      } else {
+        setArticleState('error')
+        setArticleMessage(result?.error ?? 'No listing facts came back.')
+      }
+    } catch (err) {
+      setArticleState('error')
+      setArticleMessage(err instanceof Error ? err.message : 'Prefill failed.')
+    }
+  }
+
+  async function handleCreateArticle(): Promise<void> {
+    if (!articleTitle.trim() || articleContent.trim().length < 500) return
+    setArticleState('working')
+    setArticleMessage('')
+    try {
+      const result = await createArticle({
+        title: articleTitle.trim(),
+        content: articleContent.trim(),
+        category: articleCategory,
+        excerpt: articleExcerpt.trim() || undefined
+      })
+      if (result.ok) {
+        setArticleState('done')
+        setArticleMessage(
+          result.slug ? `Draft saved — slug: ${result.slug}` : 'Draft saved to the CMS.'
+        )
+      } else {
+        setArticleState('error')
+        setArticleMessage(result.error ?? 'The draft failed.')
+      }
+    } catch (err) {
+      setArticleState('error')
+      setArticleMessage(err instanceof Error ? err.message : 'The draft failed.')
     }
   }
 
@@ -498,6 +563,67 @@ export function ChatRealtyPull(): React.JSX.Element | null {
                 : `☺ Stage agent into ${interiorPicks.size} photo${interiorPicks.size === 1 ? '' : 's'}`}
           </button>
           {stageMessage && <div className={`cr-msg ${stageState}`}>{stageMessage}</div>}
+        </div>
+      )}
+      {topListing && (
+        <div className="cr-cover">
+          <p className="cr-help">
+            Draft a market-insight article on the agent&apos;s CMS for {topListing.address || 'this listing'}.
+            DRAFT only — publishing is a separate, deliberate step this app doesn&apos;t take.
+          </p>
+          <div className="cr-slide-kinds">
+            {ARTICLE_CATEGORIES.map((c) => (
+              <Button
+                key={c.id}
+                type="button"
+                variant={articleCategory === c.id ? 'mini-primary' : 'mini'}
+                onClick={() => setArticleCategory(c.id)}
+              >
+                {c.label}
+              </Button>
+            ))}
+          </div>
+          <input
+            className="link-input cr-input"
+            placeholder="Title (10-200 characters)"
+            value={articleTitle}
+            onChange={(e) => setArticleTitle(e.target.value)}
+            maxLength={200}
+          />
+          <input
+            className="link-input cr-input"
+            placeholder="Excerpt (optional, up to 300 characters)"
+            value={articleExcerpt}
+            onChange={(e) => setArticleExcerpt(e.target.value)}
+            maxLength={300}
+          />
+          <textarea
+            className="link-input cr-input cr-textarea"
+            placeholder="Content (MDX, at least 500 characters)"
+            value={articleContent}
+            onChange={(e) => setArticleContent(e.target.value)}
+            rows={6}
+          />
+          <Button
+            variant="mini"
+            type="button"
+            disabled={articleState === 'prefilling'}
+            onClick={() => void handlePrefillArticle()}
+          >
+            {articleState === 'prefilling' ? 'Fetching facts…' : '⌕ Prefill from listing facts'}
+          </Button>
+          <button
+            className="action-btn cr-btn"
+            disabled={
+              articleState === 'working' || !articleTitle.trim() || articleContent.trim().length < 500
+            }
+            onClick={() => void handleCreateArticle()}
+          >
+            {articleState === 'working'
+              ? 'Saving draft…'
+              : `✎ Save article draft (${articleContent.trim().length}/500 chars)`}
+          </button>
+          {articleMessage && <div className={`cr-msg ${articleState}`}>{articleMessage}</div>}
         </div>
       )}
     </div>

@@ -3,6 +3,8 @@ import { IPC } from '../shared/ipc-channels'
 import type {
   AgentPingResult,
   AgentStreamEvent,
+  ChatRealtyArticleDraftInput,
+  ChatRealtyArticleDraftResult,
   ChatRealtyCarouselSlideInput,
   ChatRealtyCoverResult,
   ChatRealtyListingContextResult,
@@ -160,7 +162,11 @@ const api = {
     createCarouselSlide: (input: ChatRealtyCarouselSlideInput): Promise<ChatRealtyCoverResult | null> =>
       ipcRenderer.invoke(IPC.chatRealtyCarouselSlide, input),
     stageListing: (listingKey: string, photoIndexes: number[]): Promise<ChatRealtyStageResult | null> =>
-      ipcRenderer.invoke(IPC.chatRealtyStage, listingKey, photoIndexes)
+      ipcRenderer.invoke(IPC.chatRealtyStage, listingKey, photoIndexes),
+    createArticleDraft: (
+      input: ChatRealtyArticleDraftInput
+    ): Promise<ChatRealtyArticleDraftResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyArticleDraft, input)
   },
   connectors: {
     list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),

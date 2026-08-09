@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type {
+  ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
   CombineLocalKind,
   ConnectorDef,
@@ -29,6 +30,7 @@ import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
 import {
+  createArticleDraft,
   createCarouselSlide,
   createListingCover,
   hasChatRealtyToken,
@@ -339,6 +341,10 @@ export function registerIpc(window: BrowserWindow): void {
       typeof listingKey === 'string' ? listingKey : '',
       Array.isArray(photoIndexes) ? photoIndexes.filter((n) => Number.isInteger(n)) : []
     )
+  })
+  ipcMain.handle(IPC.chatRealtyArticleDraft, (e, input: ChatRealtyArticleDraftInput) => {
+    if (!isMainSender(e)) return null
+    return createArticleDraft(input)
   })
 
   ipcMain.handle(IPC.connectorsList, (e) => {

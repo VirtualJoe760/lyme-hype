@@ -7,6 +7,72 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-seventh autonomous run: ChatRealty article drafts wired (Recommendations item 2, closing it)
+
+Queue state going in: all ten rows `done` (rows 1/2 unchanged — both still flagged nothing-safely-
+buildable-blind: row 1 needs a joint session, row 2's remaining item needs its own design pass). The
+twenty-sixth run's own writeup pointed at item 2 as the next candidate genuinely worth a first
+analysis pass rather than another parameter wire-up: `create_article`/`create_landing_page`, sitting
+completely untouched next to the creative-rendering chain row 10 already finished.
+
+**What I built.** Scoped to `create_article` only (not `create_landing_page` — see below for why).
+New `createArticleDraft()` in `chatrealty.ts`: one deterministic `create_article` MCP call
+(`title`/`content`/`category`, optional `excerpt`/`tags`), same no-agent-turn shape as
+`createListingCover`/`planListingCarousel`/`createCarouselSlide`. Full plumbing: `ChatRealtyArticleDraftInput`/
+`ChatRealtyArticleDraftResult` shared types, a new `chatrealty:create-article-draft` IPC channel
+end-to-end (`ipc-channels.ts` → `ipc.ts` → `preload/index.ts` → `bridge.ts`, including the
+browser-preview mock's honest "unavailable" stub), and a `createChatRealtyArticleDraft` store action.
+`ChatRealtyPull.tsx` gained a fourth mini-form beneath the staging picker: a category toggle
+(market insights / articles / tips, reusing the same `Button` `mini`/`mini-primary` pattern the
+carousel-slide kind picker established), title/excerpt/content fields, and a "Prefill from listing
+facts" button that calls the already-built `bridge.chatRealty.listingContext()` — the exact
+`plan_listing_carousel` call row 10 step 2 wired into the Scripting panel's agent context — to seed
+the content textarea with real listing/CMA numbers instead of a blank box or an agent inventing
+stats, without clobbering anything the user's already typed (only fills when the textarea is empty).
+The submit button stays disabled below the tool's own 500-character content minimum, with a live
+character counter so that constraint isn't a surprise on submit.
+
+**Why this is lower-risk than most of what this queue has shipped, and why I built it anyway
+despite the "never touch a shared system without confirmation" instinct.** `create_article` only
+ever produces a DRAFT — `update_article`'s `status: 'published'` transition is the actual publish
+step (which also cross-posts to Google Business automatically per the reference doc), and that's
+explicitly out of scope regardless of what this routine does, per `AGENTS.md` rule 6. A draft on
+the agent's own CMS, never auto-submitted (the button fires only on a human click, same as every
+other ChatRealty creative tool in this chain), is closer in risk category to a saved-but-unpublished
+document than to a live billed generation call — still a real write to a real external system, which
+is exactly why the wiring exists and nothing calls it autonomously, same posture as every other row
+in this queue.
+
+**What I deliberately left out.** `create_landing_page` (the Recommendation's other named tool) is a
+structurally bigger surface — MDX body plus a whole `landingPage` block (lead-form fields/recipients,
+`heroType` photo/video, `youtubeUrl`, `themeOverride`) — and returns `editUrl`/`previewUrl` rather
+than a bare slug, a genuinely different UI shape than the four-field article form. Scoping both into
+one pass would have meant rushing the landing-page form's field set from the reference doc's prose
+the same way the carousel-slide fields were inferred, without the article draft's benefit of reusing
+an already-built prefill path — better left as its own well-scoped future pass than force-fit here.
+No `tags`/`seo`/`featuredImage` fields either (all optional per the schema) — the four required-ish
+fields (title/content/category/excerpt) are the ones worth a first pass; the others are a natural
+follow-up once the core path is proven live.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json`
+(fresh `npm install`, no `node_modules` at run start). **Not run live** — no ChatRealty token
+configured in this sandbox, and even with one this routine would never press the button itself; the
+`create_article` response shape is the least-documented of any ChatRealty tool wired so far (the
+reference doc only says "JSON text block (slug)," no field name given), so `createArticleDraft()`
+tries `slug`/`slugId`/`id` in that order before falling back to the raw trimmed text — flagged
+explicitly as worth a live check once a token exists, same confidence tier as the carousel-slide
+field-name guesswork from row 10. `creative-nodes.md` and `capability-map.md` updated in this
+commit; `node-enrichment-strategy.md`'s Listing photos section got a new status entry for this fifth
+tool, since it falls outside the original four-step build order that section documented.
+
+**Where this leaves things.** Not a queue row, so nothing to mark in the progress table.
+Recommendations item 2 in this report is now struck as shipped (article drafts only — landing pages
+are the natural follow-up, flagged above). Item 5 (muapi image-edit for Motion graphics) remains the
+next design-pass-scoped candidate; a `create_landing_page` pass and a Yapper-slice re-check on the
+fal `asset-upload` item are the next similarly-scoped quick-slice candidates.
+
+---
+
 ## 2026-08-09 — Twenty-sixth autonomous run: fal i2v canvas picker (Recommendations item 1, closing it)
 
 Queue state going in: all ten rows `done` (rows 1/2 unchanged — both still flagged nothing-safely-
@@ -1676,16 +1742,15 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    image-conditioning paths could get the same "via: fal" treatment if a design pass wants it, but
    neither was flagged as urgent the way Generate video's i2v case was.
 
-2. **ChatRealty's CMS tools are completely untouched and low-risk.** `create_article` /
-   `create_landing_page` (both DRAFT-only — `update_article`/`update_landing_page`'s `status:
-   'published'` transition is the actual publish step, and that's explicitly out of scope per
-   AGENTS.md rule 6 regardless) sit next to the creative-rendering chain this queue just finished,
-   completely unused. A "turn this Storyboard script into a market-insight article draft" action
-   would reuse the same Scripting-panel CMA-context plumbing row 10 step 2 just built
-   (`plan_listing_carousel`'s real numbers) as the article's factual backbone instead of an agent
-   inventing stats — and since it only ever produces a draft, never a publish, it carries none of
-   the live-billed-call caution every generation tile needs. Genuinely lower-risk than most of what
-   this queue already shipped.
+2. ~~**ChatRealty's CMS tools are completely untouched and low-risk.**~~ — **`create_article`'s
+   slice shipped** (2026-08-09, twenty-seventh autonomous run): a category/title/excerpt/content
+   form on the Listing photos tile, `createArticleDraft()` in `chatrealty.ts`, a "Prefill from
+   listing facts" button reusing the `listingContext`/`plan_listing_carousel` plumbing row 10 step 2
+   already built. DRAFT-only, same as ever — `update_article`'s `status: 'published'` transition
+   stays untouched, per AGENTS.md rule 6. **Still open:** `create_landing_page` (a structurally
+   bigger form — MDX body plus a `landingPage` block for lead-form fields/recipients/hero
+   type/theme, returning `editUrl`/`previewUrl` rather than a bare slug) was deliberately left for
+   its own pass rather than rushed into the same run as the article form.
 
 3. ~~**Veo video-extension** (`+7s` chained, 720p)~~ — **shipped** (backend: 2026-08-09, twenty-third
    autonomous run; canvas UI + duration tracking: 2026-08-09, twenty-fourth autonomous run). See that

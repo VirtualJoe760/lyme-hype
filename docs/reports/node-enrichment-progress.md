@@ -29,6 +29,24 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-seventh autonomous run) — queue confirmed fully `done`/blocked, same as prior
+  runs (rows 1/2 still nothing-safely-buildable-blind). Per the empty-queue guardrail, took
+  Recommendations item 2: ChatRealty's `create_article` CMS tool was completely unused despite the
+  report flagging it as "genuinely lower-risk than most of what this queue already shipped." Shipped
+  `createArticleDraft()` in `chatrealty.ts` (DRAFT-only, one deterministic `create_article` call) end
+  to end — shared types, IPC channel, preload/bridge (mock included), store action, and a
+  category/title/excerpt/content form on the Listing photos tile with a "Prefill from listing facts"
+  button that reuses the already-built `listingContext`/`plan_listing_carousel` plumbing instead of
+  inventing a second fetch path. `npm run typecheck` clean (fresh `npm install`, no `node_modules` at
+  run start). Not run live — no ChatRealty token in this sandbox; the response shape
+  (`create_article` returns "JSON text block (slug)" per the reference doc, no field name given) is
+  the least-documented of any ChatRealty tool wired so far, so the parser tries three candidate
+  field names before falling back to raw text. `capability-map.md` and `creative-nodes.md` updated
+  in this commit; `node-enrichment-strategy.md` got a new status entry for this fifth ChatRealty
+  tool, outside the original four-step build order. Recommendations item 2 in the report is now
+  struck as shipped (article drafts only — `create_landing_page` is flagged as the next similarly-
+  scoped candidate, deliberately not rushed into this same pass since its field shape is materially
+  bigger). Item 5 (muapi image-edit for Motion graphics) remains open too.
 - 2026-08-09 (twenty-sixth autonomous run) — queue confirmed fully `done`/blocked, same as prior
   runs (rows 1/2 still nothing-safely-buildable-blind). Per the empty-queue guardrail, took the
   "fal-forcing UI picker" item the twenty-fifth run's own writeup and Recommendations item 1 both

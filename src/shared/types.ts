@@ -560,6 +560,25 @@ export interface ChatRealtyStageResult {
   error?: string
 }
 
+/** `create_article`'s input — a CMS DRAFT, never a publish. `update_article`'s
+ *  `status: 'published'` transition is the real publish step and is explicitly
+ *  out of Lyme Hype's scope (AGENTS.md rule 6); this tile only ever drafts. */
+export interface ChatRealtyArticleDraftInput {
+  title: string
+  content: string
+  category: 'articles' | 'market-insights' | 'real-estate-tips'
+  excerpt?: string
+  tags?: string[]
+}
+
+/** `create_article`'s result — a DRAFT slug on the agent's own CMS, not a
+ *  Cloudinary asset, so nothing lands on the canvas as a media node. */
+export interface ChatRealtyArticleDraftResult {
+  ok: boolean
+  slug?: string
+  error?: string
+}
+
 /** The only credential facts the agent or renderer ever sees — never the value. */
 export interface SecretReport {
   connectorId: string

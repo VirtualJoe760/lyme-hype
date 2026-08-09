@@ -93,7 +93,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images (local files, or a canvas node's `lyme-asset://` URL — e.g. Deepfake's "train a LoRA from this photo" shortcut) + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
 | **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
-| **Listing photos** | listing query (+ optional hook/body for the cover; a carousel-slide kind + per-kind form; interior-photo checkboxes for agent staging) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render, a carousel slide render (cma/text/cta/banner), and an agent-staged interior-photo render | `data-mls`; cover + slide renders via `create_listing_cover`/`create_carousel_slide` (templated server-side layout, not a generation model — still a real API call, only fires on button press); staging via `stage_listing_with_agent` (real Nano Banana compositing, ~$0.04/photo — the one billed generation call in this tile) |
+| **Listing photos** | listing query (+ optional hook/body for the cover; a carousel-slide kind + per-kind form; interior-photo checkboxes for agent staging; a title/category/excerpt/content form for an article draft) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render, a carousel slide render (cma/text/cta/banner), an agent-staged interior-photo render, and a CMS article draft (no canvas node — a CMS slug) | `data-mls`; cover + slide renders via `create_listing_cover`/`create_carousel_slide` (templated server-side layout, not a generation model — still a real API call, only fires on button press); staging via `stage_listing_with_agent` (real Nano Banana compositing, ~$0.04/photo — the one billed generation call in this tile); article drafting via `create_article` (CMS DRAFT only, never published) |
 
 ## Reference person (Deepfake's identity + voice pairing)
 
@@ -252,6 +252,20 @@ asset path — still takes a manually pasted URL rather than reading a staged no
 that gap for real would mean re-uploading a staged asset somewhere Cloudinary-reachable, out of
 scope for this pass. All four items in `node-enrichment-strategy.md`'s Listing photos build order
 are now shipped.
+
+A fifth tool this tile never touched, added later (Recommendations item 2 in
+`../reports/node-enrichment-report.md`): `create_article`, a DRAFT-only blog/market-insight/tips
+post on the agent's own CMS (`update_article`'s `status: 'published'` is the real publish step and
+stays out of scope, per AGENTS.md rule 6). A category picker (market insights / articles / tips) +
+title/excerpt/content form sits beneath the staging picker; a "Prefill from listing facts" button
+reuses `bridge.chatRealty.listingContext()` — the same `plan_listing_carousel` call the Scripting
+panel's context-enrichment already makes — to seed the content textarea with real numbers instead
+of a blank box, without overwriting anything the user's already typed. `createArticleDraft()` in
+`chatrealty.ts` parses the tool's loosely-documented "JSON text block (slug)" response defensively
+(tries `slug`/`slugId`/`id` keys, falls back to the raw trimmed text) since no field-level schema
+was captured for this response any more than the carousel-slide fields were. Unlike every other
+tool in this chain, the result isn't a Cloudinary URL — no canvas node is created, only a status
+line showing the returned slug.
 
 ## Where routing happens
 

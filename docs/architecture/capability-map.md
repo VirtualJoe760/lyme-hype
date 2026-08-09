@@ -102,7 +102,7 @@ $0.03 vs. $0.06/image).
 | Create a LoRA | `lora-train` | fal trainer pick | — |
 | Storyboard promote (image) | `image-gen` | per-panel choice | agent-pick |
 | Storyboard → Deepfake handoff | *(none — local)* | word-overlap match of panel `feeling` against Reference people's `personaTone` | no match found (screen just prefills the script, picker stays "none") |
-| Listing photos | `data-mls` | chatrealty | top-matched listing also offers a branded Instagram cover render (`create_listing_cover`, hook+body required), a carousel slide render (`create_carousel_slide`, kind picker: cma/text/cta/banner), and an interior-photo picker for agent staging (`stage_listing_with_agent`, real ~$0.04/photo generation, checkboxes feed exact `photoIndexes` from each pulled photo's `ChatRealtyPulledImage.photoIndex`) — same connector, all downloaded via `importUrlAsset` |
+| Listing photos | `data-mls` | chatrealty | top-matched listing also offers a branded Instagram cover render (`create_listing_cover`, hook+body required), a carousel slide render (`create_carousel_slide`, kind picker: cma/text/cta/banner), an interior-photo picker for agent staging (`stage_listing_with_agent`, real ~$0.04/photo generation, checkboxes feed exact `photoIndexes` from each pulled photo's `ChatRealtyPulledImage.photoIndex`), and a CMS article draft (`create_article`, DRAFT-only, category/title/excerpt/content form, optional prefill from `plan_listing_carousel`'s facts via the same `listingContext` call the Scripting panel uses — no canvas node, a CMS slug) — same connector, renders downloaded via `importUrlAsset` |
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
 | Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |
 | Combine · audio+image | `lipsync` or `video-gen-i2v` | agent-pick (unrestricted) | prompt tells the agent to branch on whether the image shows a face |
@@ -232,5 +232,12 @@ several connectors can satisfy one node.
   exact `photoIndexes` rather than guessing — this is the one tool in the chain that's a real billed
   generation call (~$0.04/photo), so the picker only builds the request; nothing fires until a human
   presses the button, same posture as every other connector's Generate action.
+- **A fifth ChatRealty tool, `create_article`, is now wired too** (Recommendations item 2 in the
+  enrichment report) — a DRAFT-only CMS post, distinct from the four Cloudinary-returning creative
+  tools above in that its result is a slug, not media, so nothing lands on the canvas; a "Prefill
+  from listing facts" button reuses `plan_listing_carousel`'s material (the same `listingContext`
+  call the Scripting panel's context enrichment already makes) so the draft can start from real
+  numbers instead of an agent inventing them. `update_article`'s `status: 'published'` transition
+  (the actual publish step, cross-posting to Google Business) stays untouched, per AGENTS.md rule 6.
 - **muapi sandbox keys** return instant free mock data — the cheap way to integration-test
   the whole generation loop before the joint live session.

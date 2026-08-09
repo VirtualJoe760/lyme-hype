@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import type {
   AgentStreamEvent,
   CanvasNodeState,
+  ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
   CombineLocalKind,
   CutExportResult,
@@ -361,6 +362,9 @@ interface StudioStore {
     photoIndexes: number[],
     opts: { labelBase: string; detailUrl?: string }
   ): Promise<{ ok: boolean; count: number; error?: string }>
+  createChatRealtyArticleDraft(
+    input: ChatRealtyArticleDraftInput
+  ): Promise<{ ok: boolean; slug?: string; error?: string }>
   flushPersist(): void
 }
 
@@ -1656,6 +1660,14 @@ export const useStudio = create<StudioStore>((set, get) => {
         })
       })
       return { ok: true, count: result.images.length }
+    },
+
+    async createChatRealtyArticleDraft(input) {
+      const result = await bridge.chatRealty.createArticleDraft(input)
+      if (!result || !result.ok) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      return { ok: true, slug: result.slug }
     },
 
     flushPersist() {
