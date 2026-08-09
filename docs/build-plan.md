@@ -217,9 +217,14 @@ The largest single item, and the one with real UI risk.
 - [ ] Panel keeps prompt + model pills + action; only the artifact surface moves.
 - [ ] Expand and Reframe are modes of the surface but render an honest "not built yet" line.
 
-## Phase 20 — Roll the shell out to the other nodes — MOSTLY DONE
+## Phase 20 — Roll the shell out to the other nodes ✅ (2026-08-09)
 
-- [x] **Video and Deepfake are on the shell**; `VideoScreen`/`DeepfakeScreen` deleted. Settings kinds built: media pickers (start/end frame, source, person) that share the handoff role names, plus voice, loraKind, steps. Audio and LoRA stay on their existing screens — audio's ElevenLabs/Yapper voice browsing and LoRA's dataset management are real surfaces the shell does not model yet. Original note: All four manifests exist, but the shell implements only `style`, `refs` and `takes`. Swapping video/audio/lora/deepfake onto it today would REGRESS shipped behavior — Yapper voice browsing, the Suno fallback, LoRA dataset management, Deepfake person/source pickers. Build `voice`, `sourceMedia`, `startFrame`/`endFrame`, `loraKind`/`steps`/`caption`, `person` first.
+- [x] **All five nodes render from one manifest.** `AsidePanel.tsx` went 1630 → 400 lines; `VideoScreen`, `ImageScreen`, `AudioScreen`, `LoraScreen`, `DeepfakeScreen` all deleted rather than left dead.
+- [x] `NodeToolDef.exec` carries *how* a tool runs — agent, direct audio connector call, dataset mutation, or local ffmpeg — so the renderer never special-cases a node id.
+- [x] Settings kinds built: canvas media pickers (start/end frame, source, person) keyed to the same role names the handoffs use, plus live voice browsing, LoRA kind, steps, trainer.
+- [x] Nothing regressed: audio keeps real voice browsing and the Yapper free-tier route; LoRA holds its training set in the preview and blocks below fal's dataset minimum.
+- [x] Local-only tools (audio isolate, video reframe) render a "no model, no spend" line instead of an empty pill row.
+- [x] Audit fixes: LoRA no longer opens with a dataset tool active, handoffs no longer offer self-targets or appear on a node that commits a person, colliding pill labels carry their connector, and `clear` is disabled on an empty dataset.
 - [ ] **Generate video** — start/end-frame settings squares, Extend tool (**only 4 models**), lipsync handoff.
 - [ ] **Create a LoRA** — preview holds the training set; Finish saves a person.
 - [ ] **Deepfake** — toolbar as a left-to-right chain (Speech → Lipsync → Face swap), preview carries stage state. Face swap is **one model, muapi** — same refuse-when-empty case.
