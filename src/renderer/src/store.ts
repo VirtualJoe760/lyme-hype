@@ -5,6 +5,7 @@ import type {
   CanvasNodeState,
   ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
+  ChatRealtyLandingPageDraftInput,
   CombineLocalKind,
   CutExportResult,
   ExportClip,
@@ -365,6 +366,9 @@ interface StudioStore {
   createChatRealtyArticleDraft(
     input: ChatRealtyArticleDraftInput
   ): Promise<{ ok: boolean; slug?: string; error?: string }>
+  createChatRealtyLandingPageDraft(
+    input: ChatRealtyLandingPageDraftInput
+  ): Promise<{ ok: boolean; editUrl?: string; previewUrl?: string; error?: string }>
   flushPersist(): void
 }
 
@@ -1668,6 +1672,14 @@ export const useStudio = create<StudioStore>((set, get) => {
         return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
       }
       return { ok: true, slug: result.slug }
+    },
+
+    async createChatRealtyLandingPageDraft(input) {
+      const result = await bridge.chatRealty.createLandingPageDraft(input)
+      if (!result || !result.ok) {
+        return { ok: false, error: result?.error ?? 'ChatRealty is unavailable.' }
+      }
+      return { ok: true, editUrl: result.editUrl, previewUrl: result.previewUrl }
     },
 
     flushPersist() {

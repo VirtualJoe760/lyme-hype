@@ -20,7 +20,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
 | 8 | Storyboard / Scripting | done | Reference person gained an optional `personaTone` tag (Settings › Trained styles); a script-born Storyboard panel gets a "☺ Send to Deepfake" button that prefills the script and auto-suggests a Reference person by matching the panel's `feeling` against `personaTone` (word overlap, no agent call). |
 | 9 | Timeline / export | done | Built the local ffmpeg compositing row 7 explicitly deferred here: Combine's four remaining pairs (video+video stitch, image+video overlay, audio+video score, audio+audio mix) now produce real output via a new `combineLocal()`/`media:combine-local` IPC round trip instead of the Phase 2 placeholder node. |
-| 10 | Listing photos (ChatRealty) | done | Cover render shipped: `create_listing_cover` wired into the Listing photos tile (hook/body form on the top-matched listing, Cloudinary URL downloaded via `importUrlAsset`, real image node). CMA-context shipped: `planListingCarousel()` (`chatrealty:listing-context` IPC) feeds `plan_listing_carousel`'s real listing facts/CMA stats into the Scripting panel's first agent turn whenever a ChatRealty-sourced node is in the session, once per conversation. Carousel slide builder shipped (a concurrent run, same pass window): `createCarouselSlide()` (`chatrealty:create-carousel-slide` IPC) wraps `create_carousel_slide` (no `listingKey` — this tool takes literal per-kind fields, not a lookup) behind a kind picker (cma/text/cta/banner) + four per-kind forms on the tile, same Cloudinary-URL-then-`importUrlAsset` ingestion as the cover; the `cma`/`text`/`cta` field shapes are inferred from the reference doc's prose (no field-level schema captured), worth a live check once a token exists. Agent-in-photo staging shipped (this run): `stageListingWithAgent()` wraps `stage_listing_with_agent` (real ~$0.04/photo Nano Banana compositing — the one billed call in this chain), an interior-photo checkbox picker (each pulled photo carries its real `get_listing_photos` position as `ChatRealtyPulledImage.photoIndex`, so the picker feeds exact indices instead of guessing), full IPC/bridge/store plumbing, button fires only on a human click. All four build-order items closed — row 10 is the last node in the queue, and the queue is now fully `done`. |
+| 10 | Listing photos (ChatRealty) | done | Cover render shipped: `create_listing_cover` wired into the Listing photos tile (hook/body form on the top-matched listing, Cloudinary URL downloaded via `importUrlAsset`, real image node). CMA-context shipped: `planListingCarousel()` (`chatrealty:listing-context` IPC) feeds `plan_listing_carousel`'s real listing facts/CMA stats into the Scripting panel's first agent turn whenever a ChatRealty-sourced node is in the session, once per conversation. Carousel slide builder shipped (a concurrent run, same pass window): `createCarouselSlide()` (`chatrealty:create-carousel-slide` IPC) wraps `create_carousel_slide` (no `listingKey` — this tool takes literal per-kind fields, not a lookup) behind a kind picker (cma/text/cta/banner) + four per-kind forms on the tile, same Cloudinary-URL-then-`importUrlAsset` ingestion as the cover; the `cma`/`text`/`cta` field shapes are inferred from the reference doc's prose (no field-level schema captured), worth a live check once a token exists. Agent-in-photo staging shipped (this run): `stageListingWithAgent()` wraps `stage_listing_with_agent` (real ~$0.04/photo Nano Banana compositing — the one billed call in this chain), an interior-photo checkbox picker (each pulled photo carries its real `get_listing_photos` position as `ChatRealtyPulledImage.photoIndex`, so the picker feeds exact indices instead of guessing), full IPC/bridge/store plumbing, button fires only on a human click. All four build-order items closed — row 10 is the last node in the queue, and the queue is now fully `done`. A fifth tool, `create_article` (CMS DRAFT-only blog post), shipped later (Recommendations item 2). A sixth, `create_landing_page` (CMS DRAFT-only lead-capture page, Recommendations item 2's deferred second half), shipped later still — see the thirtieth run's entry below. |
 
 ## Cross-cutting plumbing (build once, benefits multiple rows)
 
@@ -29,6 +29,32 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (thirtieth autonomous run) — queue confirmed fully `done`/blocked (row 1 still
+  live-verification-only, joint-session scope; all other rows `done`). Recommendations items 1–5
+  were all struck except item 2's own "still open" sub-note (`create_landing_page`, deliberately
+  deferred when `create_article` shipped for being "structurally bigger"). Considered a "via: fal"
+  image-conditioning picker for Motion graphics/Combine (item 1's other still-open sub-note) first,
+  but `docs/connectors/reference/fal.md`'s own gotchas section flags routing image work to fal's
+  nano-banana models as "just adds fal margin" over the already-direct Gemini connector — building
+  that picker would have shipped a UI encouraging the exact anti-pattern the reference doc warns
+  against, so skipped it and took `create_landing_page` instead. Shipped `createLandingPageDraft()`
+  in `chatrealty.ts`: only `title`/`content` (the reference doc's two documented required fields)
+  plus the three simplest `landingPage` block fields (`heroType`, `youtubeUrl`, `themeOverride`) are
+  sent — the block's lead-form fields/recipients sub-shape has no field-level schema anywhere in the
+  reference doc, so it's deliberately left to the CMS's own editor rather than guessed at, same
+  honesty posture as the carousel-slide fields and `create_article`'s response parsing. Full
+  plumbing end to end (shared types, IPC channel, preload/bridge incl. the browser-preview mock,
+  store action) plus a fourth mini-form on the Listing photos tile beneath the article form,
+  reusing the same "Prefill from listing facts" button pattern. `npm run typecheck` clean (fresh
+  `npm install`, no `node_modules` at run start). **Not run live** — no ChatRealty token in this
+  sandbox; the response shape (`editUrl`/`previewUrl` per the reference doc, parsed with a
+  raw-text-URL-scan fallback since no field-level schema was given) is unverified end to end.
+  `creative-nodes.md`, `capability-map.md`, and `node-enrichment-strategy.md` updated in this
+  commit; Recommendations item 2 in the report is now fully closed. Queue stays `done` on every row
+  except row 1; the fal-image-margin finding above is worth flagging to a human rather than treating
+  as buildable scope — if fal's image-conditioning path is ever wanted deliberately (e.g. a specific
+  fal-only model not available via Gemini/OpenAI), it should be a conscious choice, not a routine
+  wiring it in because a UI slot was open.
 - 2026-08-09 (twenty-ninth autonomous run) — took Recommendations item 5, the last open item on
   the list: muapi's image-edit tool as a second batch source for row 2 (Motion graphics). Did the
   design pass the item had been waiting on since row 2's very first pass — `muapi_image_edit`

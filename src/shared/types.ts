@@ -579,6 +579,32 @@ export interface ChatRealtyArticleDraftResult {
   error?: string
 }
 
+/** `create_landing_page`'s input — a CMS DRAFT, same publish boundary as
+ *  articles (AGENTS.md rule 6). The reference doc documents `title`/`content`
+ *  as the only required fields and describes a `landingPage` block covering
+ *  hero media, a YouTube embed, a theme override, and lead-form
+ *  fields/recipients — only the three simplest of those (`heroType`,
+ *  `youtubeUrl`, `themeOverride`) are wired here; the lead-form field/
+ *  recipient sub-shape isn't documented at the field level anywhere in the
+ *  reference doc, so it's deliberately left out rather than guessed. */
+export interface ChatRealtyLandingPageDraftInput {
+  title: string
+  content: string
+  heroType?: 'photo' | 'video'
+  youtubeUrl?: string
+  themeOverride?: string
+}
+
+/** `create_landing_page`'s result — the reference doc says it returns
+ *  `editUrl` + `previewUrl` rather than the bare slug `create_article`
+ *  returns; nothing lands on the canvas as a media node either way. */
+export interface ChatRealtyLandingPageDraftResult {
+  ok: boolean
+  editUrl?: string
+  previewUrl?: string
+  error?: string
+}
+
 /** The only credential facts the agent or renderer ever sees — never the value. */
 export interface SecretReport {
   connectorId: string

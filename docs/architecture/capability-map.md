@@ -102,7 +102,7 @@ $0.03 vs. $0.06/image).
 | Create a LoRA | `lora-train` | fal trainer pick | — |
 | Storyboard promote (image) | `image-gen` | per-panel choice | agent-pick |
 | Storyboard → Deepfake handoff | *(none — local)* | word-overlap match of panel `feeling` against Reference people's `personaTone` | no match found (screen just prefills the script, picker stays "none") |
-| Listing photos | `data-mls` | chatrealty | top-matched listing also offers a branded Instagram cover render (`create_listing_cover`, hook+body required), a carousel slide render (`create_carousel_slide`, kind picker: cma/text/cta/banner), an interior-photo picker for agent staging (`stage_listing_with_agent`, real ~$0.04/photo generation, checkboxes feed exact `photoIndexes` from each pulled photo's `ChatRealtyPulledImage.photoIndex`), and a CMS article draft (`create_article`, DRAFT-only, category/title/excerpt/content form, optional prefill from `plan_listing_carousel`'s facts via the same `listingContext` call the Scripting panel uses — no canvas node, a CMS slug) — same connector, renders downloaded via `importUrlAsset` |
+| Listing photos | `data-mls` | chatrealty | top-matched listing also offers a branded Instagram cover render (`create_listing_cover`, hook+body required), a carousel slide render (`create_carousel_slide`, kind picker: cma/text/cta/banner), an interior-photo picker for agent staging (`stage_listing_with_agent`, real ~$0.04/photo generation, checkboxes feed exact `photoIndexes` from each pulled photo's `ChatRealtyPulledImage.photoIndex`), a CMS article draft (`create_article`, DRAFT-only, category/title/excerpt/content form, optional prefill from `plan_listing_carousel`'s facts via the same `listingContext` call the Scripting panel uses — no canvas node, a CMS slug), and a CMS landing-page draft (`create_landing_page`, DRAFT-only, title/content/hero-type/YouTube/theme form, same prefill button — no canvas node, an editUrl+previewUrl) — same connector, renders downloaded via `importUrlAsset` |
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
 | Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |
 | Combine · audio+image | `lipsync` or `video-gen-i2v` | agent-pick (unrestricted) | prompt tells the agent to branch on whether the image shows a face |
@@ -247,5 +247,16 @@ several connectors can satisfy one node.
   call the Scripting panel's context enrichment already makes) so the draft can start from real
   numbers instead of an agent inventing them. `update_article`'s `status: 'published'` transition
   (the actual publish step, cross-posting to Google Business) stays untouched, per AGENTS.md rule 6.
+- **A sixth ChatRealty tool, `create_landing_page`, is now wired too** (the "still open" half of
+  Recommendations item 2 — a structurally bigger sibling to `create_article`, deliberately left for
+  its own pass at the time). Same DRAFT-only posture and same slug-not-media result shape (here
+  `editUrl`/`previewUrl` per the reference doc, not a slug — `createLandingPageDraft()` tries those
+  two JSON keys, falls back to scanning the raw text for URLs since no field-level schema exists).
+  Only `title`/`content` (the reference doc's two documented required fields) plus the three
+  simplest `landingPage` block fields (`heroType`, `youtubeUrl`, `themeOverride`) are sent — the
+  block's lead-form fields/recipients sub-shape has no field-level documentation anywhere in the
+  reference doc, so it's deliberately left unwired rather than guessed at; a human configures lead
+  capture in the CMS's own editor once the draft exists. `update_landing_page`'s
+  `status: 'published'` transition stays untouched, same AGENTS.md rule 6 boundary.
 - **muapi sandbox keys** return instant free mock data — the cheap way to integration-test
   the whole generation loop before the joint live session.

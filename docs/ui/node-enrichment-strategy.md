@@ -319,6 +319,33 @@ as paid-for and unused since the map was first written.
   billed/state-writing ChatRealty call. `creative-nodes.md` and `capability-map.md` updated in the
   same commit.
 
+**Status (2026-08-09, later pass — a sixth tool, `create_landing_page`, the deliberately-deferred
+half of Recommendations item 2):**
+
+- `create_landing_page` was called out by name at the time `create_article` shipped as
+  "structurally bigger" and left for its own pass. Confirmed on this pass: the reference doc
+  documents only `title`/`content` (≥500 chars) as required, and describes a `landingPage` block
+  covering hero media, a YouTube embed, a theme override, and lead-form fields/recipients — but
+  never gives that block's lead-form sub-shape a field-level schema anywhere. `createLandingPageDraft()`
+  in `chatrealty.ts` therefore sends only `title`/`content` plus the three simplest `landingPage`
+  fields (`heroType: 'photo'|'video'`, `youtubeUrl`, `themeOverride`), same deterministic
+  single-call shape as every other ChatRealty function in this chain. Lead-form configuration is
+  left to the CMS's own editor once the draft exists rather than guessed at — the same honesty
+  posture the carousel-slide field names and `create_article`'s response parsing already used.
+- UI: a fourth mini-form on the Listing photos tile, beneath the article form — title/content/
+  hero-type toggle/YouTube URL/theme-override fields, the same "Prefill from listing facts" button
+  reusing `bridge.chatRealty.listingContext()`. `update_landing_page`'s `status: 'published'`
+  transition stays untouched, same AGENTS.md rule 6 boundary as every other CMS draft in this app.
+- The result shape is documented as `editUrl` + `previewUrl` rather than `create_article`'s bare
+  slug — `createLandingPageDraft()` tries those two JSON keys first, then falls back to scanning
+  the raw response text for URLs if the shape doesn't parse as JSON, mirroring `create_article`'s
+  own defensive-parsing pattern for an equally under-documented response.
+- `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install`, no
+  `node_modules` at run start). **Not run live** — no ChatRealty token configured in this sandbox;
+  the request shape (only 3 of the `landingPage` block's real fields sent) and the response-parsing
+  fallback are both unverified end to end. `creative-nodes.md` and `capability-map.md` updated in
+  the same commit.
+
 ---
 
 ## Node queue (priority order — the routine works top to bottom, one per run)

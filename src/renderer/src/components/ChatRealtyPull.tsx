@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { Button } from './ui/Button'
-import type { ChatRealtyArticleDraftInput, ChatRealtyCarouselSlideInput } from '@shared/types'
+import type {
+  ChatRealtyArticleDraftInput,
+  ChatRealtyCarouselSlideInput,
+  ChatRealtyLandingPageDraftInput
+} from '@shared/types'
 
 type PullState = 'idle' | 'pulling' | 'done' | 'error'
 type CoverState = 'idle' | 'working' | 'done' | 'error'
@@ -11,11 +15,18 @@ type SlideState = 'idle' | 'working' | 'done' | 'error'
 type StageState = 'idle' | 'working' | 'done' | 'error'
 type ArticleCategory = ChatRealtyArticleDraftInput['category']
 type ArticleState = 'idle' | 'prefilling' | 'working' | 'done' | 'error'
+type LandingHeroType = NonNullable<ChatRealtyLandingPageDraftInput['heroType']>
+type LandingState = 'idle' | 'prefilling' | 'working' | 'done' | 'error'
 
 const ARTICLE_CATEGORIES: { id: ArticleCategory; label: string }[] = [
   { id: 'market-insights', label: 'Market insights' },
   { id: 'articles', label: 'Articles' },
   { id: 'real-estate-tips', label: 'Real estate tips' }
+]
+
+const LANDING_HERO_TYPES: { id: LandingHeroType; label: string }[] = [
+  { id: 'photo', label: 'Hero: photo' },
+  { id: 'video', label: 'Hero: video' }
 ]
 
 interface TopListing {
@@ -76,6 +87,7 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   const createSlide = useStudio((s) => s.createChatRealtyCarouselSlide)
   const stageListing = useStudio((s) => s.stageChatRealtyListing)
   const createArticle = useStudio((s) => s.createChatRealtyArticleDraft)
+  const createLandingPage = useStudio((s) => s.createChatRealtyLandingPageDraft)
   const [connected, setConnected] = useState<boolean | null>(null)
   const [query, setQuery] = useState('')
   const [state, setState] = useState<PullState>('idle')
@@ -99,6 +111,13 @@ export function ChatRealtyPull(): React.JSX.Element | null {
   const [articleContent, setArticleContent] = useState('')
   const [articleState, setArticleState] = useState<ArticleState>('idle')
   const [articleMessage, setArticleMessage] = useState('')
+  const [landingTitle, setLandingTitle] = useState('')
+  const [landingContent, setLandingContent] = useState('')
+  const [landingHeroType, setLandingHeroType] = useState<LandingHeroType | ''>('')
+  const [landingYoutubeUrl, setLandingYoutubeUrl] = useState('')
+  const [landingThemeOverride, setLandingThemeOverride] = useState('')
+  const [landingState, setLandingState] = useState<LandingState>('idle')
+  const [landingMessage, setLandingMessage] = useState('')
 
   useEffect(() => {
     let active = true
@@ -309,6 +328,52 @@ export function ChatRealtyPull(): React.JSX.Element | null {
     } catch (err) {
       setArticleState('error')
       setArticleMessage(err instanceof Error ? err.message : 'The draft failed.')
+    }
+  }
+
+  async function handlePrefillLandingPage(): Promise<void> {
+    if (!topListing) return
+    setLandingState('prefilling')
+    setLandingMessage('')
+    try {
+      const result = await bridge.chatRealty.listingContext(topListing.listingKey)
+      if (result?.ok && result.text) {
+        setLandingContent((prev) => (prev.trim() ? prev : result.text ?? ''))
+        setLandingState('idle')
+      } else {
+        setLandingState('error')
+        setLandingMessage(result?.error ?? 'No listing facts came back.')
+      }
+    } catch (err) {
+      setLandingState('error')
+      setLandingMessage(err instanceof Error ? err.message : 'Prefill failed.')
+    }
+  }
+
+  async function handleCreateLandingPage(): Promise<void> {
+    if (!landingTitle.trim() || landingContent.trim().length < 500) return
+    setLandingState('working')
+    setLandingMessage('')
+    try {
+      const result = await createLandingPage({
+        title: landingTitle.trim(),
+        content: landingContent.trim(),
+        heroType: landingHeroType || undefined,
+        youtubeUrl: landingYoutubeUrl.trim() || undefined,
+        themeOverride: landingThemeOverride.trim() || undefined
+      })
+      if (result.ok) {
+        setLandingState('done')
+        setLandingMessage(
+          result.editUrl ? `Draft saved — edit: ${result.editUrl}` : 'Draft saved to the CMS.'
+        )
+      } else {
+        setLandingState('error')
+        setLandingMessage(result.error ?? 'The draft failed.')
+      }
+    } catch (err) {
+      setLandingState('error')
+      setLandingMessage(err instanceof Error ? err.message : 'The draft failed.')
     }
   }
 
@@ -624,6 +689,74 @@ export function ChatRealtyPull(): React.JSX.Element | null {
               : `✎ Save article draft (${articleContent.trim().length}/500 chars)`}
           </button>
           {articleMessage && <div className={`cr-msg ${articleState}`}>{articleMessage}</div>}
+        </div>
+      )}
+      {topListing && (
+        <div className="cr-cover">
+          <p className="cr-help">
+            Draft a lead-capture landing page on the agent&apos;s CMS for{' '}
+            {topListing.address || 'this listing'}. DRAFT only — publishing is a separate,
+            deliberate step this app doesn&apos;t take. Lead-form field/recipient configuration
+            isn&apos;t wired here — that sub-shape isn&apos;t documented at the field level, so
+            it&apos;s left for the CMS&apos;s own editor once the draft exists.
+          </p>
+          <input
+            className="link-input cr-input"
+            placeholder="Title"
+            value={landingTitle}
+            onChange={(e) => setLandingTitle(e.target.value)}
+          />
+          <textarea
+            className="link-input cr-input cr-textarea"
+            placeholder="Content (MDX, at least 500 characters)"
+            value={landingContent}
+            onChange={(e) => setLandingContent(e.target.value)}
+            rows={6}
+          />
+          <div className="cr-slide-kinds">
+            {LANDING_HERO_TYPES.map((h) => (
+              <Button
+                key={h.id}
+                type="button"
+                variant={landingHeroType === h.id ? 'mini-primary' : 'mini'}
+                onClick={() => setLandingHeroType(landingHeroType === h.id ? '' : h.id)}
+              >
+                {h.label}
+              </Button>
+            ))}
+          </div>
+          <input
+            className="link-input cr-input"
+            placeholder="YouTube URL (optional)"
+            value={landingYoutubeUrl}
+            onChange={(e) => setLandingYoutubeUrl(e.target.value)}
+          />
+          <input
+            className="link-input cr-input"
+            placeholder="Theme override (optional)"
+            value={landingThemeOverride}
+            onChange={(e) => setLandingThemeOverride(e.target.value)}
+          />
+          <Button
+            variant="mini"
+            type="button"
+            disabled={landingState === 'prefilling'}
+            onClick={() => void handlePrefillLandingPage()}
+          >
+            {landingState === 'prefilling' ? 'Fetching facts…' : '⌕ Prefill from listing facts'}
+          </Button>
+          <button
+            className="action-btn cr-btn"
+            disabled={
+              landingState === 'working' || !landingTitle.trim() || landingContent.trim().length < 500
+            }
+            onClick={() => void handleCreateLandingPage()}
+          >
+            {landingState === 'working'
+              ? 'Saving draft…'
+              : `⬈ Save landing page draft (${landingContent.trim().length}/500 chars)`}
+          </button>
+          {landingMessage && <div className={`cr-msg ${landingState}`}>{landingMessage}</div>}
         </div>
       )}
     </div>

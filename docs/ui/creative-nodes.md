@@ -93,7 +93,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images (local files, or a canvas node's `lyme-asset://` URL — e.g. Deepfake's "train a LoRA from this photo" shortcut) + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
 | **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
-| **Listing photos** | listing query (+ optional hook/body for the cover; a carousel-slide kind + per-kind form; interior-photo checkboxes for agent staging; a title/category/excerpt/content form for an article draft) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render, a carousel slide render (cma/text/cta/banner), an agent-staged interior-photo render, and a CMS article draft (no canvas node — a CMS slug) | `data-mls`; cover + slide renders via `create_listing_cover`/`create_carousel_slide` (templated server-side layout, not a generation model — still a real API call, only fires on button press); staging via `stage_listing_with_agent` (real Nano Banana compositing, ~$0.04/photo — the one billed generation call in this tile); article drafting via `create_article` (CMS DRAFT only, never published) |
+| **Listing photos** | listing query (+ optional hook/body for the cover; a carousel-slide kind + per-kind form; interior-photo checkboxes for agent staging; a title/category/excerpt/content form for an article draft; a title/content/hero-type/YouTube/theme form for a landing-page draft) | image nodes (with MLS provenance); the top-matched listing also offers a branded Instagram cover render, a carousel slide render (cma/text/cta/banner), an agent-staged interior-photo render, a CMS article draft, and a CMS landing-page draft (neither draft creates a canvas node — a CMS slug / editUrl+previewUrl) | `data-mls`; cover + slide renders via `create_listing_cover`/`create_carousel_slide` (templated server-side layout, not a generation model — still a real API call, only fires on button press); staging via `stage_listing_with_agent` (real Nano Banana compositing, ~$0.04/photo — the one billed generation call in this tile); article drafting via `create_article`, landing-page drafting via `create_landing_page` (both CMS DRAFT only, never published) |
 
 ## Reference person (Deepfake's identity + voice pairing)
 
@@ -275,6 +275,23 @@ of a blank box, without overwriting anything the user's already typed. `createAr
 was captured for this response any more than the carousel-slide fields were. Unlike every other
 tool in this chain, the result isn't a Cloudinary URL — no canvas node is created, only a status
 line showing the returned slug.
+
+A sixth tool, `create_landing_page` (Recommendations item 2's own "still open" note — a
+structurally bigger sibling to `create_article`, deliberately left for its own pass at the time):
+another DRAFT-only CMS write, this time a lead-capture landing page
+(`update_landing_page`'s `status: 'published'` is the real publish step, same AGENTS.md rule 6
+boundary). The reference doc documents only `title`/`content` as required and describes a
+`landingPage` block covering hero media, a YouTube embed, a theme override, and lead-form
+fields/recipients — but never gives the lead-form sub-shape a field-level schema anywhere, so
+`createLandingPageDraft()` in `chatrealty.ts` only sends the three simplest `landingPage` fields
+(`heroType`, `youtubeUrl`, `themeOverride`) and leaves lead-form configuration to the CMS's own
+editor once the draft exists, rather than guessing at an undocumented array shape. Sits beneath
+the article form as a fourth mini-form (title/content/hero-type toggle/YouTube URL/theme
+override), same "Prefill from listing facts" button reusing `listingContext()`. The tool's result
+is documented as `editUrl` + `previewUrl` rather than a bare slug — `createLandingPageDraft()`
+tries those two JSON keys first, falling back to scanning the raw response text for URLs. Not run
+live — no ChatRealty token in this sandbox, so the response-parsing fallback is unverified end to
+end.
 
 ## Where routing happens
 

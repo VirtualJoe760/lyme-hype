@@ -7,6 +7,8 @@ import type {
   ChatRealtyArticleDraftResult,
   ChatRealtyCarouselSlideInput,
   ChatRealtyCoverResult,
+  ChatRealtyLandingPageDraftInput,
+  ChatRealtyLandingPageDraftResult,
   ChatRealtyListingContextResult,
   ChatRealtyPullResult,
   ChatRealtyStageResult,
@@ -166,7 +168,11 @@ const api = {
     createArticleDraft: (
       input: ChatRealtyArticleDraftInput
     ): Promise<ChatRealtyArticleDraftResult | null> =>
-      ipcRenderer.invoke(IPC.chatRealtyArticleDraft, input)
+      ipcRenderer.invoke(IPC.chatRealtyArticleDraft, input),
+    createLandingPageDraft: (
+      input: ChatRealtyLandingPageDraftInput
+    ): Promise<ChatRealtyLandingPageDraftResult | null> =>
+      ipcRenderer.invoke(IPC.chatRealtyLandingPageDraft, input)
   },
   connectors: {
     list: (): Promise<ConnectorView[]> => ipcRenderer.invoke(IPC.connectorsList),

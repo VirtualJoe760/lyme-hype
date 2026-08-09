@@ -51,6 +51,7 @@ export const IPC = {
   chatRealtyCarouselSlide: 'chatrealty:create-carousel-slide',
   chatRealtyStage: 'chatrealty:stage-listing',
   chatRealtyArticleDraft: 'chatrealty:create-article-draft',
+  chatRealtyLandingPageDraft: 'chatrealty:create-landing-page-draft',
 
   connectorsList: 'connectors:list',
   connectorsSave: 'connectors:save',

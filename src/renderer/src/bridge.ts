@@ -5,6 +5,8 @@ import type {
   ChatRealtyArticleDraftResult,
   ChatRealtyCarouselSlideInput,
   ChatRealtyCoverResult,
+  ChatRealtyLandingPageDraftInput,
+  ChatRealtyLandingPageDraftResult,
   ChatRealtyListingContextResult,
   ChatRealtyPullResult,
   ChatRealtyStageResult,
@@ -119,6 +121,9 @@ export interface Bridge {
     createCarouselSlide(input: ChatRealtyCarouselSlideInput): Promise<ChatRealtyCoverResult | null>
     stageListing(listingKey: string, photoIndexes: number[]): Promise<ChatRealtyStageResult | null>
     createArticleDraft(input: ChatRealtyArticleDraftInput): Promise<ChatRealtyArticleDraftResult | null>
+    createLandingPageDraft(
+      input: ChatRealtyLandingPageDraftInput
+    ): Promise<ChatRealtyLandingPageDraftResult | null>
   }
   connectors: {
     list(): Promise<ConnectorView[]>
@@ -309,6 +314,10 @@ function createBrowserMock(): Bridge {
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       }),
       createArticleDraft: async () => ({
+        ok: false,
+        error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
+      }),
+      createLandingPageDraft: async () => ({
         ok: false,
         error: 'ChatRealty runs in the Electron main process — unavailable in browser preview.'
       })

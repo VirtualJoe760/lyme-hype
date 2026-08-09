@@ -6,6 +6,8 @@ import type {
   ChatRealtyArticleDraftResult,
   ChatRealtyCarouselSlideInput,
   ChatRealtyCoverResult,
+  ChatRealtyLandingPageDraftInput,
+  ChatRealtyLandingPageDraftResult,
   ChatRealtyListing,
   ChatRealtyListingContextResult,
   ChatRealtyPullResult,
@@ -396,6 +398,62 @@ export async function createArticleDraft(
       slug = text.trim().slice(0, 120) || undefined
     }
     return { ok: true, slug }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    client.stop()
+  }
+}
+
+/**
+ * `create_landing_page` — a DRAFT lead-capture page on the agent's own CMS,
+ * same publish boundary as `createArticleDraft` (`update_landing_page`'s own
+ * `status: 'published'` transition is the real publish step, untouched here,
+ * AGENTS.md rule 6). Only the fields the reference doc documents at the field
+ * level (`title`, `content`, and the three simplest `landingPage` block
+ * fields) are sent — the lead-form fields/recipients sub-shape isn't
+ * documented anywhere, so it's left out rather than guessed at.
+ */
+export async function createLandingPageDraft(
+  input: ChatRealtyLandingPageDraftInput
+): Promise<ChatRealtyLandingPageDraftResult> {
+  const client = new McpStdioClient()
+  try {
+    const token = resolveChatRealtyToken()
+    if (!token) return { ok: false, error: 'No ChatRealty token configured.' }
+    await client.start(serverSpec(token))
+
+    const landingPage: Record<string, unknown> = {}
+    if (input.heroType) landingPage.heroType = input.heroType
+    if (input.youtubeUrl) landingPage.youtubeUrl = input.youtubeUrl
+    if (input.themeOverride) landingPage.themeOverride = input.themeOverride
+
+    const args: Record<string, unknown> = {
+      title: input.title,
+      content: input.content
+    }
+    if (Object.keys(landingPage).length > 0) args.landingPage = landingPage
+
+    const result = await client.callTool('create_landing_page', args)
+    if (result.isError) {
+      return { ok: false, error: textOf(result.content).slice(0, 300) }
+    }
+    const text = textOf(result.content)
+    let editUrl: string | undefined
+    let previewUrl: string | undefined
+    try {
+      const parsed = JSON.parse(text) as Record<string, unknown>
+      if (typeof parsed.editUrl === 'string') editUrl = parsed.editUrl
+      if (typeof parsed.previewUrl === 'string') previewUrl = parsed.previewUrl
+    } catch {
+      // The reference doc only says "Returns editUrl + previewUrl" loosely,
+      // no field-level schema — fall back to scanning the raw text for URLs
+      // rather than failing a draft that plainly succeeded server-side.
+      const urls = text.match(/https?:\/\/\S+/g) ?? []
+      editUrl = urls[0]
+      previewUrl = urls[1] ?? urls[0]
+    }
+    return { ok: true, editUrl, previewUrl }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {

@@ -7,6 +7,78 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Thirtieth autonomous run: ChatRealty landing-page drafts wired (Recommendations item 2's deferred second half, closing it fully)
+
+Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only, unchanged for
+thirty runs straight now). Recommendations items 1, 3, 4, 5 fully struck; item 2 struck for
+`create_article` but still carrying one open sub-note — `create_landing_page` was flagged by name
+at the time as "structurally bigger" and deliberately deferred rather than rushed into the same
+run as the article form.
+
+**What I considered first, and why I didn't build it.** Item 1's own still-open sub-note reads:
+"Motion graphics' and Combine's image-conditioning paths could get the same 'via: fal' treatment
+if a design pass wants it." I scoped this first — it looked like the more directly-flagged
+candidate — but reading `docs/connectors/reference/fal.md`'s own gotchas section stopped me:
+> **"nano-banana" is Gemini resold**: `fal-ai/nano-banana-pro` ≡ `fal-ai/gemini-3-pro-image-preview`
+> (same price, same model). We already have a direct Gemini connector — routing image work to
+> fal's nano-banana just adds fal margin.
+Motion graphics' reference-conditioning image generation is exactly the kind of call that would
+hit. Adding a "via: fal" picker there wouldn't have surfaced a genuinely new capability the way the
+video i2v picker did (fal's real advantage there is Kling/Seedance/WAN — models Gemini doesn't
+have) — it would have shipped a UI control whose only live-visible effect is paying fal's markup
+for a model we already call directly. That's not "surfacing what already works," it's building an
+attractive nuisance. Skipped it, and I think a human should decide deliberately if fal's image path
+is ever wanted (e.g. a specific fal-only image model, not nano-banana) rather than have a routine
+wire it in just because a UI slot was open.
+
+**What I built instead.** `create_landing_page`, ChatRealty's sixth tool, same DRAFT-only CMS
+posture as `create_article` (`update_landing_page`'s `status: 'published'` transition is the real
+publish step and stays untouched, AGENTS.md rule 6). The reference doc documents only
+`title`/`content` (≥500 chars) as required, and describes a `landingPage` block covering hero
+media, a YouTube embed, a theme override, and lead-form fields/recipients — but never gives that
+block's lead-form sub-shape a field-level schema anywhere, unlike the two-field required set.
+Rather than guess at an array-of-field-defs-plus-recipients shape with zero documentation to check
+it against, `createLandingPageDraft()` in `chatrealty.ts` sends only the three simplest
+`landingPage` fields (`heroType: 'photo'|'video'`, `youtubeUrl`, `themeOverride`) alongside
+`title`/`content`, and leaves lead-capture configuration to the CMS's own editor once the draft
+exists. Same judgment call the carousel-slide field names and `create_article`'s response parsing
+already made — build what's documented, flag what isn't, don't fabricate a schema.
+
+Full plumbing end to end, same shape as every prior ChatRealty tool in this chain:
+`ChatRealtyLandingPageDraftInput`/`Result` in `shared/types.ts`, a `chatrealty:create-landing-page-draft`
+IPC channel through `ipc-channels.ts` → `ipc.ts` → `preload/index.ts` → `bridge.ts` (including the
+browser-preview mock's honest "unavailable" stub), and a `createChatRealtyLandingPageDraft` store
+action. `ChatRealtyPull.tsx` gained a fourth mini-form beneath the article draft form: title/content
+fields, a hero-type toggle (photo/video, click-to-clear), YouTube URL and theme-override inputs,
+and the same "Prefill from listing facts" button pattern reusing `bridge.chatRealty.listingContext()`
+— the `plan_listing_carousel` material every other draft/slide form in this chain already draws on.
+Submit stays disabled below the tool's 500-character content minimum, same live counter as the
+article form.
+
+**Response parsing.** The reference doc says the tool "Returns `editUrl` + `previewUrl`" — no field
+names given beyond that prose, one tier less documented than `create_article`'s "JSON text block
+(slug)." `createLandingPageDraft()` tries `editUrl`/`previewUrl` as JSON keys first; if the response
+doesn't parse as JSON, it falls back to scanning the raw text for `https?://` URLs and takes the
+first two matches. Same "don't fail a draft that plainly succeeded server-side over a parsing
+guess" posture as `create_article`'s slug fallback.
+
+**What I verified.** `npm run typecheck` clean on both `tsconfig.node.json` and `tsconfig.web.json`
+(fresh `npm install`, no `node_modules` at run start). **Not run live** — no ChatRealty token
+configured in this sandbox; both the request shape (only 3 of the `landingPage` block's real fields
+sent, the rest genuinely unknown) and the response-parsing fallback are unverified end to end, same
+ceiling as every prior pass in this queue. `creative-nodes.md`, `capability-map.md`, and
+`node-enrichment-strategy.md` updated in this commit.
+
+**Where this leaves things.** Recommendations item 2 is now fully closed — both `create_article`
+and `create_landing_page` shipped. Queue stays `done` on every row except row 1 (Deepfake,
+unchanged, joint-session scope). No new Recommendations items to add this pass beyond the
+fal-margin finding above, which is a "don't build this" flag for a human to weigh, not open scope
+for the routine. Expect the next several runs to find nothing further safely buildable blind unless
+a human adds new rows or Recommendations items — same honest-empty-queue state the twenty-ninth
+run's own writeup already described.
+
+---
+
 ## 2026-08-09 — Twenty-ninth autonomous run: muapi image-edit wired into Motion graphics' batch stage (Recommendations item 5, closing it and the queue)
 
 Queue state going in: every row `done` except row 1 (Deepfake, joint-session-only) and row 2
@@ -1858,10 +1930,13 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    form on the Listing photos tile, `createArticleDraft()` in `chatrealty.ts`, a "Prefill from
    listing facts" button reusing the `listingContext`/`plan_listing_carousel` plumbing row 10 step 2
    already built. DRAFT-only, same as ever — `update_article`'s `status: 'published'` transition
-   stays untouched, per AGENTS.md rule 6. **Still open:** `create_landing_page` (a structurally
-   bigger form — MDX body plus a `landingPage` block for lead-form fields/recipients/hero
-   type/theme, returning `editUrl`/`previewUrl` rather than a bare slug) was deliberately left for
-   its own pass rather than rushed into the same run as the article form.
+   stays untouched, per AGENTS.md rule 6. **`create_landing_page`'s slice shipped too** (2026-08-09,
+   thirtieth autonomous run): a fourth mini-form beneath the article form —
+   title/content/hero-type/YouTube-URL/theme-override, same prefill button, `createLandingPageDraft()`
+   in `chatrealty.ts`. Only `title`/`content` plus the three simplest `landingPage` block fields are
+   sent; the lead-form fields/recipients sub-shape has no field-level documentation anywhere in the
+   reference doc, so it's deliberately left to the CMS's own editor rather than guessed at. Item 2
+   is now fully closed.
 
 3. ~~**Veo video-extension** (`+7s` chained, 720p)~~ — **shipped** (backend: 2026-08-09, twenty-third
    autonomous run; canvas UI + duration tracking: 2026-08-09, twenty-fourth autonomous run). See that

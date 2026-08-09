@@ -3,6 +3,7 @@ import { IPC } from '@shared/ipc-channels'
 import type {
   ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
+  ChatRealtyLandingPageDraftInput,
   CombineLocalKind,
   ConnectorDef,
   GenerationParams,
@@ -32,6 +33,7 @@ import { claudeAuthOverrideKind } from './claude-auth'
 import {
   createArticleDraft,
   createCarouselSlide,
+  createLandingPageDraft,
   createListingCover,
   hasChatRealtyToken,
   planListingCarousel,
@@ -345,6 +347,10 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.chatRealtyArticleDraft, (e, input: ChatRealtyArticleDraftInput) => {
     if (!isMainSender(e)) return null
     return createArticleDraft(input)
+  })
+  ipcMain.handle(IPC.chatRealtyLandingPageDraft, (e, input: ChatRealtyLandingPageDraftInput) => {
+    if (!isMainSender(e)) return null
+    return createLandingPageDraft(input)
   })
 
   ipcMain.handle(IPC.connectorsList, (e) => {
