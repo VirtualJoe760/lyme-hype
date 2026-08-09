@@ -1026,7 +1026,9 @@
 
 .create-tiles {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Responsive to the resizable aside: ~3 columns wide, 2 at the default
+   * width, 1 when narrow — keeps the tile thumbs from stretching into bars. */
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px;
   margin: 4px 4px 10px;
 }
@@ -1047,7 +1049,9 @@
 }
 
 .create-tile-thumb {
-  height: 44px;
+  aspect-ratio: 2 / 1;
+  max-height: 76px;
+  width: 100%;
   display: grid;
   place-items: center;
   font-size: 18px;
