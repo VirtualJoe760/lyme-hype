@@ -29,6 +29,25 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-third autonomous run) — queue confirmed fully `done`/blocked (rows 1–2 need a
+  joint session or a design pass, rows 3–10 `done`), so per the empty-queue guardrail took the next
+  Recommendations item: #3, Veo video-extension. Shipped `gemini_extend_video` in
+  `resources/gemini-mcp.cjs` (new tool: `source_video_path` + `prompt` → base64 re-read of the local
+  clip, `predictLongRunning`, forced 8s duration, same poll/download pattern as
+  `gemini_generate_video`; rejects the lite variant and a >148s-total extension) plus
+  `GenerationParams.extendVideoPath`/`extendVideoDurationSec` wired through `generation.ts`'s
+  disk-path resolution and agent prompt hints. Backend/wrapper only — no canvas UI (no "Extend +7s"
+  button), no chained-duration tracking across multiple extensions, and the wire shape for the prior
+  video reference is genuinely unverified (Google's own docs show `inlineData`, a developer-forum
+  report says `uri` is required instead — used `inlineData` per the primary docs source, flagged
+  both in `docs/connectors/reference/gemini.md`'s new `gemini_extend_video` entry and
+  `capability-map.md`'s open-items list). `npm run typecheck` clean (fresh `npm install`, no
+  `node_modules` at run start) plus `node --check` on the wrapper file itself. Not run live — no
+  Gemini key in this sandbox. resume: next pass should build the canvas "Extend +7s" UI (video node
+  action + `connectorId: 'gemini'` force, mirroring row 3's starting-frame picker) and duration
+  tracking (a video node needs to remember its cumulative extended length so the 148s cap can
+  actually be enforced) — and treat the first live click as the real verification of which wire
+  shape is correct, ready to swap `inlineData`→`uri` if it 400s.
 - 2026-08-09 (twenty-second autonomous run) — queue confirmed fully `done` (all ten rows), same as
   the twenty-first run found. Per the empty-queue guardrail, took the top item off the report's own
   Recommendations list rather than inventing a new row: item 4, Yapper's voice library, was flagged

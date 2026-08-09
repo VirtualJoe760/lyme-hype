@@ -44,7 +44,7 @@ way around.
 | `video-gen-t2v` | ✓ Seedance/Kling/Veo/Sora (591 models) | — | ○ video models | ○ Seedance/WAN etc. | ✓ Veo 3.1 (lite = $0.05/s) | — | ○ ~20 models (sora-2, kling-3, seedance-2.x…) | — |
 | `video-gen-i2v` | ○ video-from-image (single image_url) | — | ○ | ○ (needs `asset-upload`) | ✓ start frame | — | ○ | — |
 | `video-frame-conditioning` | ○ **REST-only** (MCP tool can't express it) | — | ○ | ○ (5 different param spellings — check per model) | ✓ image+lastFrame (dur must be 8) | — | ○ | — |
-| `video-extension` | — | — | ○ Seedance 1.0 Pro `start_video` | — | ○ Veo 3.1 (+7s ×20, 720p) | — | — | — |
+| `video-extension` | — | — | ○ Seedance 1.0 Pro `start_video` | — | ✓ Veo 3.1 wrapper tool (+7s ×20, 720p; no canvas UI yet, wire shape unverified) | — | — | — |
 | `image-gen` | ✓ flux/nano-banana/imagen4 | — | ✓ K2 family (1K only) | ○ (nano-banana here = resold Gemini — prefer direct) | ✓ Nano Banana 2 | ✓ gpt-image-2 (quality = price lever) | ○ 11 models | ○ covers/carousel/staging (templated, Cloudinary URLs) |
 | `image-production` | ✓ Midjourney V7/V8/Niji (muapi-exclusive: MJ/Suno/Sora have ZERO fal endpoints) | — | ○ K2 Large | — | — | — | — | — |
 | `image-ref-conditioning` | ○ image-edit tool | — | ○ | ○ | ✓ ≤10 obj +4 char +3 style refs (NB2) | ✓ edits ≤16 refs | — | ○ staging composites agent headshots |
@@ -163,8 +163,17 @@ several connectors can satisfy one node.
   so parsing reads defensively across the field names the sibling `/audio/speech` response's own
   `voice{voiceId,provider,name}` object uses — worth a live check once a REST key exists. Picking
   no voice still falls back to Yapper's own default, same as before.
-- **Veo video-extension** (+7s chained, 720p) — a natural "extend this clip" action on video
-  nodes; extending also resets the 2-day server retention clock.
+- **Veo video-extension** (+7s chained, 720p) — the wrapper tool now exists (`gemini_extend_video`,
+  2026-08-09 enrichment run) and `GenerationParams` carries `extendVideoPath`/`extendVideoDurationSec`
+  through `generation.ts`'s agent prompt, but no canvas UI sets those fields yet — still needs an
+  "Extend +7s" button/picker on a video node, plus real duration tracking across chained extensions
+  (the 148s/20-extension cap) which the wrapper can only enforce if the caller tells it the running
+  total. The wire shape for the prior-video reference itself is **unverified** — see
+  `docs/connectors/reference/gemini.md`'s `gemini_extend_video` entry for the two conflicting shapes
+  found (official docs' `inlineData` vs. a forum report wanting `uri`) and why the wrapper went with
+  `inlineData` from a local re-read rather than threading Google's short-lived video URI through (the
+  wrapper already discards it after downloading). Extending also resets the 2-day server retention
+  clock, moot for the wrapper since it downloads immediately either way.
 - **ChatRealty's whole creative-rendering chain is now wired** — all four tools
   (`create_listing_cover`, `plan_listing_carousel`, `create_carousel_slide`,
   `stage_listing_with_agent`), the last two both landing in the same overnight pass window

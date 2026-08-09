@@ -156,6 +156,14 @@ function buildPrompt(params: GenerationParams): string {
       `Audio file(s) on disk to use as-is (do not regenerate speech, it already exists): ${params.referenceAudioPaths.join(' | ')}.`
     )
   }
+  if (params.extendVideoPath) {
+    lines.push(
+      `This is a video-extension request, not a fresh generation: extend the existing video at ${params.extendVideoPath} by ~7 seconds using the tool's source_video_path parameter (e.g. gemini_extend_video).`
+    )
+    if (params.extendVideoDurationSec) {
+      lines.push(`Pass its current length, ${params.extendVideoDurationSec} seconds, as previous_duration_seconds.`)
+    }
+  }
   if (params.sourceMediaPath || params.referenceAudioPaths?.length) {
     lines.push(
       "If the target generation tool needs a hosted URL rather than a local path, and one of your attached connectors exposes its own file-upload tool (e.g. a *_upload_file tool), call that first to get a URL, then pass the returned URL to the generation tool."
@@ -196,7 +204,8 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     referenceAudioPaths: params.referenceAudioPaths
       ?.map(toDiskPath)
       .filter((p): p is string => p !== null),
-    sourceMediaPath: params.sourceMediaPath ? (toDiskPath(params.sourceMediaPath) ?? undefined) : undefined
+    sourceMediaPath: params.sourceMediaPath ? (toDiskPath(params.sourceMediaPath) ?? undefined) : undefined,
+    extendVideoPath: params.extendVideoPath ? (toDiskPath(params.extendVideoPath) ?? undefined) : undefined
   }
 
   const restrictIds =

@@ -7,6 +7,77 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-third autonomous run: Veo video-extension wrapper tool (Recommendations item 3), backend only
+
+Queue state going in: all ten rows `done` (rows 1/2 technically `in-progress` but both flagged
+nothing-safely-buildable-blind by prior runs — row 1 needs a joint session, row 2's remaining item
+needs its own design pass). Per the empty-queue guardrail, took the next item off the report's own
+Recommendations list: item 3, Veo video-extension, flagged by the twentieth run as "the next
+similarly-scoped candidate" once item 4 (Yapper voice browsing) shipped in the twenty-second run.
+
+**What I researched.** Re-read the Gemini reference doc's existing (verified) note that Veo 3.1
+supports `+7s` chained extension up to 148s total — that fact was already documented from the
+model catalog, but `resources/gemini-mcp.cjs` never exposed a tool for it, only
+`gemini_generate_video`. WebSearched for the actual REST wire shape since neither our reference doc
+nor the wrapper had ever nailed it down, and found a genuine conflict worth flagging rather than
+picking one silently:
+- Google's own Veo docs page (`ai.google.dev/gemini-api/docs/veo`) shows the prior video referenced
+  as `instances[0].video: {inlineData: {mimeType: 'video/mp4', data: <base64>}}` — the same
+  `inlineData` shape `generateContent`'s own image parts use.
+- A Google AI developer forum thread (2026) reports the live REST endpoint rejecting base64 video
+  on that field ("bytesBase64Encoded isn't supported by this model") and says only
+  `video: {uri: <files/...:download URL>}` — the *original* generation's short-lived (2-day) authed
+  URI — actually works.
+
+These aren't reconcilable without a live key to test against. Building the `uri`-based version
+would also require restructuring the wrapper to retain the operation's video URI across calls
+(today `generateVideo()` downloads it and throws it away immediately — nothing persists an
+operation's identity past one tool call), a materially bigger change than "wire a new tool," so I
+scoped that out rather than half-build it. Went with the shape shown in Google's own primary docs
+page for this pass, and documented the disagreement explicitly in the reference doc and
+`capability-map.md` rather than presenting it as settled — the same "flag the real uncertainty"
+posture the Krea `/assets` response and Yapper `AudioVoice` shape got from earlier runs.
+
+**What I built.** `gemini_extend_video` in `resources/gemini-mcp.cjs`: takes `source_video_path`
+(absolute local path to a prior generated mp4) and `prompt` (what happens next), re-reads and
+base64-encodes the local file, POSTs `predictLongRunning` with the `inlineData` shape above and the
+mandatory `durationSeconds: 8`, polls the same way `gemini_generate_video` already does, downloads
+and returns `RESULT_FILE:`. Rejects `veo-3.1-lite-generate-preview` outright (extension isn't
+supported on lite per the model table) and rejects an extension that would push a known running
+total past 148s if the caller supplies `previous_duration_seconds`. `GenerationParams` gained
+`extendVideoPath`/`extendVideoDurationSec` (`shared/types.ts`), resolved to a disk path in
+`generation.ts` the same way `startFramePath`/`sourceMediaPath` already are, with a new prompt-hint
+block telling the agent this is an extension request, not a fresh generation, and which tool
+param to use.
+
+**What I deliberately left out.** No canvas UI — no "Extend +7s" button on a video node, no picker,
+no `connectorId: 'gemini'` force the way row 3's starting-frame picker set. No chained-extension
+duration tracking either: the wrapper can enforce the 148s cap *if told* the running total, but
+nothing computes or threads that total from a chain of already-extended clips yet — that's real UI
++ store-state work (a video node would need to remember its own cumulative extended length), not a
+parameter wire-up, so it's genuinely the next slice rather than something to rush into this pass.
+Both gaps, plus the wire-shape uncertainty above, are called out as the resume note below and in
+`capability-map.md`'s open-items list.
+
+**What I verified.** `node --check resources/gemini-mcp.cjs` (plain syntax check — it's a
+dependency-free CJS file outside the TS build). `npm run typecheck` clean on both
+`tsconfig.node.json` and `tsconfig.web.json` (fresh `npm install`, no `node_modules` at run start).
+**Not run live** — no Gemini API key in this sandbox, and even with one, this is exactly the kind
+of new/unverified wire shape this routine should never fire blind against a billed endpoint per the
+live-call guardrail. `capability-map.md` (matrix row + open-items bullet) and the report's own
+Recommendations item 3 updated in this commit; `creative-nodes.md` left untouched since nothing
+user-visible changed yet (no node's inputs/outputs are different from the user's point of view
+until the UI half lands).
+
+**Where this leaves things.** Not a queue row, so nothing to mark `done`/`in-progress` in the
+progress table — tracked instead as a now-partially-struck Recommendations item 3, with a resume
+note in the progress file's session log for whoever (human or routine) picks up the UI half next:
+build the "Extend +7s" button + duration tracking, and treat the first live click as the actual
+verification of which wire shape (`inlineData` vs `uri`) is correct — expect it might need a quick
+follow-up fix either way.
+
+---
+
 ## 2026-08-09 — Twenty-first autonomous run: another collision on row 10 step 4, deferred after review
 
 Queue state going in (from my own read of the branch at the start of this run): row 10
@@ -1440,10 +1511,14 @@ starting point for whoever plans the next phase of enrichment (human or routine)
    the live-billed-call caution every generation tile needs. Genuinely lower-risk than most of what
    this queue already shipped.
 
-3. **Veo video-extension** (`+7s` chained, 720p, mentioned in `capability-map.md`'s open-items list
-   since early in this queue) is a natural "extend this clip" action on any Gemini-sourced video
-   node — the wrapper capability already exists per the reference doc, nothing in the UI surfaces
-   it. Small, contained, similar shape to the starting-frame picker row 3 already shipped.
+3. ~~**Veo video-extension** (`+7s` chained, 720p)~~ — **backend half shipped, UI still open**
+   (2026-08-09, twenty-third autonomous run): `resources/gemini-mcp.cjs` gained `gemini_extend_video`
+   (`source_video_path` + `prompt` → `instances[0].video.inlineData` + forced 8 s duration, same
+   long-running-op pattern as `gemini_generate_video`), `GenerationParams` gained
+   `extendVideoPath`/`extendVideoDurationSec`, and `generation.ts`'s prompt builder hints the agent
+   toward the new tool when they're set. **Not a full ship** — see that run's entry below for what's
+   still missing (a canvas UI picker, chained-extension duration tracking, and a genuinely unverified
+   wire shape for the prior-video reference itself).
 
 4. ~~**Yapper's voice library** (`GET /audio/voices`)~~ — **shipped** (2026-08-09, twenty-second
    autonomous run): a Cartesia/ElevenLabs provider toggle on the Voice job's Yapper-fallback block

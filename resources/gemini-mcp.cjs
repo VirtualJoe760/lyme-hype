@@ -177,6 +177,62 @@ async function generateVideo(args) {
   return `RESULT_FILE: ${file}`
 }
 
+// Video extension: append ~7 s of new content onto a Veo-generated clip.
+// [unverified] wire shape — official docs (ai.google.dev/gemini-api/docs/veo)
+// show `instances[0].video: {inlineData: {mimeType, data}}` for the prior
+// clip, matching the `inlineData` shape generateContent's own image parts
+// use; at least one third-party report claims the REST endpoint rejects
+// base64 video and wants `video: {uri: <files/... download URL>}` instead —
+// but that uri is the short-lived (2-day) authed one this wrapper already
+// discards after downloading, so honoring it would mean restructuring the
+// wrapper to retain operation state across calls. Going with the shape the
+// primary docs show; if it 400s in practice the fix is almost certainly
+// swapping to `uri` and threading the original operation's video URI through
+// instead of a fresh local-file read. Not supported on the lite variant.
+async function extendVideo(args) {
+  const sourcePath = String(args.source_video_path || '').trim()
+  if (!sourcePath) throw new Error('source_video_path is required')
+  const prompt = String(args.prompt || '').trim()
+  if (!prompt) throw new Error('prompt is required (what happens in the next ~7 seconds)')
+  const model = VIDEO_MODELS.includes(args.model) ? args.model : VIDEO_MODEL
+  if (model === 'veo-3.1-lite-generate-preview') {
+    throw new Error('Video extension is not supported on veo-3.1-lite-generate-preview — use the default or fast model.')
+  }
+  const priorDuration = Number(args.previous_duration_seconds) || 0
+  if (priorDuration > 0 && priorDuration + 7 > 148) {
+    throw new Error(`Extending would exceed Veo's 148 s total-length cap (already at ~${priorDuration}s).`)
+  }
+  const data = readFileSync(sourcePath).toString('base64')
+  const body = {
+    instances: [{ prompt, video: { inlineData: { mimeType: 'video/mp4', data } } }],
+    // Extension requires the mandatory 8 s duration, same as lastFrame interpolation.
+    parameters: { durationSeconds: 8 }
+  }
+  const op = await api(`models/${model}:predictLongRunning`, body)
+  if (!op.name) throw new Error('No operation returned for video extension')
+
+  const deadline = Date.now() + VIDEO_TIMEOUT_MS
+  let status = op
+  while (!status.done) {
+    if (Date.now() > deadline) throw new Error('Video extension timed out')
+    await new Promise((r) => setTimeout(r, VIDEO_POLL_MS))
+    status = await api(status.name.startsWith('operations/') || status.name.includes('/') ? status.name : `operations/${status.name}`)
+  }
+  if (status.error) throw new Error(`Video extension failed: ${status.error.message || 'unknown error'}`)
+
+  const r = status.response || {}
+  const gv = r.generateVideoResponse || r
+  const sample = (gv.generatedSamples && gv.generatedSamples[0]) || (gv.generatedVideos && gv.generatedVideos[0])
+  const uri = sample && sample.video && (sample.video.uri || sample.video.videoUri)
+  if (!uri) throw new Error('Video extension finished but no video URI in response')
+
+  const dl = await fetch(uri, { headers: { 'x-goog-api-key': apiKey() } })
+  if (!dl.ok) throw new Error(`Video download failed: HTTP ${dl.status}`)
+  const file = join(outDir(), `${randomUUID()}.mp4`)
+  writeFileSync(file, Buffer.from(await dl.arrayBuffer()))
+  return `RESULT_FILE: ${file}`
+}
+
 const TOOLS = [
   {
     name: 'gemini_generate_image',
@@ -214,6 +270,28 @@ const TOOLS = [
       },
       required: ['prompt']
     }
+  },
+  {
+    name: 'gemini_extend_video',
+    description:
+      'Extend an existing Veo-generated video by ~7 seconds of new content (Veo 3.1, not the lite variant). Pass the absolute local path of the previously generated mp4 and a prompt describing what happens next. Up to 20 extensions per clip, 148s total. Takes minutes; polls until done. Returns a RESULT_FILE: line with the absolute path of the saved, extended mp4.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source_video_path: { type: 'string', description: 'Absolute local path of the video to extend (a prior gemini_generate_video/gemini_extend_video result)' },
+        prompt: { type: 'string', description: 'What happens in the next ~7 seconds' },
+        model: {
+          type: 'string',
+          enum: VIDEO_MODELS.filter((m) => m !== 'veo-3.1-lite-generate-preview'),
+          description: 'Veo variant (optional, defaults to the standard model). Extension is not supported on the lite variant.'
+        },
+        previous_duration_seconds: {
+          type: 'number',
+          description: "The source video's current total length in seconds, if known — used to reject an extension that would exceed Veo's 148s cap (optional)."
+        }
+      },
+      required: ['source_video_path', 'prompt']
+    }
   }
 ]
 
@@ -236,7 +314,9 @@ async function handle(msg) {
           ? await generateImage(args)
           : name === 'gemini_generate_video'
             ? await generateVideo(args)
-            : null
+            : name === 'gemini_extend_video'
+              ? await extendVideo(args)
+              : null
       if (text === null) throw new Error(`Unknown tool: ${name}`)
       return { content: [{ type: 'text', text }], isError: false }
     } catch (err) {

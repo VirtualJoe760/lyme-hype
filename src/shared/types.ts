@@ -129,6 +129,14 @@ export interface GenerationParams {
   /** The face/performance media to drive (Deepfake's source video or still
    *  photo) — lyme-asset:// URL or absolute path, resolved main-side. */
   sourceMediaPath?: string
+  /** A previously generated video to extend by ~7s (Veo via the Gemini
+   *  wrapper's gemini_extend_video) — lyme-asset:// URL or absolute path,
+   *  resolved main-side. Set alongside `extendVideoDurationSec` when the
+   *  source clip's current length is known, so the wrapper can enforce
+   *  Veo's 148s total-extension cap. */
+  extendVideoPath?: string
+  /** The source clip's current total length in seconds, if known. */
+  extendVideoDurationSec?: number
 }
 
 export interface LocalToolResult {
