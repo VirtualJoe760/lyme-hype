@@ -7,6 +7,61 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Eleventh autonomous run: Create a LoRA (row 6), Deepfake-photo shortcut — row closed
+
+Row 5 was fully done as of the tenth run, so this pass moved to row 6 per the strategy doc's
+priority order: "Create a LoRA" already has two working trainers, and the queue's stated gap was a
+"train from this deepfake's reference photos" shortcut, now unblocked since row 1's Reference
+person concept shipped several runs ago.
+
+**What I built:** the Deepfake screen's face/performance-node picker now shows a "◈ Train a LoRA
+from this photo" button whenever the currently-picked node is a still image (deliberately excluded
+for video source nodes — neither trainer accepts a video, and grabbing a representative frame
+automatically felt like a decision a user should make explicitly, not one worth guessing). Clicking
+it jumps to the Create a LoRA screen with that image already loaded as the first training file,
+`kind` defaulted to "Subject / character" instead of "Style" (this is a person's likeness, not a
+visual style), and `name` defaulted to `"<Reference person> — LoRA"` when a person was picked (or
+the node's own label otherwise). Also fixed the LoRA screen's file picker so a second picker click
+*adds* to the current selection instead of replacing it outright — without that, prefilling one
+photo and then picking three more to round out the set to 4+ would have silently thrown the
+prefilled one away, defeating the point of the shortcut.
+
+**The part that took real digging, not just UI wiring:** the shortcut only works if the training
+`imagePaths` array can actually contain a canvas node's `src`, and canvas node sources are always
+`lyme-asset://<file>` URLs — everything generated, uploaded, or link-imported gets copied into
+`userData/assets` and referenced that way (`asset-store.ts`), never a raw filesystem path. Both
+trainers (`fal-training.ts`, `krea-training.ts`) call `readFileSync(path)` directly on every entry
+in `imagePaths`. That's correct for what the native file-picker always handed back before this
+pass, and would throw `ENOENT` on a `lyme-asset://` string, since it isn't a real path at all. I
+checked whether this resolution step already existed anywhere in the codebase before writing it —
+it does, one case away: `ipc.ts`'s `scriptingTurn` handler already resolves `lyme-asset://` URLs to
+disk paths via `assetPathForUrl()`, built for the Motion graphics wizard's vision-input references,
+which is the exact same "canvas node feeds a main-process call" shape. The `lora:train` handler two
+cases below it in the same file just never got the equivalent fix, because until this shortcut
+existed there was no code path capable of handing it a `lyme-asset://` URL. Added the identical
+one-line resolve-and-filter to `lora:train`, matching the existing pattern rather than inventing a
+new one — and since it lives at the IPC layer, not inside the shortcut's own code, any future
+caller that wants to train from a canvas node (not just this one button) gets it for free.
+
+**Verified:** `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`; this sandbox
+needed a fresh `npm install` again — `node_modules` wasn't present at run start). **Not run
+live** — no fal or Krea key is configured in this sandbox, and live spend is out of scope for this
+routine regardless. Worth calling out explicitly, though: this is one of the lower-risk changes
+shipped so far precisely because it doesn't touch *how* a trainer consumes `imagePaths`, only
+*which strings* are now valid to appear in that array before hitting the same unchanged
+`readFileSync` call — so there's less than usual riding on the eventual live-key verification pass.
+
+**Docs updated in the same commit:** `docs/ui/creative-nodes.md` (Create a LoRA tile row now
+mentions canvas-node image sources; a new paragraph under the Deepfake stage list cross-links the
+shortcut both directions), `docs/ui/node-enrichment-strategy.md` (row 6 status block),
+`docs/reports/node-enrichment-progress.md` (row 6 marked done, session log entry).
+
+Row 6 has nothing left buildable blind. Next run should move to row 7 (Combine) per the queue's
+priority order — the canvas drag-onto-node stub is still unimplemented semantics, a genuinely
+different shape of work than the last several parameter-wiring/prefill passes.
+
+---
+
 ## 2026-08-09 — Tenth autonomous run: Generate audio (row 5), Suno-via-muapi music fallback — row closed
 
 Picked up exactly where the ninth run's resume note said to: row 5's one remaining item,

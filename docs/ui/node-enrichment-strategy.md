@@ -261,6 +261,47 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    has nothing left buildable blind; next run should move to row 6 (Create a LoRA).
 6. **Create a LoRA** — already dual-trainer (Krea 2 / FLUX Krea); enrich with a "train from
    this deepfake's reference photos" shortcut once step 1's Reference-person concept exists.
+
+   **Status (2026-08-09 enrichment run — shipped):** the Deepfake screen's face/performance node
+   picker now shows a "Train a LoRA from this photo" button whenever the currently-picked node is
+   a still image (video source nodes are excluded — neither trainer accepts a video input, and
+   picking a representative still is a design choice a real user should make, not one to guess
+   automatically by grabbing a frame). Clicking it navigates to the Create a LoRA screen with that
+   image already in the training set (`kind` defaults to "Subject / character" rather than
+   "Style," and `name` defaults to `"<Reference person> — LoRA"` when a person was picked, or the
+   node's own label otherwise) — a genuine shortcut, not a dead end: the LoRA screen's own file
+   picker now *adds* newly-picked images to whatever's already selected (a small dedup'd merge,
+   `[...new Set([...prev, ...picked])]`) instead of replacing the selection outright, so the
+   prefilled photo survives the user rounding out the set to 4+ images afterward — previously each
+   picker click silently discarded the prior batch, which would have undone the whole point of the
+   shortcut.
+
+   The part of this that took actual investigation rather than being a straightforward UI wire-up:
+   the shortcut is only real if the resulting `imagePaths` array can *contain* a canvas node's
+   `src`, and canvas node sources are `lyme-asset://<file>` URLs (everything generated, uploaded,
+   or downloaded gets copied into `userData/assets` and referenced that way — see
+   `asset-store.ts`), never raw filesystem paths. Both trainers (`fal-training.ts`,
+   `krea-training.ts`) call `readFileSync(path)` directly on each entry in `imagePaths` — correct
+   for what the native file-picker (`bridge.media.pickFiles`) always returned before now, wrong for
+   a `lyme-asset://` URL, which would have thrown `ENOENT` trying to open a string that isn't a
+   filesystem path at all. Checked whether this resolution already existed anywhere before adding
+   it: `ipc.ts`'s `scriptingTurn` handler *does* already resolve `lyme-asset://` URLs via
+   `assetPathForUrl()` for the Motion graphics wizard's vision input (a case of exactly this same
+   canvas-node-as-input-to-a-main-process-call shape) — but the `lora:train` handler two cases
+   below it in the same file never got the equivalent treatment, because until this shortcut
+   existed there was no code path that could hand it a `lyme-asset://` URL in the first place.
+   Added the same one-line resolve-and-filter to `lora:train`'s handler, matching the existing
+   pattern exactly rather than inventing a new one. This also means any *future* caller that wants
+   to train a LoRA from a canvas node (not just this one shortcut) gets the capability for free —
+   it's IPC-layer plumbing, not shortcut-specific code.
+
+   `npm run typecheck` clean (`tsconfig.node.json` + `tsconfig.web.json`). **Not run live** — no
+   fal or Krea key configured in this sandbox; unlike most rows so far, this one has almost no
+   live-call risk to flag even once keys exist, since nothing about *how* the trainer consumes
+   `imagePaths` changed — only *which strings* can validly appear in that array before reaching the
+   unchanged `readFileSync` call. `creative-nodes.md`'s Create a LoRA tile row and Deepfake stage
+   list updated in this commit. Row 6 has nothing left buildable blind; next run should move to
+   row 7 (Combine).
 7. **Combine (canvas drag-onto-node)** — still a stub. Real semantics belong here:
    image+image → `image-ref-conditioning` mix; image+audio → `video-gen-i2v` with lip-sync if
    the image is a face. This is where several matrix ○ cells become real UI.

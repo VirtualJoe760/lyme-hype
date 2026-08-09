@@ -240,7 +240,16 @@ export function registerIpc(window: BrowserWindow): void {
       }
     ) => {
       if (!isMainSender(e)) return null
-      return trainStyle(input)
+      // Training images may be lyme-asset:// canvas node URLs (e.g. the
+      // Deepfake screen's "train a LoRA from this photo" shortcut), not just
+      // paths from the native file picker — resolve to disk paths here, same
+      // as scriptingTurn's vision input above.
+      return trainStyle({
+        ...input,
+        imagePaths: input.imagePaths
+          .map((p) => (p.startsWith('lyme-asset://') ? assetPathForUrl(p) : p))
+          .filter((p): p is string => p !== null)
+      })
     }
   )
   ipcMain.handle(IPC.loraList, (e) => (isMainSender(e) ? listTrainedStyles() : []))

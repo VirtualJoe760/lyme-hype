@@ -73,7 +73,7 @@ what does it cost. Readiness derives from the capability map's node→capability
 | **Generate audio · Clone** | name + sample files (+ optional Reference person to attach to) | a reusable voice (not a node) | `voice-clone` |
 | **Motion graphics** | references + instruction (wizard below) | image nodes + video node + alpha webm node | `image-gen`, `image-ref-conditioning`, `video-frame-conditioning`, local ffmpeg alpha |
 | **Isolate audio** | video node / file / direct URL | audio node | none — local ffmpeg (standing principle: local beats paid) |
-| **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
+| **Create a LoRA** | trainer pick (fal krea-2 / fal flux-krea / Krea direct) + style/subject + images (local files, or a canvas node's `lyme-asset://` URL — e.g. Deepfake's "train a LoRA from this photo" shortcut) + steps + trigger | trained style (Settings › Trained styles; `loraUrl` for fal trainers, a Krea `style_id` for the Krea-direct trainer) | `lora-train` |
 | **Deepfake** | Reference person (identity + voice) + script + source video/photo | audio node (speech) then video node (lip-sync/face) | `audio-tts` (direct ElevenLabs call) then `lipsync` / `face-swap` (agent call, restricted to the connected `yapper`/`muapi` pair) |
 | **Upload / Link** | file / direct URL | node of inferred type | none — local |
 | **Listing photos** | listing query | image nodes (with MLS provenance) | `data-mls` |
@@ -109,6 +109,15 @@ opaque call:
    Settings › Connectors, independent of Yapper's OAuth MCP login) and hands the agent the
    resulting `sourceVideoAssetId`/`audioAssetId` directly. **Unverified live** — no API keys are
    configured to fire this chain yet; the wiring is real, the call itself isn't.
+
+When the picked face/performance node is a still image, a **"Train a LoRA from this photo"**
+button next to the picker jumps to the Create a LoRA screen with that image already loaded as the
+first training image (kind defaults to "Subject / character," name defaults to the Reference
+person's name when one is picked) — the LoRA screen's file picker adds to that starting image
+rather than replacing it, so the shortcut is a head start, not the whole training set. This closes
+the loop the other way too: identity built with **Create a LoRA** and voice attached (§ above)
+can start from a photo Deepfake already had on the canvas, instead of a separate file-picker round
+trip through the OS dialog.
 
 ## Motion graphics wizard (stages as nodes)
 

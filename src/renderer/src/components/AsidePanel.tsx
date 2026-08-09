@@ -912,12 +912,15 @@ const TRAINERS = [
   }
 ]
 
-function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
-  const [name, setName] = useState('')
-  const [files, setFiles] = useState<string[]>([])
+function LoraScreen(props: {
+  connectors: ConnectorView[]
+  prefill?: { imageSrc: string; name: string } | null
+}): React.JSX.Element {
+  const [name, setName] = useState(props.prefill?.name ?? '')
+  const [files, setFiles] = useState<string[]>(props.prefill ? [props.prefill.imageSrc] : [])
   const [trainer, setTrainer] = useState(TRAINERS[0].id)
   const [steps, setSteps] = useState(TRAINERS[0].defaultSteps)
-  const [kind, setKind] = useState<'style' | 'subject'>('style')
+  const [kind, setKind] = useState<'style' | 'subject'>(props.prefill ? 'subject' : 'style')
   const [triggerWord, setTriggerWord] = useState('')
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
@@ -966,7 +969,11 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
               : '~$2/run'
         }
       />
-      <p className="aside-help">Use 4+ example images; more is better.</p>
+      <p className="aside-help">
+        {props.prefill
+          ? 'Started from a Deepfake reference photo — pick more of the same person for a stronger identity LoRA (4+ is better).'
+          : 'Use 4+ example images; more is better.'}
+      </p>
       <select
         className="cr-input create-select"
         value={trainer}
@@ -1004,7 +1011,11 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
       />
       <button
         className="action-btn"
-        onClick={() => void bridge.media.pickFiles('image').then((f) => f && setFiles(f))}
+        onClick={() =>
+          void bridge.media
+            .pickFiles('image')
+            .then((f) => f && setFiles((prev) => [...new Set([...prev, ...f])]))
+        }
       >
         {files.length > 0 ? `${files.length} training image(s) picked` : '↑ Pick training images'}
       </button>
@@ -1031,7 +1042,11 @@ function LoraScreen(props: { connectors: ConnectorView[] }): React.JSX.Element {
  * the agent can chain an upload tool into a lip-sync/face-swap tool without
  * opening every installed connector.
  */
-function DeepfakeScreen(props: { connectors: ConnectorView[]; styles: TrainedStyle[] }): React.JSX.Element {
+function DeepfakeScreen(props: {
+  connectors: ConnectorView[]
+  styles: TrainedStyle[]
+  onTrainFromFace: (imageSrc: string, name: string) => void
+}): React.JSX.Element {
   const nodes = useStudio((s) => s.nodes)
   const addNode = useStudio((s) => s.addNode)
   const generateMedia = useStudio((s) => s.generateMedia)
@@ -1059,6 +1074,7 @@ function DeepfakeScreen(props: { connectors: ConnectorView[]; styles: TrainedSty
       !n.data.panel
   )
   const faceNode = faceNodes.find((n) => n.id === faceNodeId)
+  const faceImageSrc = faceNode?.data.mediaType === 'image' ? faceNode.data.src : undefined
 
   async function generateSpeech(): Promise<void> {
     setSpeechBusy(true)
@@ -1182,6 +1198,16 @@ function DeepfakeScreen(props: { connectors: ConnectorView[]; styles: TrainedSty
           No ready video/image node on the canvas yet — upload or generate one first.
         </p>
       )}
+      {faceImageSrc && (
+        <button
+          className="action-btn"
+          onClick={() =>
+            props.onTrainFromFace(faceImageSrc, person ? `${person.name} — LoRA` : faceNode!.data.label)
+          }
+        >
+          ◈ Train a LoRA from this photo
+        </button>
+      )}
       <button className="generate-btn" disabled={!ready || !speechSrc || !faceNode} onClick={generateFace}>
         2 · Lip-sync / face
       </button>
@@ -1269,6 +1295,7 @@ export function AsidePanel(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('home')
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
   const [styles, setStyles] = useState<TrainedStyle[]>([])
+  const [loraPrefill, setLoraPrefill] = useState<{ imageSrc: string; name: string } | null>(null)
 
   useEffect(() => {
     void bridge.connectors.list().then(setConnectors)
@@ -1315,7 +1342,10 @@ export function AsidePanel(): React.JSX.Element {
                       ? tile.blurb
                       : `${tile.blurb} — connect any of: ${state.options}`
                   }
-                  onClick={() => setScreen(tile.key)}
+                  onClick={() => {
+                    setLoraPrefill(null)
+                    setScreen(tile.key)
+                  }}
                 >
                   <span className={`create-tile-thumb sw${(index % 6) + 1}`}>
                     {tile.glyph}
@@ -1342,8 +1372,17 @@ export function AsidePanel(): React.JSX.Element {
           />
         )}
         {screen === 'isolate' && <IsolateScreen />}
-        {screen === 'lora' && <LoraScreen connectors={connectors} />}
-        {screen === 'deepfake' && <DeepfakeScreen connectors={connectors} styles={styles} />}
+        {screen === 'lora' && <LoraScreen connectors={connectors} prefill={loraPrefill} />}
+        {screen === 'deepfake' && (
+          <DeepfakeScreen
+            connectors={connectors}
+            styles={styles}
+            onTrainFromFace={(imageSrc, name) => {
+              setLoraPrefill({ imageSrc, name })
+              setScreen('lora')
+            }}
+          />
+        )}
         {screen === 'upload' && <UploadScreen done={home} />}
         {screen === 'link' && <LinkScreen done={home} />}
         {screen === 'motion' && <MotionGraphicsWizard />}
