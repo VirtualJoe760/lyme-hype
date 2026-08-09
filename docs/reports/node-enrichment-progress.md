@@ -29,6 +29,17 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (sixteenth autonomous run) — collided with the fifteenth run on row 9, independently;
+  built a different, also-typechecked-clean implementation (reused the Cut Room export's own
+  multitrack compositor via a synthetic timeline spec, vs. their four purpose-built filter graphs),
+  reviewed their already-pushed fix, found their per-clip `hasAudio` probing on stitch/score more
+  careful than my reliance on the general compositor's own audio-inclusion logic and their real
+  `concat` filter more legible than my overlay-gating trick for the same sequential-playback effect,
+  reset to their commit rather than fight a six-file conflict between two structurally different
+  filter-graph designs, re-verified `npm run typecheck` clean on their tip myself. No code changes;
+  see the report for the full account, including one shipped-behavior difference flagged for a
+  human glance (audio+video's mute handling). Row 9 stays `done` from the fifteenth run. Next: row
+  10 (Listing photos / ChatRealty).
 - 2026-08-09 (fifteenth autonomous run) — Row 9 (Timeline / export) closed: built the local ffmpeg
   compositing row 7 explicitly scoped out ("belongs with row 9"). Four new pure args builders in
   `media-tools.ts` (stitch/overlay/score/mix), one `combineLocal()` dispatcher, one IPC channel

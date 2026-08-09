@@ -7,6 +7,60 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Sixteenth autonomous run: row-9 collision with a concurrent run, deferred after review
+
+Started this run the same way another session evidently did: row 8 was `done`, the strategy doc's
+row 9 note ("lower priority, look for gaps only") pointed at the same discovery — that row 7's own
+writeup had already deferred Combine's four non-generative pairs (video+video, image+video,
+audio+video, audio+audio) to "row 9's territory." I independently built a real implementation for
+all four (`combineOverlay` in `ffmpeg.ts`, reusing the Cut Room export's own `buildMultitrackArgs`
+compositor via a synthetic `TimelineExportSpec`, plus a separate direct `amix` for audio+audio
+since the overlay compositor always emits a video), typechecked it clean, committed, and hit a
+push rejection: `git fetch` showed a concurrent run had landed `c46f6ad` — "Combine: real local
+ffmpeg compositing for the four non-generative pairs (row 9)" — closing the identical gap first,
+also calling itself "the fifteenth autonomous run" for the same reason I did (both sessions saw
+the same fourteen-run history as their starting point).
+
+**Reviewed their diff before deciding what to do with mine.** Their approach differs
+architecturally from mine, not just in naming: I reused the general multitrack compositor
+end-to-end (a synthetic two-clip timeline spec through the same code path real Cut Room exports
+use); they wrote four dedicated, purpose-built ffmpeg filter graphs directly in `media-tools.ts`
+(`buildStitchArgs`/`buildOverlayImageArgs`/`buildScoreArgs`/`buildMixAudioArgs`, dispatched by a
+new `CombineLocalKind` union through one `combineLocal()`/`media:combine-local` IPC round trip).
+Both are sound designs — mine trades new filter-graph code for reuse of already-proven logic;
+theirs trades a slightly larger surface area for filter graphs that read as direct, standard
+idioms for each named operation (a real `concat` for stitch, an explicit `overlay...shortest=1`
+for the image-over-video case, `-c:v copy` for score since only the audio changes). Two places
+where theirs is measurably more careful than mine: (1) stitch and score both explicitly probe
+`hasAudio` on each source via `probeMediaInfo` and branch the filter graph accordingly (dropping
+audio entirely rather than referencing a stream that might not exist, avoiding `concat`'s
+requirement that every segment have matching stream counts); my version relied on
+`buildMultitrackArgs`'s own per-clip audio inclusion logic to degrade gracefully instead, which I
+believe is correct but is a subtler claim to verify by inspection than theirs. (2) their video+video
+stitch uses an actual `concat` filter, which is the unambiguous right tool for "play these two
+clips back to back," where mine repurposed the overlay compositor's `enable=between(t,start,end)`
+gating on a shared track to get the same sequential effect — correct once traced through by hand,
+but a less direct read of the code for the next person who has to touch it. Neither implementation
+has an obvious defect; theirs is the more legible of the two for exactly the operations Combine
+needs, and reuse-vs-purpose-built is a judgment call reasonable people land differently on, not a
+correctness question with one right answer.
+
+**Decision:** reset this branch to their commit rather than force a six-file conflict resolution
+between two structurally different implementations of the same four filter graphs — the established
+pattern this queue has used every time two runs have converged on the same row (rows 4, 6, and 8's
+collisions all resolved this way). Re-ran `npm run typecheck` against their commit myself to
+confirm it's clean rather than trusting their own report of it, which it is. No code changes from
+this run; row 9 stays `done` from their commit. Flagging one thing for a human glance rather than
+picking it myself: my `combineOverlay` path's implicit "video's own audio always stays unmuted
+under an added audio+video score track" behavior and their explicit `hasAudio`-probed branching
+are two different answers to the same edge case, and only their version is what's actually shipped
+— worth knowing that's the behavior in the app now, not a gap.
+
+**Queue state:** unchanged from the fifteenth run's own entry below — rows 1–9 done, row 10
+(Listing photos / ChatRealty) remains.
+
+---
+
 ## 2026-08-09 — Fifteenth autonomous run: Timeline/export (row 9), Combine's last four pairs go real — row closed
 
 Row 8 was `done` going into this pass (queue confirmed fully closed through row 8), so this run
