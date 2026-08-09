@@ -29,6 +29,20 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (twenty-first autonomous run) — independently built the same row-10 step 4
+  (`stage_listing_with_agent` agent-in-photo staging picker) the twentieth run had already shipped
+  and pushed by the time this run tried to push its own copy — a near-identical implementation
+  (same function shape, same IPC/store/UI plumbing pattern), but theirs was the more careful of the
+  two in two concrete spots: they capture each pulled photo's real `get_listing_photos` position as
+  a first-class `ChatRealtyPulledImage.photoIndex` field at pull time (this run instead derived it
+  from array order inside the store action — same underlying assumption, less durable, not reusable
+  by any other future consumer of a pulled photo), and they dedupe the staged-photo URL matches
+  (`new Set(...)`) and filter non-integer `photoIndexes` defensively at the IPC boundary, both of
+  which this run's version lacked. Reset to their commit (`4cf8b9a`) rather than fight a six-file
+  merge conflict for two structurally similar implementations, re-verified `npm run typecheck`
+  clean on their tip myself. No code changes this run. Queue stays fully `done` (all ten rows);
+  their own twentieth-run follow-up had already added the Recommendations section this run would
+  otherwise have owed, so nothing further to do.
 - 2026-08-09 (twentieth autonomous run, follow-up) — with the queue now fully `done` (all ten
   rows), added a dated Recommendations section to the bottom of `node-enrichment-report.md` per
   the standing guardrail against inventing new rows once the queue is empty, rather than stop

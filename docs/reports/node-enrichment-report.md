@@ -7,6 +7,71 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Twenty-first autonomous run: another collision on row 10 step 4, deferred after review
+
+Queue state going in (from my own read of the branch at the start of this run): row 10
+`in-progress`, step 4 (`stage_listing_with_agent`, the agent-in-photo staging picker) the only item
+left. I hadn't yet seen the twentieth run's work — it landed on origin while I was mid-build.
+
+**What I built, independently.** The same feature the twentieth run had already shipped:
+`stageListingWithAgent()` in `chatrealty.ts` (one `stage_listing_with_agent` MCP call, `photoIndexes`
+capped at 10 and made a hard requirement rather than merely "strongly preferred" per the tool's own
+schema, since the reference doc's gotcha documents default selection as usually wrong), a
+`ChatRealtyStagingResult` type, a `chatrealty:stage-listing` IPC channel end to end, a
+`stageChatRealtyListing` store action, and an "Agent-in-photo staging" checkbox-grid section on the
+Listing photos tile with a button whose copy states the real cost. `npm run typecheck` clean.
+Committed and went to push.
+
+**The push told a different story.** `git push` rejected — origin had moved. `git fetch` showed the
+twentieth run had already built essentially the same thing (`4cf8b9a`) and, on top of that, a
+follow-up commit (`21dab3b`) had already added the Recommendations section for the now-fully-done
+queue. Two runs had converged on the identical gap in the identical pass window — not surprising,
+since it was the only item left in the only in-progress row, but worth registering as it happened
+rather than silently overwriting.
+
+**What I compared.** Read the twentieth run's diff against my own line by line rather than assuming
+"they got there first, defer automatically." Both implementations are functionally equivalent —
+same function shape, same required-`photoIndexes` reasoning, same IPC/store/UI plumbing pattern —
+but theirs is the more careful of the two in two concrete, non-cosmetic spots:
+
+1. **Where `photoIndex` lives.** My version derived a pulled photo's staging index from its position
+   in the store's local array (`result.images.map((img, i) => ...)`) — correct today, but a value
+   that only exists inside one store action and has to be re-derived by hand if anything else ever
+   needs it. Their version adds `photoIndex` as a first-class field on `ChatRealtyPulledImage` itself,
+   captured once in `chatrealty.ts`'s `imagesToAssets()` at the moment each photo is actually pulled
+   from `get_listing_photos`. Same underlying assumption (pull order equals `get_listing_photos`
+   embed order — neither of us verified this against a live response, it's inferred from both tools
+   sharing the same photo feed), but theirs is the version other code can trust without re-deriving,
+   and it's the more honest place to attach the assumption's own documentation (the type's own doc
+   comment, not a comment buried in one store action).
+2. **Two defensive touches mine skipped.** Their `stageListingWithAgent()` dedupes the Cloudinary
+   URL matches with `new Set(...)` before downloading (my version would double-download and create
+   two duplicate nodes if the same URL appeared twice in the tool's response text — plausible if the
+   reply echoes a URL in both a caption and a list). Their IPC handler also filters
+   `photoIndexes` to actual integers before it reaches the main-process function
+   (`photoIndexes.filter((n) => Number.isInteger(n))`) — cheap insurance against a malformed
+   renderer-side array reaching an MCP tool call, which mine didn't have.
+
+Mine had one thing theirs didn't — an optional prompt-override textarea, riding on the tool's own
+`prompt` param — but a missing nice-to-have doesn't outweigh two real correctness/robustness gaps,
+so this wasn't a close call.
+
+**What I did about it.** Reset the branch to their commit (`4cf8b9a`, and their already-landed
+follow-up `21dab3b`) rather than open a six-file merge for two implementations of the same feature —
+the established pattern this queue has used for every prior collision (see the row-1, row-4, row-6,
+and row-9 entries above). Re-ran `npm run typecheck` on their tip myself rather than trusting their
+own report's claim — clean on both `tsconfig.node.json` and `tsconfig.web.json`. No code changes
+landed from this run.
+
+**Where this leaves things.** Row 10, and the entire ten-row queue, are fully `done` — confirmed by
+both runs independently arriving at the same conclusion from different builds of the same feature.
+The twentieth run's own follow-up already added the Recommendations section the empty-queue
+guardrail calls for, so there's nothing further this run owes there either. If the cadence keeps
+producing near-simultaneous runs on an empty queue, the next one should expect to find nothing left
+to build and, per that same guardrail, should stop rather than search for busywork.
+
+---
+
 ## 2026-08-09 — Twentieth autonomous run: merging a genuine collision on row 10 — both halves of the build order shipped, queue fully done
 
 Started this run to find another session had landed on row 10 at the same moment, independently —
