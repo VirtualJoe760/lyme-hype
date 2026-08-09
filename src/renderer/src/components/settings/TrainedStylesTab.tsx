@@ -45,6 +45,45 @@ function VoiceField(props: { style: TrainedStyle; onSaved: (style: TrainedStyle)
   )
 }
 
+/**
+ * A Reference person's tone/persona tag ("calm authoritative newsreader") —
+ * matched against a Storyboard shot's "feeling" annotation to auto-suggest
+ * this person on the Deepfake screen (docs/ui/node-enrichment-strategy.md,
+ * row 8), same shape as VoiceField above.
+ */
+function ToneField(props: { style: TrainedStyle; onSaved: (style: TrainedStyle) => void }): React.JSX.Element {
+  const [personaTone, setPersonaTone] = useState(props.style.personaTone ?? '')
+  const [saving, setSaving] = useState(false)
+  const dirty = personaTone.trim() !== (props.style.personaTone ?? '')
+
+  async function save(): Promise<void> {
+    setSaving(true)
+    try {
+      const updated = await bridge.lora.setTone(props.style.id, personaTone)
+      if (updated) props.onSaved(updated)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="settings-card-voice">
+      <input
+        className="cr-input"
+        placeholder="Tone/persona (e.g. calm authoritative newsreader)"
+        value={personaTone}
+        onChange={(e) => setPersonaTone(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void save()
+        }}
+      />
+      <Button variant="mini" disabled={saving || !dirty} onClick={() => void save()}>
+        {saving ? '…' : 'Save'}
+      </Button>
+    </div>
+  )
+}
+
 export function TrainedStylesTab(): React.JSX.Element {
   const [styles, setStyles] = useState<TrainedStyle[]>([])
 
@@ -59,6 +98,8 @@ export function TrainedStylesTab(): React.JSX.Element {
         Styles trained through the Create panel's LoRA tile (Krea). A trained style shows up as an
         input choice on the Generate image screen. Pair a style with an ElevenLabs voice name to
         turn it into a Reference person the Deepfake tile can pick likeness + voice from together.
+        Tag a Reference person's tone and a Storyboard shot's "feeling" can suggest them
+        automatically on the Deepfake screen.
       </p>
       <div className="settings-grid">
         {styles.length === 0 && (
@@ -85,8 +126,15 @@ export function TrainedStylesTab(): React.JSX.Element {
               {new Date(style.trainedAt).toLocaleDateString()}
               {style.loraUrl ? ' · weights saved' : ''}
               {style.voiceName && <StatusChip kind="ok">voice: {style.voiceName}</StatusChip>}
+              {style.personaTone && <StatusChip kind="ok">tone: {style.personaTone}</StatusChip>}
             </div>
             <VoiceField
+              style={style}
+              onSaved={(updated) =>
+                setStyles((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+              }
+            />
+            <ToneField
               style={style}
               onSaved={(updated) =>
                 setStyles((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))

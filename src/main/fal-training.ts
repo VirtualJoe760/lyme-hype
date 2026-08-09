@@ -102,6 +102,19 @@ export function setTrainedStyleVoice(id: string, voiceName: string): TrainedStyl
   return style
 }
 
+/** Tags a Reference person with a free-text tone/persona descriptor, matched
+ *  against a Storyboard shot's "feeling" annotation to auto-suggest a person
+ *  on the Deepfake screen (docs/ui/node-enrichment-strategy.md, row 8). Pass
+ *  an empty/whitespace tone to clear it. */
+export function setTrainedStylePersonaTone(id: string, personaTone: string): TrainedStyle | null {
+  const styles = listTrainedStyles()
+  const style = styles.find((s) => s.id === id)
+  if (!style) return null
+  style.personaTone = personaTone.trim() || undefined
+  writeTrainedStyles(styles)
+  return style
+}
+
 /* ---------- store-only ZIP writer (no dependency) ---------- */
 
 const CRC_TABLE = (() => {

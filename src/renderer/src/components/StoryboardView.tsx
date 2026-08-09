@@ -23,6 +23,7 @@ export function StoryboardView(): React.JSX.Element {
   const improvePanelPrompt = useStudio((s) => s.improvePanelPrompt)
   const improvingPanelId = useStudio((s) => s.improvingPanelId)
   const improveError = useStudio((s) => s.improveError)
+  const sendPanelToDeepfake = useStudio((s) => s.sendPanelToDeepfake)
 
   const [installedIds, setInstalledIds] = useState<string[]>([])
   useEffect(() => {
@@ -108,6 +109,13 @@ export function StoryboardView(): React.JSX.Element {
                     onClick={() => void improvePanelPrompt(panel.id)}
                   >
                     {improvingPanelId === panel.id ? '…' : '✨'}
+                  </button>
+                  <button
+                    className="conn-mini"
+                    title="Send this shot's script + feeling to the Deepfake tile — suggests a Reference person by tone"
+                    onClick={() => sendPanelToDeepfake(panel.id)}
+                  >
+                    ☺
                   </button>
                 </div>
               )}

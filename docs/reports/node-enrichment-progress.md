@@ -18,7 +18,7 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 | 5 | Generate audio | done | Yapper free-tier TTS fallback (Voice job) shipped first pass; Suno-via-muapi music fallback (agent-routed `generateMedia`/`ResultRow`, `connectorId: 'muapi'`, `modelHint: 'suno'`, instrumental-only toggle) shipped second pass. Both named items closed. |
 | 6 | Create a LoRA | done | "Train from this deepfake's reference photos" shortcut shipped: Deepfake's face-node picker gains a "Train a LoRA from this photo" button when the picked node is a still image, prefilling the Create a LoRA screen's first training image + name + kind (subject). Also fixed a real plumbing gap this depended on: `lora:train`'s IPC handler never resolved `lyme-asset://` canvas-node URLs to disk paths (only `scriptingTurn` had that resolution before), so passing a canvas image straight through would have failed `readFileSync` in both trainers. |
 | 7 | Combine (canvas) | done | image+image (ref-conditioning mix) and audio+image (lipsync-if-face, else animate+score) now call real `generateMedia` with a new prompt textarea in the dialog; the other four pairs (video+video, image+video, audio+video, audio+audio) stay the placeholder stub — real ffmpeg compositing for those belongs with row 9. |
-| 8 | Storyboard / Scripting | pending | Let script tone default a shot panel's voice/LoRA pick. |
+| 8 | Storyboard / Scripting | done | Reference person gained an optional `personaTone` tag (Settings › Trained styles); a script-born Storyboard panel gets a "☺ Send to Deepfake" button that prefills the script and auto-suggests a Reference person by matching the panel's `feeling` against `personaTone` (word overlap, no agent call). |
 | 9 | Timeline / export | pending | Lower priority — pipeline already deep; look for gaps only. |
 | 10 | Listing photos (ChatRealty) | pending | Staging/cover/carousel tools are paid-for and unused — candidate new tiles. |
 
@@ -29,6 +29,21 @@ Full per-node analysis lives in [`../ui/node-enrichment-strategy.md`](../ui/node
 
 ## Session log (routine writes one line per run here, newest first)
 
+- 2026-08-09 (fourteenth autonomous run) — Row 8 (Storyboard / Scripting) closed: `TrainedStyle`
+  gained `personaTone` (`lora:set-tone` IPC, `ToneField` in `TrainedStylesTab.tsx`, same shape as
+  the existing `voiceName`/`VoiceField` pair). Storyboard panels born from a script breakdown
+  (have `shotDescription`) gained a "☺" action beside ✨ that stores `{script, toneHint}` on a new
+  `deepfakeHandoff` store field; the Create panel's aside watches it, switches to the Deepfake
+  screen, prefills the script from `shotDescription`, and auto-selects the Reference person whose
+  `personaTone` shares the most words with the panel's `feeling` (`suggestReferencePerson` in
+  `AsidePanel.tsx` — plain string matching, no agent call, no live spend either way). No match
+  (or no tagged Reference people yet) leaves the picker on "none" with an honest status line
+  rather than guessing. `npm run typecheck` clean (fresh `npm install` in this sandbox — no
+  `node_modules` present at run start). Not exercised in a running browser (no display in this
+  sandbox) — the mechanism reuses `store.ts`'s established prefill/state-lift pattern
+  (`loraPrefill`/`onTrainFromFace` from row 6) closely enough that this is lower-risk than most
+  rows, but it's still worth a human glance in the app before trusting it blind. `creative-nodes.md`
+  and `capability-map.md` updated in this commit. Queue is now fully `done` except rows 9–10.
 - 2026-08-09 (thirteenth autonomous run) — Row 7 (Combine) closed: `CombineDialog` gained a
   prompt textarea and `confirmCombine` now dispatches image+image (`referenceImagePaths`) and
   audio+image (`sourceMediaPath` + `referenceAudioPaths`, lipsync-if-face else animate+score,

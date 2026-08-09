@@ -348,6 +348,42 @@ See `../reports/node-enrichment-progress.md` for live status. Seed ordering and 
    distinct, larger piece of scope better left for whoever tackles row 9 (Timeline / export).
 8. **Storyboard / Scripting** — agent-plumbing enrichment: let a script's tone inform which
    voice/LoRA a Deepfake-shot panel should default to.
+
+   **Status (2026-08-09 enrichment run — shipped):** the missing link was that Storyboard panels
+   and the Deepfake tile had no relationship at all — a script-born panel's `feeling` annotation
+   (the "generalized feeling," already the exact tone signal `scripting-panel.md` describes) had
+   nowhere to go except a panel's own `note` via the ✨ improve call, and the Deepfake screen had
+   no way to receive anything from outside itself. Two pieces closed the loop. First, `TrainedStyle`
+   gained an optional `personaTone` free-text tag (Settings › Trained styles, same inline
+   input+Save shape as the existing `voiceName` field it sits beside) — a Reference person can now
+   describe its own tone ("calm authoritative newsreader") the same way it already describes its
+   voice. Second, a script-born panel (has `shotDescription`) gained a "☺ Send to Deepfake" action
+   beside its existing ✨ button: it writes `{script: shotDescription, toneHint: feeling}` into a
+   new `deepfakeHandoff` store field, which the Create panel's aside (`AsidePanel.tsx`) watches to
+   auto-navigate to the Deepfake screen, prefill the script textarea, and auto-select whichever
+   Reference person's `personaTone` shares the most words with the shot's `feeling`
+   (`suggestReferencePerson` — plain lowercase word-set overlap scoring, deliberately not an agent
+   call, since matching two short tags doesn't need one and every avoided agent call is one less
+   thing to verify live). No tagged Reference person, or no overlap at all, is treated as a real
+   "no suggestion" rather than a forced guess: the screen still prefills the script and shows a
+   status line explaining why nothing was picked, so the user isn't left wondering whether it tried.
+   This is a genuinely different shape than the fields-only wire-ups most other rows shipped — it's
+   the first row-8-style feature to move state *between* two different Create-panel screens rather
+   than adding a parameter inside one, using the same `loraPrefill`/`onTrainFromFace` cross-screen
+   state-lift pattern row 6 established for "Train a LoRA from this photo," generalized from
+   component-local state (that one lived inside `AsidePanel` itself) to the zustand store (this one
+   has to cross from `StoryboardView`, a sibling component, into `AsidePanel`). `npm run typecheck`
+   clean (`tsconfig.node.json` + `tsconfig.web.json`, fresh `npm install` in this sandbox — no
+   `node_modules` present at run start). **Not exercised in a running browser** — no display in this
+   sandbox to click through the actual handoff, so the wiring is typecheck-verified but not
+   click-verified; flagging this explicitly since every other row at least got a live-key caveat
+   while this one has no connector call to caveat about, and a UI-flow bug (wrong screen, stale
+   state) would be a different failure mode than the "unverified API shape" risk every prior row
+   carries. `creative-nodes.md`'s Storyboard panel and Reference person sections, and
+   `capability-map.md`'s node table, updated in this commit. Row 8 has nothing named left to build;
+   the queue moves to row 9 (Timeline / export) next, per priority order — lower priority per this
+   doc's own seed note, so a future pass should treat it as a gap-search rather than assume there's
+   a ready-made build order waiting the way rows 1–8 had.
 9. **Timeline overlay / export** — lower priority; the ffmpeg pipeline is already deep.
 10. **Listing photos (ChatRealty)** — the connector's staging/cover/carousel tools are paid-for
     and unused; natural next tiles once the core queue is through.

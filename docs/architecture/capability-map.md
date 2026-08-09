@@ -101,6 +101,7 @@ $0.03 vs. $0.06/image).
 | Deepfake · face | `lipsync` / `face-swap` | muapi+yapper chain (both restricted via `connectorIds`) | either alone |
 | Create a LoRA | `lora-train` | fal trainer pick | — |
 | Storyboard promote (image) | `image-gen` | per-panel choice | agent-pick |
+| Storyboard → Deepfake handoff | *(none — local)* | word-overlap match of panel `feeling` against Reference people's `personaTone` | no match found (screen just prefills the script, picker stays "none") |
 | Listing photos | `data-mls` | chatrealty | — |
 | Isolate / alpha / export / upload / link | *(local)* | ffmpeg / disk | never a connector |
 | Combine · image+image | `image-ref-conditioning` | agent-pick (unrestricted) | — |

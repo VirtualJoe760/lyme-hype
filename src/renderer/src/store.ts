@@ -286,6 +286,14 @@ interface StudioStore {
   runShotBreakdown(): Promise<{ ok: boolean; count: number; stillActive?: boolean; error?: string }>
   improvePanelPrompt(nodeId: string): Promise<void>
 
+  /** Set when a Storyboard panel is sent to the Deepfake tile — the Create
+   *  panel's aside picks this up to prefill the script and suggest a
+   *  Reference person by tone (docs/ui/node-enrichment-strategy.md, row 8).
+   *  Cleared once the Deepfake screen has consumed it. */
+  deepfakeHandoff: { script: string; toneHint: string } | null
+  sendPanelToDeepfake(nodeId: string): void
+  clearDeepfakeHandoff(): void
+
   toggleRail(): void
   toggleAside(): void
   toggleTimeline(): void
@@ -1151,6 +1159,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     scriptingStream: null,
     improvingPanelId: null,
     improveError: null,
+    deepfakeHandoff: null,
 
     async sendScriptingMessage(text) {
       const trimmed = text.trim()
@@ -1332,6 +1341,21 @@ export const useStudio = create<StudioStore>((set, get) => {
       } finally {
         set({ improvingPanelId: null })
       }
+    },
+
+    sendPanelToDeepfake(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node?.data.panel || !node.data.shotDescription) return
+      set({
+        deepfakeHandoff: {
+          script: node.data.shotDescription,
+          toneHint: node.data.feeling ?? ''
+        }
+      })
+    },
+
+    clearDeepfakeHandoff() {
+      set({ deepfakeHandoff: null })
     },
 
     toggleRail() {

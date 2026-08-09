@@ -15,7 +15,13 @@ import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './c
 import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
 import { synthesizeYapperSpeech } from './yapper-rest'
 import { exportTimeline } from './ffmpeg'
-import { deleteTrainedStyle, listTrainedStyles, setTrainedStyleVoice, trainStyle } from './fal-training'
+import {
+  deleteTrainedStyle,
+  listTrainedStyles,
+  setTrainedStylePersonaTone,
+  setTrainedStyleVoice,
+  trainStyle
+} from './fal-training'
 import { isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
@@ -260,6 +266,10 @@ export function registerIpc(window: BrowserWindow): void {
   ipcMain.handle(IPC.loraSetVoice, (e, id: string, voiceName: string) => {
     if (!isMainSender(e)) return null
     return setTrainedStyleVoice(id, voiceName)
+  })
+  ipcMain.handle(IPC.loraSetTone, (e, id: string, personaTone: string) => {
+    if (!isMainSender(e)) return null
+    return setTrainedStylePersonaTone(id, personaTone)
   })
 
   ipcMain.handle(IPC.generateRun, (e, params: GenerationParams) => {

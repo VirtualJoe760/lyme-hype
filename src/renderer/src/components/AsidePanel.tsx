@@ -1033,6 +1033,31 @@ function LoraScreen(props: {
 }
 
 /**
+ * Scores each Reference person's `personaTone` tag against a shot's "feeling"
+ * hint by word overlap and returns the best match, or undefined if nobody has
+ * a tone tag or nothing overlaps — an honest "no suggestion" beats guessing
+ * (docs/ui/node-enrichment-strategy.md, row 8). Only considers styles that are
+ * actually Reference people (have a voice paired) — a bare trained style with
+ * no voice can't drive Stage 1's speech anyway.
+ */
+function suggestReferencePerson(styles: TrainedStyle[], toneHint: string): TrainedStyle | undefined {
+  const hintWords = new Set(toneHint.toLowerCase().match(/[a-z]+/g) ?? [])
+  if (hintWords.size === 0) return undefined
+  let best: TrainedStyle | undefined
+  let bestScore = 0
+  for (const style of styles) {
+    if (!style.voiceName || !style.personaTone) continue
+    const toneWords = style.personaTone.toLowerCase().match(/[a-z]+/g) ?? []
+    const score = toneWords.filter((w) => hintWords.has(w)).length
+    if (score > bestScore) {
+      best = style
+      bestScore = score
+    }
+  }
+  return best
+}
+
+/**
  * Staged, per docs/ui/node-enrichment-strategy.md's flagship build order: a
  * Reference person (trained identity + ElevenLabs voice, paired in Settings ›
  * Trained styles) speaks a script — Stage 1 renders the speech directly via
@@ -1050,6 +1075,8 @@ function DeepfakeScreen(props: {
   const nodes = useStudio((s) => s.nodes)
   const addNode = useStudio((s) => s.addNode)
   const generateMedia = useStudio((s) => s.generateMedia)
+  const deepfakeHandoff = useStudio((s) => s.deepfakeHandoff)
+  const clearDeepfakeHandoff = useStudio((s) => s.clearDeepfakeHandoff)
 
   const [personId, setPersonId] = useState('')
   const [voiceName, setVoiceName] = useState('')
@@ -1059,6 +1086,27 @@ function DeepfakeScreen(props: {
   const [speechStatus, setSpeechStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const [speechSrc, setSpeechSrc] = useState<string | null>(null)
   const [resultId, setResultId] = useState<string | null>(null)
+  const [handoffNote, setHandoffNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!deepfakeHandoff) return
+    setScript(deepfakeHandoff.script)
+    const suggested = suggestReferencePerson(props.styles, deepfakeHandoff.toneHint)
+    if (suggested) {
+      setPersonId(suggested.id)
+      setHandoffNote(
+        `Script sent from Storyboard. Feeling "${deepfakeHandoff.toneHint}" matched "${suggested.name}" — pick a different Reference person if that's wrong.`
+      )
+    } else {
+      setHandoffNote(
+        deepfakeHandoff.toneHint
+          ? `Script sent from Storyboard. No Reference person's tone matched "${deepfakeHandoff.toneHint}" — pick one below, or tag a person's tone in Settings › Trained styles.`
+          : 'Script sent from Storyboard.'
+      )
+    }
+    clearDeepfakeHandoff()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepfakeHandoff])
 
   const person = props.styles.find((s) => s.id === personId)
   const elevenlabsReady = connectorReady(props.connectors, 'elevenlabs')
@@ -1140,6 +1188,7 @@ function DeepfakeScreen(props: {
         Trained styles), write the script, generate the speech, then drive a source video or photo
         with it.
       </p>
+      {handoffNote && <p className="cr-msg">{handoffNote}</p>}
 
       {props.styles.length > 0 && (
         <select
@@ -1296,11 +1345,16 @@ export function AsidePanel(): React.JSX.Element {
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
   const [styles, setStyles] = useState<TrainedStyle[]>([])
   const [loraPrefill, setLoraPrefill] = useState<{ imageSrc: string; name: string } | null>(null)
+  const deepfakeHandoff = useStudio((s) => s.deepfakeHandoff)
 
   useEffect(() => {
     void bridge.connectors.list().then(setConnectors)
     void bridge.lora.list().then(setStyles)
   }, [screen])
+
+  useEffect(() => {
+    if (deepfakeHandoff) setScreen('deepfake')
+  }, [deepfakeHandoff])
 
   const home = (): void => setScreen('home')
 

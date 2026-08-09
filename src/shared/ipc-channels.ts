@@ -36,6 +36,7 @@ export const IPC = {
   loraList: 'lora:list',
   loraDelete: 'lora:delete',
   loraSetVoice: 'lora:set-voice',
+  loraSetTone: 'lora:set-tone',
 
   generateRun: 'generate:run',
 

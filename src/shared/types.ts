@@ -176,6 +176,11 @@ export interface TrainedStyle {
    *  Deepfake tile can pick from. Matches elevenlabs-tools.ts's `voiceName`
    *  param (the MCP tool takes voice_name, not an id). */
   voiceName?: string
+  /** Free-text tone/persona tag ("calm authoritative newsreader", "energetic
+   *  upbeat vlogger") — lets a Storyboard shot's "feeling" annotation suggest
+   *  which Reference person a Deepfake script should default to, instead of
+   *  the user re-picking the same person by hand for every matching shot. */
+  personaTone?: string
 }
 
 export interface TrainStyleResult {

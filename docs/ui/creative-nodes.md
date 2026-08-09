@@ -46,6 +46,14 @@ promote (same object, never a copy). Carries `label`, `note` (the generation pro
 `shotDescription`/`feeling` when born from a script breakdown, and `connectorId` (the
 storyboard-tier image model choice).
 
+A script-born panel (has `shotDescription`) can also be sent to the **Deepfake** tile (☺ button
+next to ✨) instead of promoted normally — for a shot that's really a talking-avatar line, not a
+generic video/image/audio render. This sets `deepfakeHandoff` (`{script, toneHint}`, script =
+`shotDescription`, toneHint = `feeling`) in the store; the Create panel's aside watches it, jumps
+to the Deepfake screen, prefills the script, and auto-suggests a Reference person by matching
+`toneHint` against each Reference person's `personaTone` tag (word-overlap scoring — see
+"Reference person" below). 2026-08-09 enrichment run, row 8.
+
 - **Capabilities consumed on promote:** `image-gen` (storyboard tier) / `video-gen-t2v` /
   `audio-*` per panel type, restricted by the per-panel model choice when set.
 
@@ -87,6 +95,16 @@ inline in Settings › Trained styles (type an *existing* voice's name), or — 
 the voice doesn't exist yet — the Create panel's **Generate audio · Clone** job, which can attach
 its freshly-cloned voice to a chosen Reference person in the same action instead of requiring a
 trip to Settings afterward to paste the name in by hand.
+
+A Reference person can also carry an optional `personaTone` — a free-text tag ("calm authoritative
+newsreader", "energetic upbeat vlogger"), set the same inline way as the voice field in Settings ›
+Trained styles. It exists solely to be matched against a Storyboard shot's `feeling` annotation
+(see "Storyboard panel" above): when a script-born panel is sent to Deepfake, `personaTone` and
+`feeling` are lowercased and split on word boundaries, and the Reference person (that also has a
+voice — a bare LoRA can't drive Stage 1's speech) whose tone words overlap the feeling words most
+wins the auto-pick. No overlap on any Reference person, or no `feeling` set, means no suggestion —
+the screen says so and leaves the picker on "none" rather than guessing. Pure client-side string
+matching, no agent call and no live spend (`suggestReferencePerson` in `AsidePanel.tsx`).
 
 ## Deepfake (stages as nodes)
 

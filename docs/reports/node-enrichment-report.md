@@ -7,6 +7,89 @@ of whether it shipped code. Read this in the morning; the machine-readable queue
 
 ---
 
+## 2026-08-09 — Fourteenth autonomous run: Storyboard/Scripting → Deepfake tone handoff (row 8) — row closed
+
+Rows 1–7 were all `done` going into this pass, so this run took row 8 next per the queue's
+priority order: "let a script's tone inform which voice/LoRA a Deepfake-shot panel should default
+to." Unlike most prior rows, this one had no existing strategy-doc analysis to implement against —
+just the one-line queue description — so the first job was figuring out what that sentence
+actually cashes out to in this codebase, since "Deepfake-shot panel" isn't a thing that exists:
+Storyboard panels only carry `mediaType: 'video' | 'image' | 'audio'`, and the Deepfake tile lives
+entirely inside the Create panel, invoked from the tile grid with zero relationship to any panel
+or script. So the real gap wasn't a missing parameter, it was a missing *connection* between two
+screens that had never talked to each other.
+
+**What I read first:** `docs/ui/scripting-panel.md`'s script → Storyboard handoff section, which
+already defines exactly the tone signal this row needs — a script-born panel's `feeling` field is
+explicitly "the user's generalized feeling annotation — mood/tone in a few words, the human
+judgment step." That's the tone. The missing piece was a destination for it and something on the
+Deepfake side worth matching it against.
+
+**What I built, two pieces:**
+
+1. **`personaTone` on `TrainedStyle`** — a free-text tag ("calm authoritative newsreader",
+   "energetic upbeat vlogger") a Reference person can carry alongside its existing `voiceName`.
+   New `setTrainedStylePersonaTone()` in `fal-training.ts` (mirrors `setTrainedStyleVoice()`
+   exactly), a `lora:set-tone` IPC channel end-to-end (channels → main handler → preload → bridge,
+   including the browser-preview mock), and a `ToneField` component in `TrainedStylesTab.tsx` —
+   same inline-input-plus-Save shape as the existing `VoiceField` it sits directly beside, plus a
+   `StatusChip` showing the tag when set.
+2. **The Storyboard → Deepfake handoff.** A script-born panel (one with `shotDescription`) now
+   shows a "☺" button next to its ✨ improve-prompt button. Clicking it calls a new store action,
+   `sendPanelToDeepfake(nodeId)`, which writes `{script: shotDescription, toneHint: feeling}` into
+   a new `deepfakeHandoff` field on the zustand store. The Create panel's aside (`AsidePanel.tsx`)
+   watches that field: when it's set, it switches its local screen state to `'deepfake'`, and the
+   `DeepfakeScreen` component consumes it on mount — prefills the script textarea, and calls a new
+   pure function, `suggestReferencePerson(styles, toneHint)`, which lowercases and word-splits both
+   the tone hint and every Reference person's `personaTone`, scores by overlap-count, and returns
+   the best match (only considering styles that actually have a paired voice, since a bare LoRA
+   can't drive Stage 1's speech step anyway). If there's a match, the Reference person picker
+   auto-selects it and a status line explains why ("Feeling 'X' matched 'Y'"); if nothing matches
+   (or no Reference person has a tone tag yet), the picker stays on "none" and the status line says
+   so plainly instead of silently picking something arbitrary — an honest "I don't know" beats a
+   confident wrong guess here, especially since nobody's watching this run to catch it if it guessed
+   badly.
+
+**Why not an agent call for the matching:** every other row that needed the agent to judge
+something ambiguous (Combine's face-vs-not branch, the instrumental-only toggle) used an
+embedded-prompt-directive pattern because the judgment genuinely needs the model reading real
+content. Matching two short tag strings for word overlap doesn't need that — it's the kind of thing
+plain code does deterministically and for free, and using the agent for it would just be one more
+unverified live-call risk for no real benefit. This is a deliberate case of *not* reaching for the
+agent, not an oversight.
+
+**The one real design decision:** `AsidePanel`'s `screen` state has always been local
+`useState` — nothing outside that component could ever navigate it. `StoryboardView` is a sibling
+component, not a child, so this handoff had to cross through the shared zustand store rather than
+a prop callback (the way row 6's "Train a LoRA from this photo" shortcut could stay entirely
+inside `AsidePanel` since both the Deepfake and LoRA screens already lived there). That's a
+slightly bigger blast radius than most of this queue's changes — new store state plus a `useEffect`
+that can force-navigate the Create panel's aside out from under whatever the user was doing there —
+so I kept the trigger fully explicit (a dedicated button the user has to click, not something that
+fires from typing) and made consuming the handoff a one-shot (`clearDeepfakeHandoff()` fires
+immediately after reading it) so returning to Storyboard and back to Deepfake doesn't repeatedly
+re-navigate or re-clobber whatever the user typed since.
+
+**Verification:** `npm run typecheck` clean (ran a fresh `npm install` first — no `node_modules`
+in this sandbox at run start; both `tsconfig.node.json` and `tsconfig.web.json` pass). **Not
+exercised in a running browser** — this sandbox has no display, so I could not actually click
+"☺" on a panel and watch the Deepfake screen react. That's a different and, I think, real gap in
+confidence versus most prior rows: those rows' main open risk was "does the live API call actually
+work," which needs real keys either way; this row's main open risk is "does the cross-component
+state hand-off actually fire correctly in the browser," which real keys wouldn't help verify
+either — someone should click through this once before trusting it. `docs/ui/creative-nodes.md`
+(Storyboard panel section, Reference person section) and `docs/architecture/capability-map.md`
+(new Storyboard → Deepfake handoff row) updated in this commit; `docs/ui/node-enrichment-strategy.md`
+row 8 filled in with the same analysis-then-status structure every other row uses.
+
+**Queue state:** rows 1–8 are now all `done`. Only row 9 (Timeline / export — explicitly
+lower-priority, "look for gaps only") and row 10 (Listing photos / ChatRealty — new tiles for
+already-paid-for, unused tools) remain. The next run should expect to spend real time just finding
+what's worth building on row 9 rather than following a ready-made plan, since — unlike rows 1–8 —
+the strategy doc never got a flagship-style analysis written for it ahead of time.
+
+---
+
 ## 2026-08-09 — Thirteenth autonomous run: Combine (row 7), image+image and audio+image go real — row closed
 
 Row 6 was fully done as of the eleventh run (confirmed again by the twelfth run's collision

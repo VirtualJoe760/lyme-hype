@@ -91,6 +91,7 @@ export interface Bridge {
     list(): Promise<TrainedStyle[]>
     delete(id: string): Promise<void>
     setVoice(id: string, voiceName: string): Promise<TrainedStyle | null>
+    setTone(id: string, personaTone: string): Promise<TrainedStyle | null>
   }
   generate: {
     run(params: GenerationParams): Promise<GenerationResult | null>
@@ -242,7 +243,8 @@ function createBrowserMock(): Bridge {
       }),
       list: async () => [],
       delete: async () => {},
-      setVoice: async () => null
+      setVoice: async () => null,
+      setTone: async () => null
     },
     generate: {
       run: async (params) => ({
