@@ -3,6 +3,7 @@ import { IPC } from '@shared/ipc-channels'
 import type {
   ConnectorDef,
   GenerationParams,
+  ConversationTurnRequest,
   ModelProviderDef,
   PersistedState,
   SecretRequest,
@@ -10,6 +11,7 @@ import type {
 } from '@shared/types'
 import { importFileAsset, importUrlAsset, mediaTypeForPath } from './asset-store'
 import { runAgentPrompt } from './agent'
+import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { exportTimeline } from './ffmpeg'
 import { runGeneration } from './generation'
 import { startOAuthConnect } from './mcp-oauth'
@@ -87,6 +89,31 @@ export function registerIpc(window: BrowserWindow): void {
       }
     })
   })
+
+  ipcMain.handle(IPC.scriptingTurn, (e, request: ConversationTurnRequest) => {
+    if (!isMainSender(e)) return null
+    const target = mainWindow
+    // Vision input arrives as asset URLs from the renderer in later phases;
+    // scripting turns are text-only, so imagePaths pass through untouched.
+    return runConversationTurn(request, (text) => {
+      if (target && !target.isDestroyed()) {
+        target.webContents.send(IPC.scriptingStream, { conversationId: request.conversationId, text })
+      }
+    })
+  })
+
+  ipcMain.handle(IPC.scriptingBreakdown, (e, request: Omit<ConversationTurnRequest, 'prompt'>) => {
+    if (!isMainSender(e)) return null
+    return runShotBreakdown(request)
+  })
+
+  ipcMain.handle(
+    IPC.scriptingImprove,
+    (e, input: { label: string; shotDescription: string; feeling: string }) => {
+      if (!isMainSender(e)) return null
+      return runImproveShotPrompt(input)
+    }
+  )
 
   ipcMain.handle(IPC.mediaPickFile, async (e, kind: string) => {
     if (!isMainSender(e) || !mainWindow) return null

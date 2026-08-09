@@ -1,6 +1,14 @@
 # Scripting panel
 
-**Not built yet.** A third middle-panel view, alongside [Canvas and Storyboard](canvas-and-storyboard.md) — a traditional chat interface with the agent for developing a script before any shot exists. `StudioView` becomes three-way (`'canvas' | 'storyboard' | 'scripting'`), not two.
+**Built (2026-08-08).** A third middle-panel view, alongside [Canvas and Storyboard](canvas-and-storyboard.md) — a traditional chat interface with the agent for developing a script before any shot exists. `StudioView` is three-way (`'canvas' | 'storyboard' | 'scripting'`).
+
+**Implementation calls made during the build, where this spec left room:**
+
+- **The multi-turn plumbing is `src/main/conversations.ts`, built generic from day one** (the shared-with-Motion-graphics requirement): `runConversationTurn` takes an optional resume id, optional image attachments (vision input, for the wizard's references stage), optional system prompt, and streams text back over `scripting:stream`. Scripting and Motion graphics both call this one module.
+- **Multi-turn works via the SDK's `resume` option** (the SDK persists sessions; each turn resumes the last one, whose id is stored as `Session.scripting.agentSessionId`) — **with a transcript-replay fallback**: the conversation's source of truth is Lyme Hype's own persisted `messages` array, so if resuming fails (SDK session lost across restarts/machines), the turn silently retries fresh with the transcript replayed as a preamble. The conversation survives anything that preserves `sessions.json`.
+- **The shot breakdown asks for strict JSON** (`[{label, description}]`, parsed main-side with a bracket-extracting fallback) and the raw JSON reply is kept OUT of the visible chat — the user sees a compact "broke it into N shots" note instead; panels carry the shot text in a new `shotDescription` field.
+- **The per-shot feeling lives on the Storyboard panel card** (input + ✨ button, shown only on script-born panels): the improve call (`runImproveShotPrompt`, a lighter one-shot as specified) writes the agent-authored structured prose into the panel's existing `note`, which promotion already feeds to generation.
+- The selftest gained a real two-turn exchange (plant a word, resume, recall it) proving resume actually carries context — the phase's one genuinely risky mechanism, verified live rather than assumed.
 
 ## Why a chat here, when the rest of the app deliberately isn't one
 
@@ -48,3 +56,5 @@ None left that would block an unattended build — the three above were the only
 ## Done when
 
 A user can hold a multi-turn conversation refining a script, trigger a shot breakdown that creates one Storyboard panel per shot, annotate a panel with a short feeling, and get back an agent-improved prompt in that panel's note field — ready to promote the normal way.
+
+*(Chat UI, streaming, persistence, breakdown → panels, feeling → ✨ → note, and per-session cost readout all built 2026-08-08; the chat flow verified in browser preview (including the error-bubble path), the resume mechanism verified live by the selftest's two-turn recall check.)*

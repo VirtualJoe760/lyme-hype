@@ -125,11 +125,13 @@ Full spec + build-decision record: [ui/timeline.md](ui/timeline.md).
 - [x] ffmpeg export rewritten: unified `overlay`-chain graph over a black canvas with per-clip `enable` windows + `amix` with `adelay` positioning; mute-only (solo structurally absent from the export types); no-audio-stream inputs probed and excluded from the mix. Selftest covers the pure builder; the real graph was executed against the machine's ffmpeg and verified (1080×1920, correct duration, alpha overlay path included).
 - **Done criteria met** — see the doc's done-when note for what was verified and the one synthetic-overlay caveat.
 
-## Phase 11 — Scripting panel
+## Phase 11 — Scripting panel ✅ (built 2026-08-08)
 
-Not started. Full spec: [ui/scripting-panel.md](ui/scripting-panel.md). A third middle-panel view (chat interface) for developing a script before any shot exists, with a script → Storyboard handoff. Needs new persistent multi-turn conversation plumbing in the main process — every agent call built so far (`runAgentPrompt`, `runGeneration`) is single-turn; this is a real architectural addition, not a thin UI wrapper.
+Full spec + build-decision record: [ui/scripting-panel.md](ui/scripting-panel.md).
 
-- **Done when:** see [ui/scripting-panel.md](ui/scripting-panel.md)'s own done-criteria.
+- [x] The multi-turn plumbing landed as `src/main/conversations.ts` — generic (resume + transcript-replay fallback, streaming, optional vision input and system prompt) so Phase 13's Motion graphics consumes the same module instead of a second copy. Selftest proves resume carries context with a real two-turn recall exchange.
+- [x] `ScriptingView` chat (third view-toggle button), conversation persisted on `Session.scripting`, per-session cost readout, script → Storyboard handoff: JSON shot breakdown → fresh panels with `shotDescription`, per-panel feeling + ✨ agent-authored prompt into `note`, promoted the normal way.
+- **Done criteria met** — see the doc's done-when note.
 
 ## Phase 12 — Resizable, collapsible panels ✅ (built 2026-08-08)
 

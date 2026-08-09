@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { BrowserWindow, app, net } from 'electron'
 import { runAgentPrompt } from './agent'
 import { hasChatRealtyToken, pullListingPhotos } from './chatrealty'
+import { runConversationTurn } from './conversations'
 import {
   CLAUDE_API_KEY_CREDENTIAL_ID,
   CLAUDE_OAUTH_TOKEN_CREDENTIAL_ID,
@@ -134,6 +135,38 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`agent: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 4b. Multi-turn conversation plumbing (Phase 11) — a REAL two-turn exchange
+  //     proving `resume` carries context: turn 1 plants a word, turn 2 resumes
+  //     and must recall it. Costs about two agent pings.
+  try {
+    const first = await runConversationTurn({
+      conversationId: 'selftest-conv',
+      prompt: 'Remember the word "kumquat". Reply with exactly: NOTED'
+    })
+    if (!first.ok || !first.agentSessionId) {
+      fail(`conversation turn 1: ${first.error ?? 'no session id captured'}`)
+    } else {
+      const second = await runConversationTurn({
+        conversationId: 'selftest-conv',
+        resumeSessionId: first.agentSessionId,
+        prompt: 'What word did I ask you to remember? Reply with only that word.',
+        history: [
+          { role: 'user', text: 'Remember the word "kumquat". Reply with exactly: NOTED' },
+          { role: 'assistant', text: first.text }
+        ]
+      })
+      if (second.ok && /kumquat/i.test(second.text)) {
+        log(
+          `conversations: PASS (resume carried context across turns, "${second.text.trim().slice(0, 30)}", $${((first.costUsd ?? 0) + (second.costUsd ?? 0)).toFixed(4)})`
+        )
+      } else {
+        fail(`conversations: ${second.error ?? `resume lost context ("${second.text.trim().slice(0, 60)}")`}`)
+      }
+    }
+  } catch (error) {
+    fail(`conversations: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   // 5. ChatRealty MCP transport (dev-machine probe). Proves Lyme Hype can spawn

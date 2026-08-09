@@ -11,6 +11,11 @@ export const IPC = {
   agentStream: 'agent:stream',
   claudeStatus: 'claude:status',
 
+  scriptingTurn: 'scripting:turn',
+  scriptingStream: 'scripting:stream',
+  scriptingBreakdown: 'scripting:breakdown',
+  scriptingImprove: 'scripting:improve',
+
   mediaPickFile: 'media:pick-file',
   mediaImport: 'media:import',
   mediaImportUrl: 'media:import-url',

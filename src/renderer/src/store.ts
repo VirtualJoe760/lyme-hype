@@ -235,8 +235,8 @@ interface StudioStore {
   detachAudio(nodeId: string): void
   deleteAudio(nodeId: string): void
 
-  addPanel(input?: { mediaType?: MediaType; label?: string }): void
-  updatePanel(nodeId: string, patch: { label?: string; note?: string; mediaType?: MediaType }): void
+  addPanel(input?: { mediaType?: MediaType; label?: string; shotDescription?: string }): void
+  updatePanel(nodeId: string, patch: Partial<MediaNodeData>): void
   movePanel(nodeId: string, dir: -1 | 1): void
   promotePanel(nodeId: string): void
 
@@ -250,7 +250,18 @@ interface StudioStore {
     resolution?: string
     position?: { x: number; y: number }
     nodeId?: string
+    /** Restrict to one connector (tier routing); omit = agent picks freely. */
+    connectorId?: string
+    modelHint?: string
   }): Promise<void>
+
+  /** Scripting panel (docs/ui/scripting-panel.md). */
+  scriptingBusy: boolean
+  scriptingStream: string | null
+  improvingPanelId: string | null
+  sendScriptingMessage(text: string): Promise<void>
+  runShotBreakdown(): Promise<{ ok: boolean; count: number; error?: string }>
+  improvePanelPrompt(nodeId: string): Promise<void>
 
   toggleRail(): void
   toggleAside(): void
@@ -914,7 +925,8 @@ export const useStudio = create<StudioStore>((set, get) => {
           swatch: pickSwatch(),
           panel: true,
           panelOrder: nextOrder,
-          promoted: false
+          promoted: false,
+          shotDescription: input?.shotDescription
         }
       }
       set({ nodes: [...get().nodes, node] })
@@ -971,7 +983,10 @@ export const useStudio = create<StudioStore>((set, get) => {
           nodeId,
           label: node.data.label,
           mediaType: node.data.mediaType,
-          prompt: note
+          prompt: note,
+          // Storyboard-tier routing: an image panel's model choice restricts
+          // the generation to that connector (docs/connectors/catalog.md).
+          connectorId: node.data.connectorId
         })
       } else {
         scheduleStubReady(nodeId)
@@ -1010,7 +1025,9 @@ export const useStudio = create<StudioStore>((set, get) => {
           prompt: input.prompt,
           aspectRatio: input.aspectRatio,
           durationSec: input.durationSec,
-          resolution: input.resolution
+          resolution: input.resolution,
+          connectorId: input.connectorId,
+          modelHint: input.modelHint
         })
       } catch (error) {
         result = {
@@ -1032,6 +1049,155 @@ export const useStudio = create<StudioStore>((set, get) => {
           status: 'error',
           error: result?.error ?? 'Generation failed.'
         })
+      }
+    },
+
+    scriptingBusy: false,
+    scriptingStream: null,
+    improvingPanelId: null,
+
+    async sendScriptingMessage(text) {
+      const trimmed = text.trim()
+      const session = activeSession()
+      if (!trimmed || !session || get().scriptingBusy) return
+      const sessionId = session.id
+      const scripting = session.scripting ?? { messages: [], totalCostUsd: 0 }
+      const userMessage = {
+        id: nextId('msg'),
+        role: 'user' as const,
+        text: trimmed,
+        at: new Date().toISOString()
+      }
+      const history = scripting.messages.map((m) => ({ role: m.role, text: m.text }))
+      updateSession(sessionId, {
+        scripting: { ...scripting, messages: [...scripting.messages, userMessage] }
+      })
+      set({ scriptingBusy: true, scriptingStream: '' })
+
+      const unsubscribe = bridge.scripting.onStream((event) => {
+        if (event.conversationId === sessionId) {
+          set({ scriptingStream: (get().scriptingStream ?? '') + event.text })
+        }
+      })
+      try {
+        const result = await bridge.scripting.turn({
+          conversationId: sessionId,
+          resumeSessionId: scripting.agentSessionId,
+          prompt: trimmed,
+          history
+        })
+        // Re-read: the turn may outlive a session switch; write to the
+        // originating session either way (updateSession works by id).
+        const target = get().sessions.find((s) => s.id === sessionId)
+        const current = target?.scripting ?? { messages: [], totalCostUsd: 0 }
+        const cost = result?.costUsd ?? 0
+        if (result?.ok) {
+          updateSession(sessionId, {
+            scripting: {
+              messages: [
+                ...current.messages,
+                { id: nextId('msg'), role: 'assistant', text: result.text, at: new Date().toISOString() }
+              ],
+              agentSessionId: result.agentSessionId ?? current.agentSessionId,
+              totalCostUsd: current.totalCostUsd + cost
+            }
+          })
+        } else {
+          updateSession(sessionId, {
+            scripting: {
+              ...current,
+              messages: [
+                ...current.messages,
+                {
+                  id: nextId('msg'),
+                  role: 'assistant',
+                  text: `⚠ ${result?.error ?? 'The agent did not respond.'}`,
+                  at: new Date().toISOString()
+                }
+              ],
+              totalCostUsd: current.totalCostUsd + cost
+            }
+          })
+        }
+        const agent = get().agent
+        set({
+          agent: {
+            ...agent,
+            lastCostUsd: result?.costUsd ?? agent.lastCostUsd,
+            totalCostUsd: agent.totalCostUsd + cost
+          }
+        })
+      } finally {
+        unsubscribe()
+        set({ scriptingBusy: false, scriptingStream: null })
+      }
+    },
+
+    async runShotBreakdown() {
+      const session = activeSession()
+      if (!session || get().scriptingBusy) return { ok: false, count: 0, error: 'Busy.' }
+      const scripting = session.scripting
+      if (!scripting || scripting.messages.length === 0) {
+        return { ok: false, count: 0, error: 'Develop a script in the conversation first.' }
+      }
+      const sessionId = session.id
+      set({ scriptingBusy: true })
+      try {
+        const result = await bridge.scripting.breakdown({
+          conversationId: sessionId,
+          resumeSessionId: scripting.agentSessionId,
+          history: scripting.messages.map((m) => ({ role: m.role, text: m.text }))
+        })
+        if (!result?.ok) {
+          return { ok: false, count: 0, error: result?.error ?? 'Shot breakdown failed.' }
+        }
+        // Always fresh panels, never matched against existing ones (the
+        // firm v1 decision in the spec).
+        for (const shot of result.shots) {
+          get().addPanel({ label: shot.label, shotDescription: shot.description })
+        }
+        const target = get().sessions.find((s) => s.id === sessionId)
+        const current = target?.scripting ?? { messages: [], totalCostUsd: 0 }
+        updateSession(sessionId, {
+          scripting: {
+            messages: [
+              ...current.messages,
+              {
+                id: nextId('msg'),
+                role: 'assistant',
+                text: `Broke the script into ${result.shots.length} shots — they're on the Storyboard. Add a feeling to each panel, then use ✨ to author its generation prompt.`,
+                at: new Date().toISOString()
+              }
+            ],
+            agentSessionId: result.agentSessionId ?? current.agentSessionId,
+            totalCostUsd: current.totalCostUsd + (result.costUsd ?? 0)
+          }
+        })
+        return { ok: true, count: result.shots.length }
+      } finally {
+        set({ scriptingBusy: false })
+      }
+    },
+
+    async improvePanelPrompt(nodeId) {
+      const node = get().nodes.find((n) => n.id === nodeId)
+      if (!node?.data.panel || !node.data.shotDescription || get().improvingPanelId) return
+      set({ improvingPanelId: nodeId })
+      try {
+        const result = await bridge.scripting.improve({
+          label: node.data.label,
+          shotDescription: node.data.shotDescription,
+          feeling: node.data.feeling ?? ''
+        })
+        if (result?.ok && result.prompt) {
+          patchNodeAnywhere(nodeId, { note: result.prompt })
+        } else {
+          patchNodeAnywhere(nodeId, {
+            note: (node.data.note ?? '') || `⚠ ${result?.error ?? 'Prompt authoring failed.'}`
+          })
+        }
+      } finally {
+        set({ improvingPanelId: null })
       }
     },
 

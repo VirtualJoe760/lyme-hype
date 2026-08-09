@@ -1,9 +1,16 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { MediaType } from '@shared/types'
+import { bridge } from '../bridge'
 import { useStudio } from '../store'
 
 const MEDIA_TYPES: MediaType[] = ['video', 'image', 'audio']
 const MEDIA_GLYPH: Record<MediaType, string> = { video: '▶', image: '▦', audio: '♪' }
+
+/** The interchangeable storyboard-tier image connectors (docs/connectors/catalog.md). */
+const STORYBOARD_IMAGE_CONNECTORS: { id: string; label: string }[] = [
+  { id: 'gemini', label: 'Gemini' },
+  { id: 'openai', label: 'OpenAI' }
+]
 
 export function StoryboardView(): React.JSX.Element {
   const nodes = useStudio((s) => s.nodes)
@@ -13,6 +20,14 @@ export function StoryboardView(): React.JSX.Element {
   const promotePanel = useStudio((s) => s.promotePanel)
   const removeNode = useStudio((s) => s.removeNode)
   const setView = useStudio((s) => s.setView)
+  const improvePanelPrompt = useStudio((s) => s.improvePanelPrompt)
+  const improvingPanelId = useStudio((s) => s.improvingPanelId)
+
+  const [installedIds, setInstalledIds] = useState<string[]>([])
+  useEffect(() => {
+    void bridge.connectors.list().then((list) => setInstalledIds(list.map((c) => c.id)))
+  }, [])
+  const imageChoices = STORYBOARD_IMAGE_CONNECTORS.filter((c) => installedIds.includes(c.id))
 
   const panels = useMemo(
     () =>
@@ -72,6 +87,29 @@ export function StoryboardView(): React.JSX.Element {
                 placeholder="Shot label"
                 onChange={(e) => updatePanel(panel.id, { label: e.target.value })}
               />
+              {panel.data.shotDescription && (
+                <p className="panel-shot-desc" title={panel.data.shotDescription}>
+                  {panel.data.shotDescription}
+                </p>
+              )}
+              {panel.data.shotDescription && !promoted && (
+                <div className="panel-feeling-row">
+                  <input
+                    className="cr-input panel-feeling"
+                    value={panel.data.feeling ?? ''}
+                    placeholder="Feeling — mood/tone, a few words"
+                    onChange={(e) => updatePanel(panel.id, { feeling: e.target.value })}
+                  />
+                  <button
+                    className="conn-mini"
+                    disabled={improvingPanelId !== null}
+                    title="Have the agent author this panel's generation prompt from the shot + feeling"
+                    onClick={() => void improvePanelPrompt(panel.id)}
+                  >
+                    {improvingPanelId === panel.id ? '…' : '✨'}
+                  </button>
+                </div>
+              )}
               <textarea
                 className="prompt-area panel-note"
                 value={panel.data.note ?? ''}
@@ -79,6 +117,23 @@ export function StoryboardView(): React.JSX.Element {
                 rows={2}
                 onChange={(e) => updatePanel(panel.id, { note: e.target.value })}
               />
+              {mediaType === 'image' && !promoted && imageChoices.length > 0 && (
+                <select
+                  className="cr-input panel-model"
+                  value={panel.data.connectorId ?? ''}
+                  title="Storyboard-tier image model for this panel"
+                  onChange={(e) =>
+                    updatePanel(panel.id, { connectorId: e.target.value || undefined })
+                  }
+                >
+                  <option value="">Model: agent picks</option>
+                  {imageChoices.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      Model: {c.label}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <div className="panel-actions">
                 <button
@@ -107,6 +162,16 @@ export function StoryboardView(): React.JSX.Element {
                     className="conn-mini primary-mini"
                     title="Turn this panel into a real generating node on the Canvas"
                     onClick={() => {
+                      // Storyboard-tier default: an image panel with no explicit
+                      // model choice uses the single installed storyboard
+                      // connector when there's exactly one (catalog.md).
+                      if (
+                        mediaType === 'image' &&
+                        !panel.data.connectorId &&
+                        imageChoices.length === 1
+                      ) {
+                        updatePanel(panel.id, { connectorId: imageChoices[0].id })
+                      }
                       promotePanel(panel.id)
                       setView('canvas')
                     }}

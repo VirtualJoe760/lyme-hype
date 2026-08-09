@@ -9,14 +9,19 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  ConversationStreamEvent,
+  ConversationTurnRequest,
+  ConversationTurnResult,
   CutExportResult,
   GenerationParams,
   GenerationResult,
+  ImprovePromptResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
   SecretReport,
   SecretRequest,
+  ShotBreakdownResult,
   TimelineExportSpec
 } from '../shared/types'
 
@@ -43,6 +48,23 @@ const api = {
       return () => ipcRenderer.removeListener(IPC.agentStream, listener)
     },
     claudeStatus: (): Promise<ClaudeAuthStatus | null> => ipcRenderer.invoke(IPC.claudeStatus)
+  },
+  scripting: {
+    turn: (request: ConversationTurnRequest): Promise<ConversationTurnResult | null> =>
+      ipcRenderer.invoke(IPC.scriptingTurn, request),
+    onStream: (callback: (event: ConversationStreamEvent) => void): (() => void) => {
+      const listener = (_: unknown, event: ConversationStreamEvent): void => callback(event)
+      ipcRenderer.on(IPC.scriptingStream, listener)
+      return () => ipcRenderer.removeListener(IPC.scriptingStream, listener)
+    },
+    breakdown: (
+      request: Omit<ConversationTurnRequest, 'prompt'>
+    ): Promise<ShotBreakdownResult | null> => ipcRenderer.invoke(IPC.scriptingBreakdown, request),
+    improve: (input: {
+      label: string
+      shotDescription: string
+      feeling: string
+    }): Promise<ImprovePromptResult | null> => ipcRenderer.invoke(IPC.scriptingImprove, input)
   },
   media: {
     pickFile: (kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null> =>

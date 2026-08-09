@@ -11,6 +11,7 @@ import {
 import type { MediaFlowNode } from '../store'
 import { useActiveSession, useStudio } from '../store'
 import { MediaNode } from './MediaNode'
+import { ScriptingView } from './ScriptingView'
 import { StoryboardView } from './StoryboardView'
 
 const nodeTypes: NodeTypes = { media: MediaNode }
@@ -134,13 +135,21 @@ export function CanvasArea(): React.JSX.Element {
         >
           Storyboard
         </button>
+        <button
+          className={view === 'scripting' ? 'active' : ''}
+          onClick={() => setView('scripting')}
+        >
+          Scripting
+        </button>
       </div>
       {view === 'canvas' ? (
         <ReactFlowProvider>
           <CanvasInner />
         </ReactFlowProvider>
-      ) : (
+      ) : view === 'storyboard' ? (
         <StoryboardView />
+      ) : (
+        <ScriptingView />
       )}
     </div>
   )

@@ -109,6 +109,15 @@ function buildPrompt(params: GenerationParams): string {
   if (params.aspectRatio) lines.push(`Aspect ratio: ${params.aspectRatio}.`)
   if (params.durationSec) lines.push(`Duration: ${params.durationSec} seconds.`)
   if (params.resolution) lines.push(`Resolution: ${params.resolution}.`)
+  if (params.modelHint) {
+    lines.push(`Model preference: use a ${params.modelHint} model if the connected tools offer one.`)
+  }
+  if (params.referenceImagePaths?.length) {
+    lines.push(
+      `Reference images on disk (mix their style into the output): ${params.referenceImagePaths.join(' | ')}`,
+      'If the chosen tool accepts a reference_image_paths parameter, pass these absolute paths to it.'
+    )
+  }
   lines.push(
     'Use exactly one connected generation tool that produces this media type. Wait for it to finish.',
     'Then reply with a single line and nothing else: `RESULT_URL: <direct https URL>` for a URL result, `RESULT_FILE: <absolute local path>` if the tool returned a local file path, or `RESULT_ERROR: <short reason>`.'

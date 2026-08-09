@@ -37,7 +37,65 @@ export type ThemeId = 'lime-cut' | 'night-terminal' | 'zest'
 export type MediaType = 'image' | 'video' | 'audio'
 export type SourceMethod = 'generate' | 'upload' | 'link'
 export type NodeStatus = 'rendering' | 'ready' | 'error'
-export type StudioView = 'canvas' | 'storyboard'
+export type StudioView = 'canvas' | 'storyboard' | 'scripting'
+
+/** One message in a session's Scripting conversation (docs/ui/scripting-panel.md). */
+export interface ScriptingMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  at: string
+}
+
+/** Persisted on Session — plain JSON through the same persist path as nodes. */
+export interface ScriptingState {
+  messages: ScriptingMessage[]
+  /** SDK session id so each turn resumes the same conversation server-side.
+   *  If resuming ever fails, the turn falls back to replaying `messages`. */
+  agentSessionId?: string
+  totalCostUsd: number
+}
+
+/** A multi-turn conversation turn (Scripting panel, Motion graphics wizard). */
+export interface ConversationTurnRequest {
+  /** Attribution id for stream events — the renderer's conversation key. */
+  conversationId: string
+  resumeSessionId?: string
+  prompt: string
+  /** Absolute paths of images attached as vision input. */
+  imagePaths?: string[]
+  /** Replay transcript used when there's no resumable SDK session. */
+  history?: { role: 'user' | 'assistant'; text: string }[]
+  systemPrompt?: string
+}
+
+export interface ConversationTurnResult {
+  ok: boolean
+  text: string
+  agentSessionId?: string
+  costUsd: number | null
+  error?: string
+}
+
+export interface ConversationStreamEvent {
+  conversationId: string
+  text: string
+}
+
+export interface ShotBreakdownResult {
+  ok: boolean
+  shots: { label: string; description: string }[]
+  agentSessionId?: string
+  costUsd: number | null
+  error?: string
+}
+
+export interface ImprovePromptResult {
+  ok: boolean
+  prompt: string
+  costUsd: number | null
+  error?: string
+}
 
 /** A generation request from the renderer. The agent picks the actual MCP tool. */
 export interface GenerationParams {
@@ -48,6 +106,12 @@ export interface GenerationParams {
   resolution?: string
   /** Restrict to a single connector by id; omit to let the agent choose. */
   connectorId?: string
+  /** Nudge toward a specific model within a connector (e.g. "Midjourney" on
+   *  muapi for production-tier image) — advisory, included in the prompt. */
+  modelHint?: string
+  /** Absolute local paths of reference images to condition the generation on
+   *  (owned wrappers accept them via reference_image_paths). */
+  referenceImagePaths?: string[]
 }
 
 export interface GenerationResult {
@@ -99,6 +163,15 @@ export interface MediaNodeData {
   /** Shot/prompt note authored on a Storyboard panel; carried onto the node when
    *  promoted so the generation call (Phase 4) has the intent. */
   note?: string
+  /** Set on panels created by the Scripting panel's shot breakdown: what
+   *  happens in the shot (from the script). Feeds the improve-prompt call. */
+  shotDescription?: string
+  /** The user's "generalized feeling" annotation for a script-born shot —
+   *  mood/tone in a few words, the human judgment step. */
+  feeling?: string
+  /** Storyboard image panels: restrict promotion's generation to one connector
+   *  (the storyboard-tier model choice — Gemini vs OpenAI). */
+  connectorId?: string
   [key: string]: unknown
 }
 
@@ -169,6 +242,7 @@ export interface Session {
   timeline: TimelineState
   /** Legacy pre-multitrack shape; migrated into `timeline` on load. */
   cutRoom?: CutClip[]
+  scripting?: ScriptingState
   view: StudioView
 }
 

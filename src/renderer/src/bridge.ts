@@ -7,14 +7,19 @@ import type {
   ConnectorSuggestion,
   ConnectorTestResult,
   ConnectorView,
+  ConversationStreamEvent,
+  ConversationTurnRequest,
+  ConversationTurnResult,
   CutExportResult,
   GenerationParams,
   GenerationResult,
+  ImprovePromptResult,
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
   SecretReport,
   SecretRequest,
+  ShotBreakdownResult,
   TimelineExportSpec
 } from '@shared/types'
 
@@ -30,6 +35,16 @@ export interface Bridge {
     ping(prompt: string): Promise<AgentPingResult | null>
     onStream(callback: (event: AgentStreamEvent) => void): () => void
     claudeStatus(): Promise<ClaudeAuthStatus | null>
+  }
+  scripting: {
+    turn(request: ConversationTurnRequest): Promise<ConversationTurnResult | null>
+    onStream(callback: (event: ConversationStreamEvent) => void): () => void
+    breakdown(request: Omit<ConversationTurnRequest, 'prompt'>): Promise<ShotBreakdownResult | null>
+    improve(input: {
+      label: string
+      shotDescription: string
+      feeling: string
+    }): Promise<ImprovePromptResult | null>
   }
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
@@ -108,6 +123,27 @@ function createBrowserMock(): Bridge {
       onStream: () => () => {},
       claudeStatus: async () => ({ override: 'none' })
     },
+    scripting: {
+      turn: async () => ({
+        ok: false,
+        text: '',
+        costUsd: null,
+        error: 'The agent runs in the Electron main process — unavailable in browser preview.'
+      }),
+      onStream: () => () => {},
+      breakdown: async () => ({
+        ok: false,
+        shots: [],
+        costUsd: null,
+        error: 'The agent runs in the Electron main process — unavailable in browser preview.'
+      }),
+      improve: async () => ({
+        ok: false,
+        prompt: '',
+        costUsd: null,
+        error: 'The agent runs in the Electron main process — unavailable in browser preview.'
+      })
+    },
     media: {
       pickFile: async () => null,
       import: async () => null,
@@ -179,6 +215,7 @@ function createElectronBridge(): Bridge {
     window: lyme.window,
     sessions: lyme.sessions,
     agent: lyme.agent,
+    scripting: lyme.scripting,
     media: lyme.media,
     generate: lyme.generate,
     cutRoom: lyme.cutRoom,
