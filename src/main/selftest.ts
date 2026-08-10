@@ -23,6 +23,7 @@ import { buildMultitrackArgs, resolveFfmpeg } from './ffmpeg'
 import { buildAlphaKeyArgs, buildIsolateAudioArgs } from './media-tools'
 import { extractFilePath } from './elevenlabs-tools'
 import { runGeneration } from './generation'
+import { listProjects, migrateSessionsToProjects, workspaceRoot } from './project-store'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
 import { loadState, saveState } from './sessions-store'
@@ -499,6 +500,27 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`media tools: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 12b. PROJECTS — the folder layout and the one-way migration off the flat
+  //      userData/assets store. Gated because it writes real folders into the
+  //      user's Documents; LYME_SELFTEST=1 alone stays read-only.
+  if (process.env['LYME_MIGRATE']) {
+    try {
+      const before = listProjects().length
+      const result = migrateSessionsToProjects()
+      const after = listProjects()
+      log(
+        `projects: root=${workspaceRoot()} · before=${before} · migrated=${result.migrated} · assets moved=${result.assetsMoved} · recovered=${result.recovered}${result.skipped ? ' (SKIPPED — already migrated)' : ''}`
+      )
+      for (const p of after) {
+        log(
+          `  project "${p.name}" -> ${p.folder} (${p.nodeCount} nodes, ${p.assetCount} assets, ${(p.assetBytes / 1048576).toFixed(1)} MB)`
+        )
+      }
+    } catch (error) {
+      fail(`projects: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   // 13. LIVE GENERATION — off by default and never part of the plumbing run, because

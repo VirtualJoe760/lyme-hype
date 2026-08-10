@@ -11,6 +11,7 @@ import { extname, join, normalize } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, net, protocol } from 'electron'
 import type { MediaType } from '@shared/types'
+import { activeProjectDir } from './workspace'
 
 export const ASSET_SCHEME = 'lyme-asset'
 
@@ -57,10 +58,38 @@ export function mediaTypeForPath(p: string): MediaType | null {
   return EXT_MEDIA_TYPE[extname(p).toLowerCase()] ?? null
 }
 
-function assetsDir(): string {
+function legacyAssetsDir(): string {
   const dir = join(app.getPath('userData'), 'assets')
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+/**
+ * New media lands inside the open project so it is browsable, portable, and deleted
+ * with the project (build-plan Phase 23). With no project open — first run, or before
+ * migration — it falls back to the old userData location so nothing breaks mid-move.
+ */
+function assetsDir(): string {
+  const project = activeProjectDir()
+  if (!project) return legacyAssetsDir()
+  const dir = join(project, 'assets')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+/**
+ * A `lyme-asset://` URL carries only a filename, so resolution checks the open project
+ * first and then the legacy folder — which is what lets sessions written before the move
+ * keep rendering their images while new ones are written project-side.
+ */
+function resolveAssetFile(fileName: string): string | null {
+  const project = activeProjectDir()
+  if (project) {
+    const inProject = join(project, 'assets', fileName)
+    if (existsSync(inProject)) return inProject
+  }
+  const legacy = join(app.getPath('userData'), 'assets', fileName)
+  return existsSync(legacy) ? legacy : null
 }
 
 /** Must run before app.whenReady() — privileged scheme registration requirement. */
@@ -76,10 +105,11 @@ export function registerAssetProtocol(): void {
     const url = new URL(request.url)
     // Only the flat filename is honored — no path traversal out of assetsDir.
     const name = normalize(url.pathname).replace(/^([/\\.]+)/, '')
-    const filePath = join(assetsDir(), name)
-    if (!filePath.startsWith(assetsDir()) || !existsSync(filePath)) {
+    if (!name || name.includes('/') || name.includes('\\')) {
       return new Response('Not found', { status: 404 })
     }
+    const filePath = resolveAssetFile(name)
+    if (!filePath) return new Response('Not found', { status: 404 })
     // net.fetch on a file URL streams with range support — needed for <video>
     // seeking — and infers Content-Type from the extension.
     return net.fetch(pathToFileURL(filePath).href)
@@ -141,15 +171,16 @@ export function assetPathForUrl(url: string): string | null {
   } catch {
     return null
   }
-  const filePath = join(assetsDir(), name)
-  if (!filePath.startsWith(assetsDir()) || !existsSync(filePath)) return null
-  return filePath
+  // Reject anything that is not a bare filename before touching the disk — the
+  // traversal guard has to survive resolving across two possible directories.
+  if (!name || name.includes("/") || name.includes("\\")) return null
+  return resolveAssetFile(name)
 }
 
 /** Test helper: confirm a saved asset is readable and non-empty. */
 export function readAssetBytes(fileName: string): number {
-  const filePath = join(assetsDir(), fileName)
-  return existsSync(filePath) ? readFileSync(filePath).length : 0
+  const filePath = resolveAssetFile(fileName)
+  return filePath ? readFileSync(filePath).length : 0
 }
 
 export function assetExtFor(mimeType: string): string {

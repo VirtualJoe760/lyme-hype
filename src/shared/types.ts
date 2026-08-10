@@ -399,6 +399,17 @@ export interface Session {
   view: StudioView
 }
 
+/** A project folder on disk, as listed for the Open/Recent UI (build-plan Phase 23). */
+export interface ProjectSummary {
+  dir: string
+  name: string
+  folder: string
+  savedAt: string
+  nodeCount: number
+  assetCount: number
+  assetBytes: number
+}
+
 export interface PersistedState {
   sessions: Session[]
   activeSessionId: string | null
