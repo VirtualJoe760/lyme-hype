@@ -323,7 +323,15 @@ function createBrowserMock(): Bridge {
       })
     },
     connectors: {
-      list: async () => [],
+      // A representative credentialed set, not an empty list: with zero connectors
+      // every tile reads "needs X" and every model pill is dim, so the readiness and
+      // routing UI — the part most likely to regress — was untestable in preview.
+      list: async () => [
+        { id: 'muapi', name: 'muapi', kind: 'stdio', authType: 'apiKey', secretFieldLabel: 'API key', hasCredential: true },
+        { id: 'elevenlabs', name: 'ElevenLabs', kind: 'stdio', authType: 'apiKey', secretFieldLabel: 'API key', hasCredential: true },
+        { id: 'gemini', name: 'Gemini', kind: 'stdio', authType: 'apiKey', secretFieldLabel: 'API key', hasCredential: true },
+        { id: 'fal', name: 'fal', kind: 'http', authType: 'bearer', secretFieldLabel: 'API key', hasCredential: false }
+      ],
       save: async () => {},
       delete: async () => {},
       test: async () => ({

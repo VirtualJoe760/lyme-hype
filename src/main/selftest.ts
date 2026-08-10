@@ -23,6 +23,8 @@ import { buildMultitrackArgs, resolveFfmpeg } from './ffmpeg'
 import { buildAlphaKeyArgs, buildIsolateAudioArgs } from './media-tools'
 import { extractFilePath } from './elevenlabs-tools'
 import { runGeneration } from './generation'
+import { modelPickerOrder } from '@shared/model-catalog'
+import { NODE_MANIFESTS } from '@shared/node-manifest'
 import { listProjects, migrateSessionsToProjects, workspaceRoot } from './project-store'
 import { probeStdioMcp } from './mcp-probe'
 import { requestSecret } from './secure-credential'
@@ -500,6 +502,30 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     }
   } catch (error) {
     fail(`media tools: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  // 12a. CONNECTOR READINESS as the renderer computes it. Both "reconnect an
+  //      already-connected tool" and "no model pills light up" collapse to one
+  //      question — does hasCredential come back true — so it gets reported
+  //      directly rather than inferred from a tile.
+  try {
+    const views = listConnectors()
+    const ready = views.filter((c) => c.authType === 'none' || c.hasCredential).map((c) => c.id)
+    for (const view of views) {
+      const decrypts = readSecretValue(view.id) !== null
+      log(
+        `  connector ${view.id.padEnd(12)} auth=${String(view.authType).padEnd(7)} hasCredential=${String(view.hasCredential).padEnd(5)} decrypts=${decrypts}`
+      )
+    }
+    const counts = NODE_MANIFESTS.map((m) => {
+      const tool = m.tools.find((t) => t.capability !== null)
+      const n = tool?.capability ? modelPickerOrder(tool.capability, ready).filter((x) => x.ready).length : 0
+      return `${m.id}:${n}`
+    }).join(' ')
+    log(`connector readiness: ready=[${ready.join(', ')}] · default-tool ready models per node -> ${counts}`)
+    if (ready.length === 0) fail('connector readiness: NOTHING is credentialed — every tile will ask to reconnect')
+  } catch (error) {
+    fail(`connector readiness: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   // 12b. PROJECTS — the folder layout and the one-way migration off the flat

@@ -103,10 +103,15 @@ function focusExistingWindow(): void {
 
 // Launching from the Start menu while the app is already open must raise the
 // running window, not boot a second studio against the same sessions store.
-if (!app.requestSingleInstanceLock()) {
+//
+// The headless checks are exempt: they are a separate short-lived process, and
+// without this exemption `LYME_SELFTEST=1 npm run dev` silently quits whenever the
+// real app happens to be open — it looks like the harness produced no output.
+const isHeadlessCheck = !!process.env['LYME_SELFTEST']
+if (!isHeadlessCheck && !app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', focusExistingWindow)
+  if (!isHeadlessCheck) app.on('second-instance', focusExistingWindow)
 
   app.whenReady().then(() => {
     app.setAppUserModelId(APP_USER_MODEL_ID)
