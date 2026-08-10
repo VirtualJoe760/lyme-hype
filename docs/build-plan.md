@@ -241,6 +241,109 @@ Spec: [architecture/connector-intake.md](architecture/connector-intake.md).
 - [ ] Step 5 — node proposals from clustered residue (needs Phase 16's manifest).
 - [ ] Default-deny on side-effecting verbs for newly observed tools — `DANGEROUS_TOOLS_BY_SERVER` is a hand-maintained blocklist and cannot cover unseen connectors.
 
+---
+
+# Part three — memory, projects, export, and shipping (2026-08-10)
+
+Part two rebuilt how a node *works*. This part is about everything around it: what survives a
+restart, where files live, how work leaves the app, and what it takes to hand someone an `.exe`.
+
+**Framing decision: there is no Save.** `persist()` already writes on every change, so a File →
+Save would be a button that does nothing. This is the Figma model, not the Photoshop model, and
+the menu should reflect it — "Save As" becomes **Duplicate project**, "Open" becomes **Open
+project**, and the only thing that genuinely leaves the app is **Export**.
+
+## Phase 22 — Close the session-memory holes (do first, all small)
+
+Everything here is a gap in something that already works, so each is cheap and independently
+shippable.
+
+- [ ] **Persist window bounds.** `createMainWindow` hardcodes 1440×900 centered on every launch;
+      maximize/move/resize is lost. Save bounds + maximized state on `close`, restore on create,
+      and clamp to the current display so a window from a disconnected monitor isn't off-screen.
+- [ ] **Persist `nodeInputs` and `nodeDataset`.** Both live in the store root and are absent from
+      `persistedSnapshot()`, so a linked start frame and an assembled LoRA training set vanish on
+      restart. They belong on the session, not the workspace — they're per-project work.
+- [ ] Confirm the rest is genuinely covered: sessions, nodes, timeline, Scripting chat, staged
+      takes, `activeSessionId`, theme and all four panel sizes already restore.
+
+## Phase 23 — Projects as folders (the structural one)
+
+Today every session lives in one global `sessions.json` and every asset is a uuid in a flat
+`userData/assets/`. **116 files / 28.8 MB are currently orphaned — nothing references any of
+them, and nothing in `src/main/` ever deletes an asset.**
+
+Target layout, the model Premiere and Figma desktop use:
+
+```
+Documents/Lyme Hype/              ← workspace root, user-chosen
+  lime-reel-01/
+    project.json                  ← nodes, chat, timeline, staged takes
+    assets/
+      img_citrus-vinyl_001.png    ← human-readable, not uuids
+      clip_lantern_002.mp4
+```
+
+- [ ] `project-store.ts` alongside `sessions-store.ts` so the current app keeps working during the
+      transition.
+- [ ] Workspace root picker, default `Documents/Lyme Hype`; `userData` keeps only machine-local
+      state (connectors, credential vault, workspace path, recents, window bounds).
+- [ ] Asset writes go to the project's own `assets/`, named from the prompt rather than a uuid.
+- [ ] Migration: existing sessions become folders; the 116 orphans move into the project that
+      references them, or a `_recovered/` folder.
+- [ ] **Asset lifecycle falls out for free** — deleting a project deletes its assets because they
+      live inside it. No reference counting to maintain.
+
+## Phase 24 — Hamburger menu + real keyboard accelerators
+
+- [ ] Hamburger in the custom titlebar (correct pattern for a frameless window — VS Code, Figma):
+      New project · Open project · Recent · Duplicate project · Reveal in Explorer · Export… ·
+      Settings. **No Save, no Save As.**
+- [ ] **Register a hidden application menu.** With `frame: false` and no `Menu.setApplicationMenu`,
+      accelerators do not exist — Ctrl+N/Ctrl+O/Ctrl+E currently do nothing and won't start working
+      just because a hamburger renders them.
+- [ ] No Edit menu until there's undo/redo — there is none today, and an Edit menu implies it.
+
+## Phase 25 — Export panel
+
+The Cut Room already renders through ffmpeg (`⬇ Export mp4`, 1080×1920 @30). What's missing is
+choice and destination.
+
+- [ ] Preset list: Reel 1080×1920, Square 1080×1080, Landscape 1920×1080, plus a Master (higher
+      bitrate, no downscale).
+- [ ] Destination defaults to the project folder rather than a dialog every time.
+- [ ] Export history per project, so a re-export overwrites deliberately instead of piling up.
+
+## Phase 26 — Adobe handoff (see the recommendation below)
+
+- [ ] **Watch-folder drop** — configurable path; after an ffmpeg export, optionally copy the file
+      into an Adobe Media Encoder watch folder. This is the only supported third-party integration
+      surface AME has, and it needs no Adobe SDK.
+- [ ] **Timeline interchange** — export the Cut Room as an XML Premiere can open, so the *edit*
+      arrives on tracks instead of a flattened mp4. **Format needs verifying against the installed
+      Premiere version** (FCP7-style XMEML is the historically reliable one; AAF and EDL are the
+      fallbacks). Do not assume.
+- [ ] Leaves the already-planned UXP plugin (project Phase 2) as the deep integration; this is the
+      cheap 90%.
+
+## Phase 27 — Ship an `.exe`
+
+No `build` config and no electron-builder exist yet. Beyond adding them, four things actually bite:
+
+- [ ] **`resources/*.cjs` cannot be spawned from inside asar.** `connector-suggestions.ts` uses
+      `join(app.getAppPath(), 'resources', …)`, which packaged becomes `app.asar/resources/…`.
+      Gemini and OpenAI connectors work in dev and fail in a packaged build. Fix with
+      `extraResources` + `process.resourcesPath`.
+- [ ] **`asarUnpack` the Agent SDK** — it spawns its own `cli.js` out of `node_modules`.
+- [ ] **Node is a hidden dependency.** muapi spawns `npx -y muapi-cli`, ChatRealty spawns `node`.
+      On a machine without Node those connectors simply don't run. Decide: document it as a
+      prerequisite, bundle a Node runtime, or prefer HTTP-transport connectors.
+- [ ] ffmpeg: personal use runs on the machine's binary; distributing to others means bundling an
+      LGPL build and switching the encoder (`AGENTS.md` §7).
+- [ ] Code signing — an unsigned `.exe` triggers SmartScreen.
+- [ ] Agent auth: generation currently rides *this machine's* Claude Code login. Another machine
+      has none, and needs its own.
+
 ## Cross-cutting, ongoing
 
 Update the relevant spec doc in the same change that implements it. Decisions made mid-build belong back in the `architecture/`, `connectors/`, or `ui/` docs, not just in code — that's how this project's planning has worked so far, and drifting from it is exactly how README's Status section went stale once already.
