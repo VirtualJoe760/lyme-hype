@@ -441,6 +441,7 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     return {
       ok: true,
       src: saved.url,
+      thumbSrc: saved.thumbUrl,
       mediaType: params.mediaType,
       note: `via ${attached.join(', ')}${costUsd != null ? ` · $${costUsd.toFixed(3)}` : ''}`,
       costUsd

@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, net, protocol } from 'electron'
+import { app, nativeImage, net, protocol } from 'electron'
 import type { MediaType } from '@shared/types'
 import { activeProjectDir } from './workspace'
 
@@ -119,6 +119,42 @@ export function registerAssetProtocol(): void {
 export interface SavedAsset {
   url: string
   bytes: number
+  /** Downscaled companion for node thumbnails, when one could be made. */
+  thumbUrl?: string
+}
+
+function stripExt(name: string): string {
+  return name.replace(/.[^.]+$/, '')
+}
+
+/** Canvas node thumbs render at 62px tall; 256 covers hi-DPI without being wasteful. */
+const THUMB_MAX = 256
+
+/**
+ * A canvas node's thumbnail is 62px tall, but it was being handed the full-resolution
+ * source — a 1024×1024 3 MB PNG decoded and downscaled per node, per render. That is the
+ * single biggest cost in the canvas. Generating a small companion once at import makes
+ * node rendering cheap; the full asset is still what Play view and export use.
+ *
+ * Best-effort by design: a format nativeImage can't read (or a video) just has no thumb,
+ * and the node falls back to the original.
+ */
+function writeThumb(sourcePath: string, baseName: string): string | undefined {
+  try {
+    const image = nativeImage.createFromPath(sourcePath)
+    if (image.isEmpty()) return undefined
+    const { width, height } = image.getSize()
+    if (width <= THUMB_MAX && height <= THUMB_MAX) return undefined
+    const resized =
+      width >= height
+        ? image.resize({ width: THUMB_MAX, quality: 'good' })
+        : image.resize({ height: THUMB_MAX, quality: 'good' })
+    const fileName = `thumb_${baseName}.jpg`
+    writeFileSync(join(assetsDir(), fileName), resized.toJPEG(82))
+    return `${ASSET_SCHEME}://asset/${fileName}`
+  } catch {
+    return undefined
+  }
 }
 
 /** Persists image bytes to userData/assets and returns a lyme-asset:// URL. */
@@ -126,8 +162,13 @@ export function saveImageAsset(base64: string, mimeType: string): SavedAsset {
   const ext = MIME_EXT[mimeType.toLowerCase()] ?? '.bin'
   const fileName = `${randomUUID()}${ext}`
   const buffer = Buffer.from(base64, 'base64')
-  writeFileSync(join(assetsDir(), fileName), buffer)
-  return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: buffer.length }
+  const dest = join(assetsDir(), fileName)
+  writeFileSync(dest, buffer)
+  return {
+    url: `${ASSET_SCHEME}://asset/${fileName}`,
+    bytes: buffer.length,
+    thumbUrl: writeThumb(dest, stripExt(fileName))
+  }
 }
 
 /** Copies a user-picked/downloaded file into the asset store and returns a
@@ -138,7 +179,11 @@ export function importFileAsset(srcPath: string): SavedAsset {
   const fileName = `${randomUUID()}${ext}`
   const dest = join(assetsDir(), fileName)
   copyFileSync(srcPath, dest)
-  return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: statSync(dest).size }
+  return {
+    url: `${ASSET_SCHEME}://asset/${fileName}`,
+    bytes: statSync(dest).size,
+    thumbUrl: writeThumb(dest, stripExt(fileName))
+  }
 }
 
 /** Downloads a remote media URL into the asset store. The extension is resolved
@@ -156,8 +201,13 @@ export async function importUrlAsset(sourceUrl: string, mediaType?: MediaType): 
     ? urlExt
     : (MIME_EXT[contentType] ?? (mediaType ? MEDIA_TYPE_DEFAULT_EXT[mediaType] : '.mp4'))
   const fileName = `${randomUUID()}${ext}`
-  writeFileSync(join(assetsDir(), fileName), buffer)
-  return { url: `${ASSET_SCHEME}://asset/${fileName}`, bytes: buffer.length }
+  const dest = join(assetsDir(), fileName)
+  writeFileSync(dest, buffer)
+  return {
+    url: `${ASSET_SCHEME}://asset/${fileName}`,
+    bytes: buffer.length,
+    thumbUrl: writeThumb(dest, stripExt(fileName))
+  }
 }
 
 /** Resolves a lyme-asset://asset/<file> URL back to its on-disk path (for ffmpeg

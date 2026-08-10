@@ -39,6 +39,9 @@ function Icon(props: { name: ToolIcon }): React.JSX.Element {
   )
 }
 
+/** Stable empty array so the not-open case never hands zustand a fresh reference. */
+const EMPTY_NODES: ReturnType<typeof useStudio.getState>["nodes"] = []
+
 function readyConnectorIds(connectors: ConnectorView[]): string[] {
   return connectors.filter((c) => c.authType === 'none' || c.hasCredential).map((c) => c.id)
 }
@@ -73,14 +76,6 @@ export function NodePanel(props: {
   const nodeInputs = useStudio((s) => s.nodeInputs)
   const editorMask = useStudio((s) => s.editor?.mask)
 
-  // Selecting s.nodes (a stable reference) and filtering in a memo — a selector that
-  // returns a fresh array fails zustand's snapshot equality and loops forever.
-  const nodes = useStudio((s) => s.nodes)
-  const canvasImages = useMemo(
-    () => nodes.filter((n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src),
-    [nodes]
-  )
-
   const [prompt, setPrompt] = useState('')
   const [takes, setTakes] = useState(1)
   const [styleId, setStyleId] = useState('')
@@ -95,6 +90,21 @@ export function NodePanel(props: {
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [params, setParams] = useState<Record<string, string>>(() =>
     Object.fromEntries(manifest.parameters.map((p) => [p.id, p.options?.[0] ?? '']))
+  )
+
+  // Subscribing to the whole `nodes` array re-rendered this entire panel on every
+  // pointer move of a canvas drag — onNodesChange fires per frame while dragging. The
+  // pickers are the only thing here that reads nodes and they are shut almost always,
+  // so the subscription is scoped to when one is actually open.
+  //
+  // The selector still returns the store's own array reference rather than a filtered
+  // copy: a selector that builds a new array fails zustand's snapshot equality and
+  // loops forever (the bug that blanked this panel the first time it rendered).
+  const pickerOpen = openSetting !== null
+  const nodes = useStudio((s) => (pickerOpen ? s.nodes : EMPTY_NODES))
+  const canvasImages = useMemo(
+    () => nodes.filter((n) => n.data.mediaType === 'image' && n.data.status === 'ready' && n.data.src),
+    [nodes]
   )
 
   const style = props.styles?.find((s) => s.id === styleId)

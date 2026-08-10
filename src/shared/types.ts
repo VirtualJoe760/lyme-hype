@@ -230,6 +230,9 @@ export interface GenerationResult {
   ok: boolean
   /** lyme-asset:// URL of the imported result, when ok. */
   src?: string
+  /** Downscaled companion for canvas thumbnails — rendering the full asset into a
+   *  62px node meant decoding a multi-megabyte image per node, per render. */
+  thumbSrc?: string
   mediaType: MediaType
   /** Short provenance note (tool/model/cost) for display. */
   note?: string
@@ -246,6 +249,8 @@ export interface MediaNodeData {
   swatch: number
   /** Real image source (lyme-asset:// URL), e.g. a ChatRealty listing photo. */
   src?: string
+  /** Downscaled companion rendered in the node thumbnail; falls back to `src`. */
+  thumbSrc?: string
   /** Motion-graphics flavored video nodes keep a tag so the aside's tab choice isn't lost. */
   motionGfx?: boolean
   sentToTimeline?: boolean
@@ -363,6 +368,8 @@ export interface StagedTake {
   label: string
   prompt: string
   src?: string
+  /** Downscaled companion, carried onto the node when the take is committed. */
+  thumbSrc?: string
   error?: string
   /** Catalog model id that produced it, for provenance in the preview. */
   modelId?: string

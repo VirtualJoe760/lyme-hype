@@ -1392,7 +1392,7 @@ export const useStudio = create<StudioStore>((set, get) => {
 
           patchTake(manifestId, take.id,
             result?.ok && result.src
-              ? { status: 'ready', src: result.src, error: undefined }
+              ? { status: 'ready', src: result.src, thumbSrc: result.thumbSrc, error: undefined }
               : { status: 'error', error: result?.error ?? 'Generation failed.' }
           )
         })()
@@ -1502,6 +1502,7 @@ export const useStudio = create<StudioStore>((set, get) => {
           source: 'generate',
           status: 'ready',
           src: take.src,
+          thumbSrc: take.thumbSrc,
           swatch: pickSwatch()
         }
       }
@@ -1574,6 +1575,7 @@ export const useStudio = create<StudioStore>((set, get) => {
             input.mediaType === 'video' ? await probeDuration(result.src, 'video') : undefined
           patchNodeAnywhere(id, {
             src: result.src,
+            thumbSrc: result.thumbSrc,
             status: 'ready',
             error: undefined,
             genNote: result.note,

@@ -64,7 +64,7 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
         ) : data.src && data.mediaType === 'video' ? (
           <video src={data.src} muted preload="metadata" className="thumb-img" />
         ) : data.src && data.mediaType === 'image' ? (
-          <img src={data.src} alt={data.label} className="thumb-img" draggable={false} />
+          <img src={data.thumbSrc ?? data.src} alt={data.label} className="thumb-img" draggable={false} />
         ) : data.mediaType === 'audio' ? (
           <Waveform />
         ) : null}
