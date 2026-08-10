@@ -253,18 +253,18 @@ Save would be a button that does nothing. This is the Figma model, not the Photo
 the menu should reflect it — "Save As" becomes **Duplicate project**, "Open" becomes **Open
 project**, and the only thing that genuinely leaves the app is **Export**.
 
-## Phase 22 — Close the session-memory holes (do first, all small)
+## Phase 22 — Close the session-memory holes ✅ (2026-08-10)
 
 Everything here is a gap in something that already works, so each is cheap and independently
 shippable.
 
-- [ ] **Persist window bounds.** `createMainWindow` hardcodes 1440×900 centered on every launch;
+- [x] **Persist window bounds.** `createMainWindow` hardcodes 1440×900 centered on every launch;
       maximize/move/resize is lost. Save bounds + maximized state on `close`, restore on create,
       and clamp to the current display so a window from a disconnected monitor isn't off-screen.
-- [ ] **Persist `nodeInputs` and `nodeDataset`.** Both live in the store root and are absent from
+- [x] **Persist `nodeInputs` and `nodeDataset`.** Both live in the store root and are absent from
       `persistedSnapshot()`, so a linked start frame and an assembled LoRA training set vanish on
       restart. They belong on the session, not the workspace — they're per-project work.
-- [ ] Confirm the rest is genuinely covered: sessions, nodes, timeline, Scripting chat, staged
+- [x] Confirmed the rest is genuinely covered: sessions, nodes, timeline, Scripting chat, staged
       takes, `activeSessionId`, theme and all four panel sizes already restore.
 
 ## Phase 23 — Projects as folders (the structural one)
