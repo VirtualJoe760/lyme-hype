@@ -4,6 +4,7 @@ import { registerAssetProtocol, registerAssetSchemePrivileges } from './asset-st
 import { reconcileInstalledConnectors } from './connector-suggestions'
 import { registerIpc } from './ipc'
 import { runSelfTest } from './selftest'
+import { restoredWindowOptions, trackWindowState } from './window-state'
 
 // Must run before app is ready — privileged custom schemes register at this point.
 registerAssetSchemePrivileges()
@@ -58,9 +59,13 @@ function hardenNavigation(): void {
 }
 
 function createMainWindow(): BrowserWindow {
+  const restored = restoredWindowOptions()
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: restored.width,
+    height: restored.height,
+    ...(restored.x !== undefined && restored.y !== undefined
+      ? { x: restored.x, y: restored.y }
+      : {}),
     minWidth: 1080,
     minHeight: 700,
     show: false,
@@ -74,6 +79,9 @@ function createMainWindow(): BrowserWindow {
       sandbox: false
     }
   })
+
+  if (restored.maximized) window.maximize()
+  trackWindowState(window)
 
   window.on('ready-to-show', () => window.show())
 

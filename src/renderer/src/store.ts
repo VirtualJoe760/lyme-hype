@@ -471,10 +471,10 @@ export const useStudio = create<StudioStore>((set, get) => {
 
   /** Serializes the live canvas back into the sessions array. */
   function syncedSessions(): Session[] {
-    const { sessions, activeSessionId, nodes } = get()
+    const { sessions, activeSessionId, nodes, nodeInputs, nodeDataset } = get()
     return sessions.map((session) =>
       session.id === activeSessionId
-        ? { ...session, nodes: nodes.map(toNodeState) }
+        ? { ...session, nodes: nodes.map(toNodeState), nodeInputs, nodeDataset }
         : session
     )
   }
@@ -648,6 +648,8 @@ export const useStudio = create<StudioStore>((set, get) => {
         sessions,
         activeSessionId,
         nodes: active.nodes.map(toFlowNode),
+        nodeInputs: active.nodeInputs ?? {},
+        nodeDataset: active.nodeDataset ?? {},
         theme,
         railWidth: persisted?.railWidth ?? PANEL_SIZES.rail.default,
         asideWidth: persisted?.asideWidth ?? PANEL_SIZES.aside.default,
@@ -677,6 +679,8 @@ export const useStudio = create<StudioStore>((set, get) => {
         sessions,
         activeSessionId: id,
         nodes: next.nodes.map(toFlowNode),
+        nodeInputs: next.nodeInputs ?? {},
+        nodeDataset: next.nodeDataset ?? {},
         combine: null
       })
       persist()

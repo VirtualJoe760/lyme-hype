@@ -390,6 +390,12 @@ export interface Session {
   /** Uncommitted work per creative node, keyed by manifest id. Survives navigating
    *  away from a node and dies with the session (build-plan Phase 14). */
   stages?: Record<string, NodeStage>
+  /** Canvas media linked into a node's role (start frame, source, face), keyed by
+   *  manifest id then role. Per-session, not per-workspace: a frame linked in one
+   *  project has no business appearing in another. */
+  nodeInputs?: Record<string, Record<string, string>>
+  /** Training images assembled for a dataset-preview node, keyed by manifest id. */
+  nodeDataset?: Record<string, string[]>
   view: StudioView
 }
 
