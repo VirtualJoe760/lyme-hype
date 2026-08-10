@@ -501,6 +501,79 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
     fail(`media tools: ${error instanceof Error ? error.message : String(error)}`)
   }
 
+  // 13. LIVE GENERATION — off by default and never part of the plumbing run, because
+  //     every case here spends real money on the user's connector accounts. Gated on its
+  //     own env var so LYME_SELFTEST=1 can stay free forever (AGENTS.md §0: live billed
+  //     verification is joint-session work, not something a routine or CI does).
+  if (process.env['LYME_LIVEGEN']) {
+    const only = process.env['LYME_LIVEGEN'].toLowerCase()
+    const wants = (kind: string): boolean => only === '1' || only.includes(kind)
+    const installed = installedConnectorIds()
+    log(`LIVE GENERATION requested (${only}) — installed: ${installed.join(', ') || 'none'}`)
+
+    const cases: { kind: string; label: string; params: Parameters<typeof runGeneration>[0] }[] = [
+      {
+        kind: 'image',
+        label: 'image · muapi flux-dev',
+        params: {
+          mediaType: 'image',
+          prompt: 'a quarter lime wedge on black slate, studio rim light, macro, high contrast',
+          aspectRatio: '1:1',
+          connectorId: 'muapi',
+          modelHint: 'flux-dev'
+        }
+      },
+      {
+        kind: 'image',
+        label: 'image · muapi flux-schnell (second take)',
+        params: {
+          mediaType: 'image',
+          prompt: 'citrus-slice vinyl record spinning in fog, neon green key light',
+          aspectRatio: '1:1',
+          connectorId: 'muapi',
+          modelHint: 'flux-schnell'
+        }
+      },
+      {
+        kind: 'audio',
+        label: 'audio · elevenlabs tts',
+        params: {
+          mediaType: 'audio',
+          prompt: 'The lyme does not lie. It just does not care.',
+          connectorId: 'elevenlabs'
+        }
+      },
+      {
+        kind: 'video',
+        label: 'video · muapi',
+        params: {
+          mediaType: 'video',
+          prompt: 'slow push in on a lime wedge resting on black slate, volumetric fog',
+          aspectRatio: '9:16',
+          durationSec: 5,
+          connectorId: 'muapi'
+        }
+      }
+    ]
+
+    for (const c of cases) {
+      if (!wants(c.kind)) continue
+      if (!installed.includes(c.params.connectorId ?? '')) {
+        log(`live ${c.label}: SKIP — ${c.params.connectorId} not installed`)
+        continue
+      }
+      const started = Date.now()
+      try {
+        const result = await runGeneration(c.params)
+        const secs = Math.round((Date.now() - started) / 1000)
+        if (result.ok && result.src) log(`live ${c.label}: PASS in ${secs}s -> ${result.src}`)
+        else fail(`live ${c.label}: ${result.error ?? 'no src returned'} (${secs}s)`)
+      } catch (error) {
+        fail(`live ${c.label}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+
   log(failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`)
   app.exit(failures === 0 ? 0 : 1)
 }

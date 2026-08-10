@@ -43,6 +43,19 @@ function mcpName(connectorId: string): string {
 }
 
 /**
+ * On Windows `npx` is `npx.cmd`, which CreateProcess won't resolve from a bare name.
+ * `mcp-client.ts` gets away with `shell: true`, but the Agent SDK spawns MCP servers
+ * itself and doesn't — so every stdio connector died with "process exited with code 1"
+ * and no attached tools. Route bare commands through cmd.exe; leave absolute paths and
+ * already-suffixed executables alone.
+ */
+function windowsSafeCommand(command: string, args: string[]): { command: string; args: string[] } {
+  if (process.platform !== 'win32') return { command, args }
+  if (/[\\/]/.test(command) || /\.(exe|cmd|bat)$/i.test(command)) return { command, args }
+  return { command: 'cmd.exe', args: ['/c', command, ...args] }
+}
+
+/**
  * Builds the SDK mcpServers map from installed connectors, injecting each stored
  * credential the same way a real call would — env var for stdio, header for
  * http. The SDK carries the actual transport (stdio spawn / Streamable-HTTP).
@@ -84,9 +97,17 @@ async function buildMcpServers(restrictIds?: string[]): Promise<{
     }
     const name = mcpName(def.id)
     if (def.kind === 'stdio' && def.command) {
-      const env: Record<string, string> = { ...(def.env ?? {}) }
+      // The SDK uses this env as the child's WHOLE environment, so the secret alone
+      // leaves the server with no PATH and nothing to resolve `npx`/`node` with —
+      // mcp-client.ts merges process.env for exactly this reason, and generation
+      // silently didn't, which is why no stdio connector ever attached.
+      const env: Record<string, string> = {
+        ...(process.env as Record<string, string>),
+        ...(def.env ?? {})
+      }
       if (def.secretKey && token && def.authType !== 'oauth') env[def.secretKey] = token
-      servers[name] = { command: def.command, args: def.args ?? [], env }
+      const spawnable = windowsSafeCommand(def.command, def.args ?? [])
+      servers[name] = { command: spawnable.command, args: spawnable.args, env }
     } else if (def.kind === 'http' && def.url) {
       const headers = await resolveHttpHeaders(def)
       if (def.authType === 'oauth' && !headers['Authorization']) {
@@ -221,6 +242,8 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
 
   if (!params.prompt.trim()) return fail('Enter a prompt to generate.')
 
+  const stderrTail: string[] = []
+
   params = {
     ...params,
     referenceImagePaths: params.referenceImagePaths
@@ -342,9 +365,17 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     const prompt = preUploadLines.length
       ? `${buildPrompt(params)}\n${preUploadLines.join('\n')}`
       : buildPrompt(params)
+    // The SDK reports a failed subprocess as a bare "exited with code 1"; without this
+    // the actual cause (a connector that won't launch, a rejected option) is invisible.
     const stream = query({
       prompt,
       options: {
+        stderr: (data: string) => {
+          const line = data.trim()
+          if (!line) return
+          stderrTail.push(line)
+          console.error('[generation:sdk]', line.slice(0, 400))
+        },
         abortController: abort,
         maxTurns: 12,
         maxBudgetUsd: ORCHESTRATION_BUDGET_USD,
@@ -415,12 +446,15 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       costUsd
     }
   } catch (error) {
+    const base =
+      error instanceof Error ? error.message : String(error)
+    const detail = stderrTail.length ? ` — ${stderrTail.slice(-3).join(' | ').slice(0, 500)}` : ''
     return {
       ok: false,
       mediaType: params.mediaType,
       error: abort.signal.aborted
         ? `Generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`
-        : error instanceof Error ? error.message : String(error)
+        : `${base}${detail}`
     }
   } finally {
     clearTimeout(timeout)
