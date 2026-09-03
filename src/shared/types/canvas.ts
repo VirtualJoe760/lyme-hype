@@ -30,6 +30,10 @@ export interface MediaNodeData {
   listingKey?: string
   /** Short provenance note from a real generation (tool/model). */
   genNote?: string
+  /** This image IS a character's approved reference (Generate Character). A
+   *  Generate image run that takes it as a reference treats it as a character
+   *  ref, not an object ref. */
+  characterId?: string
   /** Failure reason when status is 'error' (e.g. generation failed). */
   error?: string
   /** Non-destructive in/out points (seconds) set in Play view; playback and
@@ -66,11 +70,16 @@ export interface MediaNodeData {
 
 export interface CanvasNodeState {
   id: string
+  /** 'group' = a named frame whose children carry parentId (moves them in unison). Absent = media. */
+  type?: 'media' | 'group'
+  /** The group this node sits in; position is then relative to the group. */
+  parentId?: string
   position: { x: number; y: number }
   data: MediaNodeData
-  /** User-resized node width (drag handle on the canvas). Height is never stored —
-   *  it follows the media's own aspect ratio. */
+  /** User-resized node width (drag handle on the canvas). Height is never stored
+   *  for media — it follows the aspect ratio — but a group frame keeps both. */
   width?: number
+  height?: number
 }
 
 /**

@@ -27,7 +27,7 @@ import type {
 
 export type SettingsTab = 'connectors' | 'models' | 'styles' | 'appearance'
 
-export type MediaFlowNode = Node<MediaNodeData, 'media'>
+export type MediaFlowNode = Node<MediaNodeData, 'media' | 'group'>
 
 let idCounter = 0
 export function nextId(prefix: string): string {
@@ -114,6 +114,7 @@ export interface StudioStore {
     src?: string
     detailUrl?: string
     listingKey?: string
+    characterId?: string
     position?: { x: number; y: number }
     startRendering?: boolean
   }): void
@@ -126,6 +127,12 @@ export interface StudioStore {
   /** Ctrl+Z on the canvas. Returns false when there was nothing to restore. */
   restoreLastTrashed(): boolean
   emptyTrash(): void
+
+  /** Canvas layout: lines by media type; named groups that move as one. */
+  tidyCanvas(): void
+  groupSelected(name?: string): string | null
+  renameGroup(id: string, name: string): void
+  ungroup(id: string): void
 
   /** Timeline (multitrack Cut Room). */
   selectedTrackId: string | null

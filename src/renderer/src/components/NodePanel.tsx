@@ -15,8 +15,9 @@ import {
   acceptedMedia,
   enhanceImagesFor,
   hWheelRef,
-  readyConnectorIds
-} from './node-panel/support'
+  characterNameFor,
+  previewInputsFor,
+  readyConnectorIds, settingValueFor } from './node-panel/support'
 import { SettingSheets } from './node-panel/SettingSheets'
 import { TakePreview } from './node-panel/TakePreview'
 import type { NodeManifest, NodeToolDef } from '@shared/node-manifest'
@@ -238,10 +239,12 @@ export function NodePanel(props: {
 
   // A canvas node's "img2img" action seeds its image as a reference here.
   const pendingRefs = useStudio((s) => s.pendingRefs)
+  const canvasNodes = useStudio((s) => s.nodes)
   const clearPendingRefs = useStudio((s) => s.clearPendingRefs)
   useEffect(() => {
     if (pendingRefs && pendingRefs.manifestId === manifest.id) {
       addRef(pendingRefs.src)
+      markCharacterRef(pendingRefs.src)
       clearPendingRefs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -397,35 +400,34 @@ export function NodePanel(props: {
     return acceptedMedia(kind) !== null
   }
 
+  /** A character node arriving as a reference stays a CHARACTER ref, and seeds an empty prompt with its name. */
+  function markCharacterRef(src: string): void {
+    const name = characterNameFor(canvasNodes, src)
+    if (name === null) return
+    setRefTypes((t) => ({ ...t, [src]: 'character' }))
+    if (!prompt.trim()) setPrompt(`${name}, `)
+  }
+
   function linkCanvasNode(kind: string, src: string): void {
     if (kind === 'refs') {
       addRef(src)
+      markCharacterRef(src)
       return
     }
     const mediaRole = MEDIA_ROLES[kind]
     if (mediaRole) setNodeInput(manifest.id, mediaRole.role, src)
   }
 
-  function settingValue(kind: string): string {
-    if (kind === 'takes') return String(takes)
-    if (kind === 'style') return style ? style.name.slice(0, 9) : 'none'
-    if (kind === 'refs') return refs.length ? String(refs.length) : 'none'
-    if (kind === 'voice') return voice ? voice.slice(0, 9) : 'default'
-    if (kind === 'loraKind') return loraKind
-    if (kind === 'trainer') return model ? model.label.slice(0, 9) : 'none'
-    if (kind === 'steps') return String(steps)
-    if (kind === 'caption') return 'auto'
-    if (kind === 'language') return 'en'
-    const mediaRole = MEDIA_ROLES[kind]
-    if (mediaRole) return (nodeInputs[manifest.id] ?? {})[mediaRole.role] ? 'set' : 'none'
-    return 'none'
-  }
+  const previewInputs = useMemo(() => previewInputsFor(refs, refTypes, nodeInputs[manifest.id]), [refs, refTypes, nodeInputs, manifest.id])
+  const settingValue = (kind: string): string =>
+    settingValueFor(kind, { takes, style, refs, voice, loraKind, model, steps, roles: nodeInputs[manifest.id] })
 
   return (
     <div className="np">
       <TakePreview
         manifest={manifest}
         activeTake={activeTake}
+        inputs={previewInputs}
         stage={stage}
         dataset={dataset}
         toggleDatasetImage={toggleDatasetImage}

@@ -28,6 +28,8 @@ export function createReviewActions(ctx: StoreCtx): Pick<StudioStore, 'openCombi
   return {
   openCombine(sourceId, targetId) {
     if (sourceId === targetId) return
+    const { nodes } = get()
+    if ([sourceId, targetId].some((id) => nodes.find((n) => n.id === id)?.type === 'group')) return
     set({ combine: { sourceId, targetId } })
   },
 

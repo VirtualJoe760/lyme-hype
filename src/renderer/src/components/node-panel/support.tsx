@@ -122,3 +122,58 @@ export function TakesStepper({ takes, setTakes }: { takes: number; setTakes: (n:
     </div>
   )
 }
+
+/** The short value a settings square shows under its label — lifted out of the
+ *  panel so the render file stays under the 700-line ceiling. */
+export function settingValueFor(
+  kind: string,
+  ctx: {
+    takes: number
+    style?: { name: string } | null
+    refs: string[]
+    voice: string
+    loraKind: string
+    model?: { label: string } | null
+    steps: number
+    roles?: Record<string, string>
+  }
+): string {
+  const { takes, style, refs, voice, loraKind, model, steps, roles } = ctx
+    if (kind === 'takes') return String(takes)
+    if (kind === 'style') return style ? style.name.slice(0, 9) : 'none'
+    if (kind === 'refs') return refs.length ? String(refs.length) : 'none'
+    if (kind === 'voice') return voice ? voice.slice(0, 9) : 'default'
+    if (kind === 'loraKind') return loraKind
+    if (kind === 'trainer') return model ? model.label.slice(0, 9) : 'none'
+    if (kind === 'steps') return String(steps)
+    if (kind === 'caption') return 'auto'
+    if (kind === 'language') return 'en'
+    const mediaRole = MEDIA_ROLES[kind]
+    if (mediaRole) return (roles ?? {})[mediaRole.role] ? 'set' : 'none'
+    return 'none'
+}
+
+/** What the preview shows before a take exists: every image linked into the
+ *  node, tagged by the role it plays (Joseph, 2026-09-03: a dropped reference
+ *  must be visibly "in", not a blank square). */
+export function previewInputsFor(
+  refs: string[],
+  refTypes: Record<string, 'object' | 'character' | 'style'>,
+  roles: Record<string, string> | undefined
+): { src: string; tag: string }[] {
+  const list = refs.map((src) => ({
+    src,
+    tag: refTypes[src] === 'character' ? 'Character reference' : refTypes[src] === 'style' ? 'Style reference' : 'Reference image'
+  }))
+  const linked = roles ?? {}
+  for (const [role, tag] of [['startFrame', 'Start frame'], ['endFrame', 'End frame'], ['faceSource', 'Face'], ['sourceImage', 'Source image']] as const) {
+    if (linked[role]) list.push({ src: linked[role]!, tag })
+  }
+  return list
+}
+
+/** The character a canvas image belongs to (by its src), or null for an ordinary image. */
+export function characterNameFor(nodes: { data: { src?: string; characterId?: string; label: string } }[], src: string): string | null {
+  const node = nodes.find((n) => n.data.src === src && n.data.characterId)
+  return node ? node.data.label : null
+}

@@ -38,6 +38,21 @@ export function highlightZone(zone: HTMLElement | null): void {
   lit = zone
 }
 
+/** The trash can sits in the canvas corner with padding between it and the
+ *  panels. Sliding off the can into that padding used to snap the ghost back
+ *  to full size for a few pixels — so within this radius of the can's centre
+ *  the ghost stays mini, lit or not (Joseph, 2026-09-03). */
+const TRASH_HALO_PX = 80
+
+export function nearTrash(clientX: number, clientY: number): boolean {
+  const can = document.querySelector('.trash-can')
+  if (!can) return false
+  const r = can.getBoundingClientRect()
+  const dx = clientX - (r.left + r.width / 2)
+  const dy = clientY - (r.top + r.height / 2)
+  return Math.hypot(dx, dy) <= TRASH_HALO_PX
+}
+
 export function clearZoneHighlight(): void {
   highlightZone(null)
 }
@@ -61,10 +76,65 @@ export function dropNodeOn(zone: HTMLElement, node: MediaFlowNode, clientX: numb
   return true
 }
 
-/** The floating chip that stands in for the node once the pointer leaves the
- *  canvas — React Flow clips the real node at the canvas edge. */
-export function positionGhost(ghost: HTMLElement | null, visible: boolean, clientX: number, clientY: number): void {
+/** Where the dragged node's box sits on screen relative to the pointer, taken
+ *  once at drag start so the ghost keeps the grab point. */
+export interface GhostGeometry {
+  /** The React Flow wrapper of the dragged node — hidden while the ghost stands in for it. */
+  el: HTMLElement
+  width: number
+  height: number
+  offsetX: number
+  offsetY: number
+}
+
+/** React Flow keeps re-rendering the wrapper during a drag, so its visibility is
+ *  an attribute React never sets (the same lesson as the drop-zone highlight). */
+const GHOSTED_ATTR = 'data-ghosted'
+
+export function ghostGeometryFor(nodeId: string, clientX: number, clientY: number): GhostGeometry | null {
+  const el = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${nodeId}"]`)
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  return { el, width: r.width, height: r.height, offsetX: clientX - r.left, offsetY: clientY - r.top }
+}
+
+/** The stand-in for a node whose pointer has left the canvas, where React Flow
+ *  clips the real one: a thumbnail centred on the pointer, floating above the
+ *  side panels, while the canvas copy is hidden. One rule — off the canvas, or
+ *  over a drop zone (the trash can lives inside the canvas), means mini.
+ *  Sizing by what is underneath made it jump between tiles: full size over the
+ *  gaps, mini over a tile (Joseph, 2026-09-03). */
+const MINI_MAX = 52
+
+export function positionGhost(
+  ghost: HTMLElement | null,
+  geometry: GhostGeometry | null,
+  canvas: DOMRect | undefined,
+  clientX: number,
+  clientY: number,
+  overZone: boolean
+): void {
   if (!ghost) return
-  ghost.hidden = !visible
-  if (visible) ghost.style.transform = `translate(${clientX + 14}px, ${clientY + 12}px)`
+  if (!geometry || !canvas) {
+    ghost.hidden = true
+    return
+  }
+  const offCanvas =
+    clientX < canvas.left || clientX > canvas.right || clientY < canvas.top || clientY > canvas.bottom
+  const standIn = offCanvas || overZone
+  ghost.hidden = !standIn
+  // Only ever ONE picture of the node: the canvas copy vanishes while the ghost shows.
+  geometry.el.toggleAttribute(GHOSTED_ATTR, standIn)
+  if (!standIn) return
+  const scale = MINI_MAX / Math.max(geometry.width, geometry.height)
+  const w = Math.round(geometry.width * scale)
+  const h = Math.round(geometry.height * scale)
+  ghost.style.width = `${w}px`
+  ghost.style.height = `${h}px`
+  ghost.style.transform = `translate(${Math.round(clientX - w / 2)}px, ${Math.round(clientY - h / 2)}px)`
+}
+
+export function hideGhost(ghost: HTMLElement | null, geometry: GhostGeometry | null): void {
+  geometry?.el.removeAttribute(GHOSTED_ATTR)
+  if (ghost) ghost.hidden = true
 }

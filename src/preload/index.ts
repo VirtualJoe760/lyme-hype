@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type {
+  CastProgress,
+  CastRequest,
+  CastResult,
+  Character,
+  CharacterSpec,
+  CharacterStyleView,
+  ReviewResult,
   AgentPingResult,
   ComfyState,
   AgentStreamEvent,
@@ -180,6 +187,21 @@ const api = {
   generate: {
     run: (params: GenerationParams): Promise<GenerationResult | null> =>
       ipcRenderer.invoke(IPC.generateRun, params)
+  },
+  character: {
+    list: (): Promise<Character[] | null> => ipcRenderer.invoke(IPC.characterList),
+    styles: (): Promise<CharacterStyleView[] | null> => ipcRenderer.invoke(IPC.characterStyles),
+    save: (input: { id?: string; spec: CharacterSpec; styleId: string; referencePhotos: string[] }): Promise<Character | null> =>
+      ipcRenderer.invoke(IPC.characterSave, input),
+    delete: (id: string): Promise<boolean | null> => ipcRenderer.invoke(IPC.characterDelete, id),
+    cast: (req: CastRequest): Promise<CastResult | null> => ipcRenderer.invoke(IPC.characterCast, req),
+    review: (id: string, rescore?: boolean): Promise<ReviewResult | null> => ipcRenderer.invoke(IPC.characterReview, id, rescore),
+    approve: (id: string, src: string): Promise<Character | null> => ipcRenderer.invoke(IPC.characterApprove, id, src),
+    onProgress: (cb: (p: CastProgress) => void): (() => void) => {
+      const listener = (_e: unknown, p: CastProgress): void => cb(p)
+      ipcRenderer.on(IPC.characterStream, listener)
+      return () => ipcRenderer.removeListener(IPC.characterStream, listener)
+    }
   },
   cutRoom: {
     export: (spec: TimelineExportSpec): Promise<CutExportResult | null> =>

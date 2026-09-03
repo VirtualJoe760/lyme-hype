@@ -46,6 +46,14 @@ All four are real tools on the connector Lyme Hype already installs — nothing 
 ### Generate image
 Prompt box + aspect/resolution controls, plus — newly wired by this redesign — an explicit **tier choice**: Storyboard (cheap: Gemini or OpenAI, whichever is installed, or a picker if both are) vs. Production (Midjourney via muapi). This is the first place `GenerationParams.connectorId` actually gets driven from the UI — see the "Wiring the tiers" gap already flagged in `../connectors/catalog.md`; this tile is what closes it.
 
+### Generate character (built 2026-09-03)
+Lock list + up to three reference photos + one of twelve cartoon styles (Illustrious /
+Pony checkpoints with a Civitai LoRA each) → N candidates side by side → a vision review
+→ approve. The approved image becomes a **character node** on the canvas that any
+Generate image run can take as its character reference. Local ComfyUI, deterministic
+graphs, no agent turn, $0. Spec: [`character-sheets-and-assets.md`](character-sheets-and-assets.md);
+provenance: `lyme-hype-lab`, where every engine step was live-verified first.
+
 ### Isolate audio
 **Local ffmpeg, not a connector call, per the stated principle above.** Two source shapes:
 

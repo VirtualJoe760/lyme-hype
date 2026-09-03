@@ -58,6 +58,7 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
   const removeNode = useStudio((s) => s.removeNode)
   const openPlay = useStudio((s) => s.openPlay)
   const openNodeScreenWith = useStudio((s) => s.openNodeScreenWith)
+  const soloSelected = useStudio((s) => s.nodes.filter((n) => n.selected).length === 1)
 
   const rendering = data.status === 'rendering'
   const errored = data.status === 'error'
@@ -80,7 +81,7 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
       {/* Selecting a node surfaces what you can DO with it — each action opens
           the matching node screen with this media already loaded. */}
       {ready && data.src && (
-        <NodeToolbar isVisible={selected} position={Position.Top} className="node-actions">
+        <NodeToolbar isVisible={selected && soloSelected} position={Position.Top} className="node-actions">
           {data.mediaType === 'image' && (
             <>
               <button
@@ -149,7 +150,7 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaFlowNode>): Rea
         </NodeToolbar>
       )}
       <span className={`src-badge ${data.listingKey ? 'link' : data.source}`}>
-        {data.listingKey ? 'mls' : data.motionGfx ? 'gfx' : SOURCE_BADGE[data.source]}
+        {data.listingKey ? 'mls' : data.characterId ? 'character' : data.motionGfx ? 'gfx' : SOURCE_BADGE[data.source]}
       </span>
       <div
         className={`thumb${

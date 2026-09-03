@@ -17,13 +17,14 @@ import { createGenerationActions } from './store/generation-actions'
 import { createWorkspaceActions } from './store/workspace-actions'
 import { createChatRealtyActions } from './store/chatrealty-actions'
 import { createTrashActions } from './store/trash-actions'
+import { createLayoutActions } from './store/layout-actions'
 import {
   STUB_RENDER_MS,
   migrateSession,
   newSession,
   pickSwatch,
   PANEL_SIZES,
-  toFlowNode,
+  flowNodesFrom,
   toNodeState,
 } from './store/helpers'
 
@@ -306,6 +307,7 @@ export const useStudio = create<StudioStore>((set, get) => {
     ...createWorkspaceActions(ctx),
     ...createChatRealtyActions(ctx),
     ...createTrashActions(ctx),
+    ...createLayoutActions(ctx),
     focusNodeId: null,
     scriptingBusy: false,
     scriptingStream: null,
@@ -408,7 +410,7 @@ export const useStudio = create<StudioStore>((set, get) => {
         loaded: true,
         sessions,
         activeSessionId,
-        nodes: active.nodes.map(toFlowNode),
+        nodes: flowNodesFrom(active.nodes),
         nodeInputs: active.nodeInputs ?? {},
         nodeDataset: active.nodeDataset ?? {},
         theme,
@@ -488,7 +490,7 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({
         sessions: [...imported, ...current],
         activeSessionId: first.id,
-        nodes: first.nodes.map(toFlowNode),
+        nodes: flowNodesFrom(first.nodes),
         combine: null
       })
       persist()
@@ -503,7 +505,7 @@ export const useStudio = create<StudioStore>((set, get) => {
       set({
         sessions,
         activeSessionId: id,
-        nodes: next.nodes.map(toFlowNode),
+        nodes: flowNodesFrom(next.nodes),
         nodeInputs: next.nodeInputs ?? {},
         nodeDataset: next.nodeDataset ?? {},
         combine: null
@@ -527,7 +529,7 @@ export const useStudio = create<StudioStore>((set, get) => {
         set({
           sessions,
           activeSessionId: nextActive.id,
-          nodes: nextActive.nodes.map(toFlowNode),
+          nodes: flowNodesFrom(nextActive.nodes),
           combine: null
         })
       } else {
@@ -579,7 +581,7 @@ export const useStudio = create<StudioStore>((set, get) => {
         set({
           sessions,
           activeSessionId: nextActive.id,
-          nodes: nextActive.nodes.map(toFlowNode),
+          nodes: flowNodesFrom(nextActive.nodes),
           combine: null
         })
       } else {
@@ -598,8 +600,9 @@ export const useStudio = create<StudioStore>((set, get) => {
       // Resize handles emit width AND height (setAttributes) — height is dropped
       // so a node's height always follows its media's aspect ratio; plain
       // measurement changes (no setAttributes) pass through untouched.
+      // A group frame is the exception: its height is the user's, kept as-is.
       const widthOnly = changes.map((c) =>
-        c.type === 'dimensions' && c.setAttributes && c.dimensions
+        c.type === 'dimensions' && c.setAttributes && c.dimensions && get().nodes.find((n) => n.id === c.id)?.type !== 'group'
           ? { ...c, dimensions: { ...c.dimensions, height: undefined as unknown as number } }
           : c
       )
@@ -636,7 +639,8 @@ export const useStudio = create<StudioStore>((set, get) => {
           filePath: input.filePath,
           sourceUrl: input.sourceUrl,
           detailUrl: input.detailUrl,
-          listingKey: input.listingKey
+          listingKey: input.listingKey,
+          characterId: input.characterId
         }
       }
       set({ nodes: [...get().nodes, node] })

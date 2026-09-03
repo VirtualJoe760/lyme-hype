@@ -4,9 +4,19 @@
 import type { NodeManifest } from '@shared/node-manifest'
 import type { NodeStage, StagedTake } from '@shared/types'
 
+/** An image linked into the node before anything was generated — a reference,
+ *  a start/end frame, a face. Shown in the preview so a drop onto the tile is
+ *  visibly "in", not a blank square saying "nothing yet" (Joseph, 2026-09-03). */
+export interface PreviewInput {
+  src: string
+  /** The tag drawn over it: "Reference image", "Character reference", "Start frame"… */
+  tag: string
+}
+
 export interface PreviewProps {
   manifest: NodeManifest
   activeTake: StagedTake | undefined
+  inputs?: PreviewInput[]
   stage: NodeStage
   dataset: string[]
   toggleDatasetImage(manifestId: string, src: string): void
@@ -17,6 +27,7 @@ export interface PreviewProps {
 export function TakePreview({
   manifest,
   activeTake,
+  inputs = [],
   stage,
   dataset,
   toggleDatasetImage,
@@ -52,12 +63,22 @@ export function TakePreview({
         )}
       </span>
     )}
-    {manifest.previewHolds === 'artifact' && !activeTake && (
+    {manifest.previewHolds === 'artifact' && !activeTake && inputs.length === 0 && (
       <span className="np-empty">
         nothing yet
         <br />
         describe it below
       </span>
+    )}
+    {manifest.previewHolds === 'artifact' && !activeTake && inputs.length > 0 && (
+      <>
+        <img className="np-art np-input" src={inputs[0]!.src} alt={inputs[0]!.tag} />
+        <span className="np-input-tag">
+          {inputs[0]!.tag}
+          {inputs.length > 1 ? ` +${inputs.length - 1}` : ''}
+        </span>
+        <span className="np-input-hint">describe the shot below</span>
+      </>
     )}
     {hasArtifact && activeTake.src && manifest.media === 'image' && (
       <img

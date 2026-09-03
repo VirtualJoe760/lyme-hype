@@ -45,3 +45,10 @@ A second mode of the same middle panel, toggled alongside Canvas and Scripting â
 
 - Does audio need link-import too (a shared Dropbox/SoundCloud link, say), or is upload + generate enough? Not explicitly requested â€” flagging as a natural extension, not a decision. The current UI reflects the current answer: the link input only activates on the Video/Motion tabs.
 - Connection auth and setup mechanics live in [../connectors/model.md](../connectors/model.md) rather than here.
+
+## Tidy and Groups (2026-09-03)
+
+**Tidy** lines nodes up by media type (a row of photos, a row of videos, a row of audio)
+without reordering them. **Groups** are named frames: select nodes, Group, drag the frame
+and everything in it follows; rename inline; Ungroup keeps positions. Stored as a
+`type: 'group'` node plus `parentId` on its members (`docs/build-plan.md`, same date).

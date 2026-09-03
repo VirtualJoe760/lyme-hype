@@ -42,7 +42,7 @@ const MIN_FREE_BYTES = 1.5 * GB
 const WATCH_INTERVAL_MS = 10_000
 const WATCH_STRIKES = 3
 
-interface ComfyConfig {
+export interface ComfyConfig {
   url: string
   path: string | null
   python: string | null
@@ -58,6 +58,11 @@ let state: ComfyState = {
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 let stopWatch: (() => void) | null = null
 let starting: Promise<boolean> | null = null
+
+/** Where the local engine is and how to spawn it, from the comfyui connector's env. */
+export function comfyConfig(): ComfyConfig | null {
+  return readConfig()
+}
 
 export function comfyState(): ComfyState {
   return state

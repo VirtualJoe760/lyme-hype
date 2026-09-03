@@ -54,6 +54,15 @@ export const IPC = {
 
   generateRun: 'generate:run',
 
+  characterList: 'character:list',
+  characterSave: 'character:save',
+  characterDelete: 'character:delete',
+  characterStyles: 'character:styles',
+  characterCast: 'character:cast',
+  characterReview: 'character:review',
+  characterApprove: 'character:approve',
+  characterStream: 'character:stream',
+
   cutRoomExport: 'cutroom:export',
 
   chatRealtyStatus: 'chatrealty:status',

@@ -7,7 +7,7 @@
 
 import type { Session, TrashedNode } from '@shared/types'
 import type { StoreCtx } from './context'
-import { toFlowNode, toNodeState } from './helpers'
+import { reparentOrphans, toFlowNode, toNodeState } from './helpers'
 import type { StudioStore } from './types'
 
 const TRASH_CAP = 50
@@ -22,8 +22,10 @@ export function createTrashActions(
   }
 
   return {
-    trashNodes(ids) {
+    trashNodes(requested) {
       const session = activeSession()
+      // A trashed group takes its members along — a child cannot outlive its frame.
+      const ids = [...new Set([...requested, ...get().nodes.filter((n) => n.parentId && requested.includes(n.parentId)).map((n) => n.id)])]
       const doomed = get().nodes.filter((n) => ids.includes(n.id))
       if (doomed.length === 0) return
       const deletedAt = new Date().toISOString()
@@ -51,7 +53,7 @@ export function createTrashActions(
       const entry = session?.trash?.find((t) => t.node.id === nodeId)
       if (!session || !entry) return
       const node = toFlowNode(entry.node)
-      set({ nodes: [...get().nodes, { ...node, selected: false }], focusNodeId: node.id })
+      set({ nodes: reparentOrphans([...get().nodes, { ...node, selected: false }]), focusNodeId: node.id })
       writeTrash(session, (session.trash ?? []).filter((t) => t.node.id !== nodeId))
       persist()
     },

@@ -1,4 +1,11 @@
 import type {
+  CastProgress,
+  CastRequest,
+  CastResult,
+  Character,
+  CharacterSpec,
+  CharacterStyleView,
+  ReviewResult,
   AgentPingResult,
   ComfyState,
   AgentStreamEvent,
@@ -126,6 +133,16 @@ export interface Bridge {
   }
   generate: {
     run(params: GenerationParams): Promise<GenerationResult | null>
+  }
+  character: {
+    list(): Promise<Character[] | null>
+    styles(): Promise<CharacterStyleView[] | null>
+    save(input: { id?: string; spec: CharacterSpec; styleId: string; referencePhotos: string[] }): Promise<Character | null>
+    delete(id: string): Promise<boolean | null>
+    cast(req: CastRequest): Promise<CastResult | null>
+    review(id: string, rescore?: boolean): Promise<ReviewResult | null>
+    approve(id: string, src: string): Promise<Character | null>
+    onProgress(cb: (p: CastProgress) => void): () => void
   }
   cutRoom: {
     export(spec: TimelineExportSpec): Promise<CutExportResult | null>
@@ -328,6 +345,16 @@ function createBrowserMock(): Bridge {
         error: 'Generation runs in the Electron main process — unavailable in browser preview.'
       })
     },
+    character: {
+      list: async () => [],
+      styles: async () => [],
+      save: async () => null,
+      delete: async () => null,
+      cast: async () => ({ ok: false, candidates: [], error: 'Local ComfyUI runs in the Electron main process — unavailable in browser preview.', generationCostUsd: 0 }),
+      review: async () => ({ ok: false, ranked: [], llmTokenCostUsd: 0, error: 'unavailable in browser preview' }),
+      approve: async () => null,
+      onProgress: () => () => {}
+    },
     cutRoom: {
       export: async () => ({
         ok: false,
@@ -422,6 +449,7 @@ function createElectronBridge(): Bridge {
     audioTools: lyme.audioTools,
     lora: lyme.lora,
     generate: lyme.generate,
+    character: lyme.character,
     cutRoom: lyme.cutRoom,
     chatRealty: lyme.chatRealty,
     connectors: lyme.connectors,

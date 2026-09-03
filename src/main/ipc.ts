@@ -5,6 +5,8 @@ import type {
   ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
   ChatRealtyLandingPageDraftInput,
+  CastRequest,
+  CharacterSpec,
   CombineLocalKind,
   ConnectorDef,
   GenerationParams,
@@ -43,6 +45,9 @@ import {
 } from './fal-training'
 import { combineLocal, isolateAudio, keyAlpha } from './media-tools'
 import { runGeneration } from './generation'
+import { approveCharacter, castCharacter, reviewCharacter } from './character/character-engine'
+import { deleteCharacter, listCharacters, saveCharacter } from './character/character-store'
+import { listStyleViews } from './character/character-styles'
 import { startOAuthConnect } from './mcp-oauth'
 import { claudeAuthOverrideKind } from './claude-auth'
 import {
@@ -433,6 +438,29 @@ export function registerIpc(window: BrowserWindow): void {
     if (!isMainSender(e)) return null
     return runGeneration(params)
   })
+
+  // Generate Character: deterministic local ComfyUI graphs, no agent turn.
+  // Progress lines stream to every window so the screen narrates the engine.
+  const characterProgress = (p: unknown): void => {
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(IPC.characterStream, p)
+  }
+  ipcMain.handle(IPC.characterList, (e) => (isMainSender(e) ? listCharacters() : null))
+  ipcMain.handle(IPC.characterStyles, (e) => (isMainSender(e) ? listStyleViews() : null))
+  ipcMain.handle(
+    IPC.characterSave,
+    (e, input: { id?: string; spec: CharacterSpec; styleId: string; referencePhotos: string[] }) =>
+      isMainSender(e) ? saveCharacter(input) : null
+  )
+  ipcMain.handle(IPC.characterDelete, (e, id: string) => {
+    if (!isMainSender(e)) return null
+    deleteCharacter(id)
+    return true
+  })
+  ipcMain.handle(IPC.characterCast, (e, req: CastRequest) => (isMainSender(e) ? castCharacter(req, characterProgress) : null))
+  ipcMain.handle(IPC.characterReview, (e, id: string, rescore?: boolean) =>
+    isMainSender(e) ? reviewCharacter(id, characterProgress, !!rescore) : null
+  )
+  ipcMain.handle(IPC.characterApprove, (e, id: string, src: string) => (isMainSender(e) ? approveCharacter(id, src) : null))
 
   ipcMain.handle(IPC.cutRoomExport, async (e, spec: TimelineExportSpec) => {
     if (!isMainSender(e) || !mainWindow) return null

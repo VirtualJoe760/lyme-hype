@@ -3,7 +3,7 @@
 Provenance: an AI-cartoon-pipeline tutorial ("AI Animation Pipeline: How I Make Cartoons
 100% With AI"), transcript reviewed 2026-08-31. Documented here as a process first; the UI
 recommendation follows. **Nothing in this doc is built yet** — see the gap table at the end
-for what already exists to build on.
+for what already exists to build on. **Update 2026-09-03: the casting half is built** — the Generate character tile (see the gap table).
 
 This is a different shape of work from [`create-panel.md`](create-panel.md)'s Motion
 graphics wizard. That one is a *linear job*: references in, one finished animation out.
@@ -242,6 +242,7 @@ Directly from 1.11, and cheap to add once beats are objects:
 | Timestamped beat prompts | Motion graphics animate stage | generalise into the scene composer |
 | Voice generation + cloning | ElevenLabs connector, `list_voices` / `clone_voice` / `generate_speech` | naming and storing a voice as an asset |
 | A persistent cross-project library | **Trained Styles only** (LoRA), in Settings | the general `LibraryAsset` store |
+| Character casting + review + approve | **Generate character tile (2026-09-03)** — `src/main/character/`, ported from the lab | sheets (turnaround, expressions) |
 | Character sheet / location sheet | — | new |
 | `@` tagging in prompts | — | new; the highest-leverage item |
 | Scene composer with per-beat regeneration | — | new |

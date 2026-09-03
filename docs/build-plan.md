@@ -399,6 +399,54 @@ Verified from the desktop icon (the user's real launch, not an agent one):
 assets=180 in the real profile, zero 404s, thumbnails and video posters render,
 and video/image/motion-graphics tiles read ready.
 
+### Tidy + groups on the canvas (2026-09-03)
+
+- [x] **Tidy** (canvas toolbar): photos in one line, videos in the next, audio in the
+      third, left-to-right in their existing order so nothing swaps places. Groups are
+      laid out as blocks; nodes inside a group keep their arrangement.
+- [x] **Groups**: select two or more nodes → Group. A named frame (React Flow parent
+      node, `CanvasNodeState.type: 'group'`, children carry `parentId` + `extent:
+      'parent'`) that moves them in unison; resizable; double-click the name (or the
+      toolbar) to rename; Ungroup leaves the nodes where they are. Trashing a group takes
+      its members; a member restored without its frame becomes a top-level node again
+      (React Flow throws on a missing parent — `reparentOrphans` runs on every load).
+- The drag ghost, drop-on-tile and trash paths all see a group as one node.
+- [x] **Multi-select + a selection toolbar** (same day): Shift-click adds to the
+      selection (React Flow's default was Control on Windows); with two or more nodes
+      selected a toolbar floats above them — *merge* (two ready stills → the Merge
+      stills dialog), *group*, trash — and the per-node actions step aside. Dragging a
+      group frame across a node no longer opens Merge (it did).
+
+### Generate Character (2026-09-03)
+
+Joseph's call: build the cartoon pipeline INTO the app instead of gathering more lab
+runs — "Generate Character should be the node's name", with Generate Scene to follow.
+The lab's live-verified pieces moved into `src/main/character/` as-is:
+
+- [x] **A Create tile** (`GenerateCharacterScreen`, three stages like the Motion
+      graphics wizard): define (name, lock list, one of 12 cartoon styles with weight
+      readiness, up to three reference photos from the canvas or an upload) → cast
+      (N candidates in a `BatchResultsGrid`, engine progress narrated live) → approve.
+- [x] **Two engines, no agent turn** (`character-engine.ts`, direct ComfyUI HTTP via
+      `character-comfy.ts`): *cast* = SDXL checkpoint + style LoRA, optional img2img
+      from photo 1; *convert* = Qwen-Image-Edit-2511 redraws the person in the style
+      AND the lock-list outfit from up to three photos, then a LoRA polish pass. Both
+      start ComfyUI on demand and `/api/free` on every checkpoint switch. Generation
+      cost $0, recorded as such in the generation log.
+- [x] **Review** = the plan LLM scoring every candidate against the photos and the
+      lock list (likeness 35 / lock list 25 / anatomy 25 / style 15), notes and issues
+      shown under the picked candidate. LLM tokens only, labelled so.
+- [x] **Approve → a character node on the canvas** (`MediaNodeData.characterId`,
+      badge "character"). Dragging it onto Generate image links it as a CHARACTER
+      reference (gemini's typed refs) and seeds the prompt with the name; on the local
+      tier it is the img2img reference. That is "generate an image of my character",
+      v1 — the @-tag picker from the spec is the next step.
+- [x] Characters persist in `userData/characters.json` (workspace-wide until channels
+      exist — the spec's §5 says the library belongs to a channel).
+- Not yet: the character sheet (turnaround + expressions), the local character-LoRA
+  trainer, Generate Scene, weight downloads from inside the app (use the lab's
+  `ensure` for now — the Civitai key lives there).
+
 ### One backend, ComfyUI on demand (2026-09-02)
 
 Joseph's machine paged to a standstill: 1 GB of 32 GB free, commit 78.9 of 79.5 GB.

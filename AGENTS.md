@@ -174,7 +174,9 @@ lyme-hype/
 │   │                     mcp-server.ts (the app AS an MCP server — `--mcp` mode exposing the
 │   │                     creative pipeline as typed tools), mcp-hub.ts (the one backend per machine:
 │   │                     fixed pipe, N bridges, studio takes over from headless), comfyui-host.ts +
-│   │                     comfyui-watchdog.ts (ComfyUI on demand, idle stop, memory kill switch),
+│   │                     comfyui-watchdog.ts (ComfyUI on demand, idle stop, memory kill switch), character/
+│   │                     (Generate Character: style registry, SDXL + Qwen-Edit graph builders, direct
+│   │                     ComfyUI client, cast/review/approve engine, characters.json store),
 │   │                     build-info.ts (compile-time build stamp +
 │                     stale-source detection for the boot line), chatrealty.ts (pull listing photos + the ChatRealty connector
 │   │                     template), connectors-store.ts (generic connector CRUD + live test

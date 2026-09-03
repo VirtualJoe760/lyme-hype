@@ -3617,12 +3617,19 @@ img.np-art { cursor: zoom-in; }
   /* Parked off-screen until a drag positions it: at (0,0) it sat in the title
      bar as a stray "≡" box (2026-09-02). */
   transform: translate(-1000px, -1000px);
-  display: flex; align-items: center; gap: 8px; padding: 5px 9px 5px 5px;
-  background: var(--panel); border: 1px solid var(--accent-dim); border-radius: 9px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.22); font-size: 12px; color: var(--text); max-width: 220px;
+  /* The node as a thumbnail centred on the pointer (canvas-drag.ts sets the
+     size): the media fills the card; slightly translucent so whatever it is
+     over — the red trash can, a lit tile — still reads around and through it. */
+  display: flex; overflow: hidden; box-sizing: border-box;
+  background: var(--panel-raised); border: 1px solid var(--accent); border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45); opacity: .88; color: var(--text);
 }
-.drag-ghost img, .drag-ghost-glyph { width: 30px; height: 30px; border-radius: 6px; object-fit: cover; background: var(--panel-raised); display: flex; align-items: center; justify-content: center; color: var(--text-soft); flex: none; }
-.drag-ghost-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drag-ghost img, .drag-ghost-glyph { flex: 1; min-height: 0; width: 100%; object-fit: cover; background: var(--panel-raised); display: flex; align-items: center; justify-content: center; color: var(--text-soft); font-size: 18px; }
+.drag-ghost-label { display: none; }
+/* The canvas copy of a node its ghost is standing in for — only while React Flow
+   agrees the node is being dragged, so a drag that ends without our stop handler
+   (window blur, a stuck synthetic drag) can never leave a node invisible. */
+.react-flow__node.dragging[data-ghosted] { opacity: 0; }
 /* The real fix: an author `display: flex` beats the browser's default
    `[hidden] { display: none }`, so the chip ignored `hidden` entirely and stayed
    on screen — a stray "≡" box wherever the last drag ended. */
@@ -3639,3 +3646,70 @@ img.np-art { cursor: zoom-in; }
 .tl-fit { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--border); }
 .tl-fit label { display: inline-flex; align-items: center; gap: 3px; font-family: var(--mono); font-size: 9.5px; color: var(--text-soft); }
 .tl-fit input { width: 52px; font-family: var(--mono); font-size: 10px; padding: 2px 4px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); color: var(--text); }
+
+/* ---------- Generate character ---------- */
+.chr-form { display: flex; flex-direction: column; gap: 6px; }
+.chr-row { display: flex; gap: 6px; }
+.chr-name { flex: 1; min-width: 0; }
+.chr-kind { flex: none; width: 92px; }
+.chr-lock-help { margin: 4px 0 0; }
+.chr-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 6px; }
+.chr-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chr-field .rail-util { font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
+.chr-field .chr-required::after { content: ' *'; color: var(--accent); }
+.chr-field .cr-input { width: 100%; box-sizing: border-box; }
+.chr-cast-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.chr-small { width: 70px; flex: none; }
+.chr-count { display: inline-flex; align-items: center; gap: 3px; }
+.chr-count input { width: 42px; font-family: var(--mono); font-size: 11px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); color: var(--text); }
+.chr-strength { display: inline-flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.chr-strength input[type=range] { flex: 1; min-width: 40px; }
+.chr-strength span { font-family: var(--mono); font-size: 10.5px; width: 32px; text-align: right; }
+.chr-score { font-family: var(--mono); font-size: 10.5px; color: var(--text-soft); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin-top: 6px; }
+.chr-score b { color: var(--text); font-size: 13px; margin-right: 4px; }
+.chr-score p { margin: 4px 0 0; font-family: inherit; color: var(--text); }
+.chr-score .chr-issues { color: var(--text-soft); }
+.media-node .src-badge.generate:has(+ *) { }
+
+/* A linked input shown in the preview before any take exists */
+.np-preview .np-art.np-input { opacity: .92; }
+.np-input-tag {
+  position: absolute; top: 8px; left: 8px; padding: 3px 7px; border-radius: 6px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--accent) 88%, black); color: var(--accent-ink, #111);
+}
+.np-input-hint {
+  position: absolute; bottom: 8px; left: 0; right: 0; text-align: center;
+  font-family: var(--mono); font-size: 10px; color: #fff; opacity: .85; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+
+/* ---------- groups + tidy ---------- */
+.canvas-toolbar .tool-sep { width: 1px; height: 18px; background: var(--border); margin: 0 3px; }
+/* React Flow ships a look for type "group" (grey fill, dotted border); ours replaces it. */
+.react-flow__node-group { background: transparent; border: none; padding: 0; border-radius: 0; }
+.group-node {
+  width: 100%; height: 100%; box-sizing: border-box; border-radius: 12px;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.group-node.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.group-head {
+  height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 12px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--text);
+  cursor: grab; user-select: none;
+}
+.group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-count {
+  flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 9.5px; background: var(--accent); color: var(--accent-ink, #111);
+}
+.group-name-input {
+  width: 100%; font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 5px;
+  border: 1px solid var(--accent); background: var(--panel); color: var(--text);
+}
+.group-resize-line { border-color: var(--accent) !important; }
+.group-resize-handle { width: 8px !important; height: 8px !important; background: var(--accent) !important; border: none !important; }
+
+/* The multi-selection toolbar (merge / group / trash) — same look as a node's own. */
+.selection-actions button.danger { color: var(--danger); }
+.node-actions button.danger:hover { border-color: var(--danger); color: var(--danger); }

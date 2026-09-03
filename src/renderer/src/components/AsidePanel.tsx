@@ -6,6 +6,7 @@ import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { ChatRealtyPull } from './ChatRealtyPull'
 import { MotionGraphicsWizard } from './MotionGraphicsWizard'
+import { GenerateCharacterScreen } from './character/GenerateCharacterScreen'
 import { NodePanel } from './NodePanel'
 
 /**
@@ -21,6 +22,7 @@ type Screen =
   | 'video'
   | 'audio'
   | 'image'
+  | 'character'
   | 'isolate'
   | 'lora'
   | 'deepfake'
@@ -33,6 +35,7 @@ type Screen =
 const TILES: { key: Screen; glyph: string; label: string; blurb: string }[] = [
   { key: 'video', glyph: '▶', label: 'Generate video', blurb: 'Prompt → video via the connected tools' },
   { key: 'image', glyph: '▦', label: 'Generate image', blurb: 'Storyboard-cheap or production-tier' },
+  { key: 'character', glyph: '☻', label: 'Generate character', blurb: 'Lock list + photos + a cartoon style → cast, review, approve' },
   { key: 'audio', glyph: '♪', label: 'Generate audio', blurb: 'Voice, music, SFX, voice cloning' },
   { key: 'motion', glyph: '✦', label: 'Motion graphics', blurb: 'References → reveal animation → alpha' },
   { key: 'isolate', glyph: '⏏', label: 'Isolate audio', blurb: 'Extract a track locally — free, no tokens' },
@@ -49,6 +52,7 @@ const SCREEN_TITLES: Record<Screen, string> = {
   video: 'Generate video',
   audio: 'Generate audio',
   image: 'Generate image',
+  character: 'Generate character',
   isolate: 'Isolate audio',
   lora: 'Create a LoRA',
   deepfake: 'Deepfake',
@@ -67,6 +71,7 @@ const TILE_NEEDS: Partial<Record<Screen, { anyOf: string[]; label: string }>> = 
   video: { anyOf: ['muapi', 'fal', 'gemini', 'krea', 'yapper'], label: 'a video tool' },
   image: { anyOf: ['gemini', 'openai', 'muapi', 'fal', 'krea', 'yapper'], label: 'an image tool' },
   audio: { anyOf: ['elevenlabs'], label: 'elevenlabs' },
+  character: { anyOf: ['comfyui'], label: 'comfyui (local)' },
   motion: { anyOf: ['gemini', 'openai'], label: 'gemini/openai' },
   lora: { anyOf: ['fal'], label: 'fal' },
   deepfake: { anyOf: ['yapper', 'muapi'], label: 'yapper/muapi' },
@@ -500,6 +505,7 @@ export function AsidePanel(): React.JSX.Element {
         {screen === 'audio' && (
           <NodePanel manifest={findManifest('audio')!} connectors={connectors} styles={styles} />
         )}
+        {screen === 'character' && <GenerateCharacterScreen />}
         {screen === 'isolate' && <IsolateScreen />}
         {screen === 'lora' && (
           <NodePanel manifest={findManifest('lora')!} connectors={connectors} styles={styles} />

@@ -19,15 +19,46 @@ export function toFlowNode(state: CanvasNodeState): MediaFlowNode {
   // 100%-width layout, and the resize handle writes back through it.
   return {
     id: state.id,
-    type: 'media',
+    type: state.type ?? 'media',
     position: state.position,
     data: state.data,
-    width: state.width ?? 104
+    width: state.width ?? 104,
+    ...(state.type === 'group' && state.height ? { height: state.height } : {}),
+    ...(state.parentId ? { parentId: state.parentId, extent: 'parent' as const } : {})
   }
 }
 
 export function toNodeState(node: MediaFlowNode): CanvasNodeState {
-  return { id: node.id, position: node.position, data: node.data, width: node.width }
+  return {
+    id: node.id,
+    ...(node.type === 'group' ? { type: 'group' as const, height: node.height } : {}),
+    ...(node.parentId ? { parentId: node.parentId } : {}),
+    position: node.position,
+    data: node.data,
+    width: node.width
+  }
+}
+
+export function isGroup(node: MediaFlowNode): boolean {
+  return node.type === 'group'
+}
+
+/** Groups first: React Flow requires a parent to precede its children. */
+export function groupsFirst(nodes: MediaFlowNode[]): MediaFlowNode[] {
+  return [...nodes.filter(isGroup), ...nodes.filter((n) => !isGroup(n))]
+}
+
+/** A child whose group is gone (restored from the trash without it, an old
+ *  save) keeps its position and becomes a top-level node — React Flow throws
+ *  on a parentId it cannot find. */
+export function reparentOrphans(nodes: MediaFlowNode[]): MediaFlowNode[] {
+  const ids = new Set(nodes.map((n) => n.id))
+  return nodes.map((n) => (n.parentId && !ids.has(n.parentId) ? { ...n, parentId: undefined, extent: undefined } : n))
+}
+
+/** Saved node states → flow nodes React Flow will accept, whatever their order or history. */
+export function flowNodesFrom(states: CanvasNodeState[]): MediaFlowNode[] {
+  return reparentOrphans(groupsFirst(states.map(toFlowNode)))
 }
 
 export function pickSwatch(): number {
