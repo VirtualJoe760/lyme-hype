@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -13,6 +13,8 @@ import { useActiveSession, useStudio } from '../store'
 import { MediaNode } from './MediaNode'
 import { ScriptingView } from './ScriptingView'
 import { StoryboardView } from './StoryboardView'
+import { TrashCan } from './TrashCan'
+import { clearZoneHighlight, dropNodeOn, highlightZone, positionGhost, zoneAt } from './canvas-drag'
 
 const nodeTypes: NodeTypes = { media: MediaNode }
 
@@ -46,14 +48,52 @@ function CanvasInner(): React.JSX.Element {
 
   const selectedIds = canvasNodes.filter((n) => n.selected).map((n) => n.id)
 
+  // Where each dragged node started, so a drop on a zone can put it back
+  // instead of leaving it stranded wherever the pointer left the canvas.
+  const dragStart = useRef(new Map<string, { x: number; y: number }>())
+  const ghostRef = useRef<HTMLDivElement | null>(null)
+  const flowRef = useRef<HTMLDivElement | null>(null)
+  const [ghostNode, setGhostNode] = useState<MediaFlowNode | null>(null)
+
+  const pointOf = (event: MouseEvent | TouchEvent): { x: number; y: number } => {
+    const t = 'touches' in event ? event.touches[0] ?? event.changedTouches[0] : event
+    return { x: t.clientX, y: t.clientY }
+  }
+
+  const handleDragStart = useCallback((_event: MouseEvent | TouchEvent, node: MediaFlowNode) => {
+    dragStart.current.set(node.id, { ...node.position })
+    setGhostNode(node)
+  }, [])
+
+  const handleDrag = useCallback((event: MouseEvent | TouchEvent, _node: MediaFlowNode) => {
+    const { x, y } = pointOf(event)
+    highlightZone(zoneAt(x, y))
+    const bounds = flowRef.current?.getBoundingClientRect()
+    const outside = !!bounds && (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom)
+    positionGhost(ghostRef.current, outside, x, y)
+  }, [])
+
   const handleDragStop = useCallback(
-    (_event: MouseEvent | TouchEvent, node: MediaFlowNode) => {
+    (event: MouseEvent | TouchEvent, node: MediaFlowNode) => {
+      const { x, y } = pointOf(event)
+      clearZoneHighlight()
+      positionGhost(ghostRef.current, false, x, y)
+      setGhostNode(null)
+      const start = dragStart.current.get(node.id)
+      dragStart.current.delete(node.id)
+
+      const zone = zoneAt(x, y)
+      if (zone && dropNodeOn(zone, node, x, y)) {
+        // Delivered. The node itself stays on the canvas, where it was.
+        if (start) onNodesChange([{ type: 'position', id: node.id, position: start, dragging: false }])
+        return
+      }
       const hits = getIntersectingNodes(node) as MediaFlowNode[]
       if (hits.length > 0) {
         openCombine(node.id, hits[0].id)
       }
     },
-    [getIntersectingNodes, openCombine]
+    [getIntersectingNodes, openCombine, onNodesChange]
   )
 
   const handleNodeDoubleClick = useCallback(
@@ -102,11 +142,17 @@ function CanvasInner(): React.JSX.Element {
         </button>
       </div>
       <ReactFlow
+        ref={flowRef}
         nodes={canvasNodes}
         edges={[]}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onNodeDragStart={handleDragStart}
+        onNodeDrag={handleDrag}
         onNodeDragStop={handleDragStop}
+        // Dragging toward the edge must not pull the canvas along — the point
+        // of leaving the canvas is to reach the timeline, the trash, a tile.
+        autoPanOnNodeDrag={false}
         onNodeDoubleClick={handleNodeDoubleClick}
         panOnDrag={tool === 'select'}
         selectionOnDrag={tool === 'box'}
@@ -118,6 +164,15 @@ function CanvasInner(): React.JSX.Element {
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.5} color="#2a2e34" />
       </ReactFlow>
+      <TrashCan />
+      <div ref={ghostRef} className="drag-ghost" hidden aria-hidden="true">
+        {ghostNode?.data.thumbSrc || (ghostNode?.data.mediaType === 'image' && ghostNode.data.src) ? (
+          <img src={ghostNode?.data.thumbSrc ?? ghostNode?.data.src} alt="" />
+        ) : (
+          <span className="drag-ghost-glyph">{ghostNode?.data.mediaType === 'video' ? '▶' : ghostNode?.data.mediaType === 'audio' ? '♪' : '▦'}</span>
+        )}
+        <span className="drag-ghost-label">{ghostNode?.data.label}</span>
+      </div>
       {canvasNodes.length === 0 && (
         <div className="canvas-empty">
           <div className="inner">

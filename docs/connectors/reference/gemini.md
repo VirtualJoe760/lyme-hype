@@ -31,18 +31,17 @@ Three tools, all **synchronous from the agent's point of view** (the wrapper doe
 
 ### `gemini_generate_image`
 - Purpose: text→image, optionally conditioned on local reference images (compose/edit — Nano Banana takes input images natively). [verified]
-- Params: `prompt` (string, required); `reference_image_paths` (string[], optional — absolute local paths, png/jpg/webp; wrapper keeps the **first 3** and silently drops extras). [verified]
-- Wire: `POST models/{model}:generateContent` with `contents[0].parts` = inline image parts (`inlineData: {mimeType, data<base64>}`) followed by the text part. [verified]
+- Params (full surface exposed 2026-08-29): `prompt` (required); `model` (enum: 3.1-flash / 3.1-flash-lite / 3-pro / 2.5-flash, default env); `aspect_ratio` (10 values, sent as `generationConfig.imageConfig.aspectRatio` — **live-verified**: 16:9 request → 1376×768 output); `image_size` (`0.5K|1K|2K|4K` → `imageConfig.imageSize` [live-verified at 1K]); `thinking_level` (`minimal|high`, sent as `generationConfig.thinkingLevel`, 3.1-flash only [unverified against live API]); typed refs — `object_reference_paths` (≤10), `character_reference_paths` (≤4), `style_reference_paths` (≤3), plus legacy `reference_image_paths` (counted as object refs). generateContent has no structured ref-type field, so the wrapper labels each image's role in a text preamble (Interactions API is the structured path). [verified wrapper]
+- Wire: `POST models/{model}:generateContent` with `contents[0].parts` = inline image parts (`inlineData: {mimeType, data<base64>}`) followed by the text part; `generationConfig.imageConfig` for aspect/size. [verified]
 - Returns: `RESULT_FILE: <absolute path>` text line (image written to `%TEMP%\lyme-hype-gemini\<uuid>.<ext>`). On refusal, surfaces the model's text as the error. [verified]
-- Not exposed by the wrapper: `imageConfig`/response-format options (`aspectRatio`, `imageSize`) — output is model default (1K, prompt-inferred aspect). [verified]
 
 ### `gemini_generate_video`
 - Purpose: text→video (Veo), optionally frame-conditioned: start frame, end frame, or both (both = seamless loop when identical). [verified]
-- Params: `prompt` (string, required — time-segmented beats work well); `aspectRatio` (string, optional, e.g. `9:16`/`16:9`); `start_frame_path`, `end_frame_path` (strings, optional — absolute local image paths). [verified]
+- Params (full surface exposed 2026-08-29): `prompt` (required — time-segmented beats work well); `model` (Veo variant enum); `aspectRatio` (`9:16`/`16:9`); `resolution` (`720p|1080p|4k` — 4k refused on lite by the wrapper); `duration_seconds` (4|6|8; wrapper forces 8 for lastFrame/refs/1080p+); `person_generation` (`allow_all|allow_adult`); `reference_image_paths` (≤3, refused on lite) + `reference_type` (`asset|style`) → `instances[0].referenceImages` [{image, referenceType}] [unverified wire against live API — first live-check target]; `start_frame_path`, `end_frame_path`. [verified wrapper]
 - Wire: `POST models/{model}:predictLongRunning`; `instances[0].image` = start frame, `instances[0].lastFrame` = end frame, both as `{bytesBase64Encoded, mimeType}` — that wire shape is valid. [verified] When `lastFrame` is present the wrapper sets `parameters.durationSeconds = 8` (required by the API). [verified]
 - Job pattern: long-running operation; the wrapper polls `GET {operation.name}` every 10 s, 6-minute timeout, then downloads the result URI itself (URI requires `x-goog-api-key` and follows redirects). [verified]
 - Returns: `RESULT_FILE: <absolute path>.mp4`. [verified]
-- Not exposed by the wrapper: `durationSeconds` (except the forced 8 s), `resolution`, `negativePrompt`, `referenceImages`, `personGeneration`. [verified]
+- Still not exposed: `negativePrompt` and `seed` (not supported on Veo 3.1 at all — nothing to expose). [docs]
 
 ### `gemini_extend_video`
 - Purpose: append ~7 s of new content onto a Veo-generated clip (the "extend" mechanism the model table's Video row already documented as a capability, but the wrapper never exposed until now). Not supported on `veo-3.1-lite-generate-preview`. [docs]

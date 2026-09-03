@@ -118,7 +118,10 @@ async function runTurnOnce(
         settingSources: [],
         ...(useResume && request.resumeSessionId ? { resume: request.resumeSessionId } : {}),
         ...(authEnv ? { env: { ...process.env, ...authEnv } } : {}),
-        ...(model ? { model } : {}),
+        // A per-request model wins over the provider's default — utility turns
+        // (prompt refinement, vision QA) pin a cheap one; a configured
+        // anthropic-compatible provider keeps its own model regardless.
+        ...(request.model ?? model ? { model: request.model ?? model } : {}),
         systemPrompt:
           request.systemPrompt ??
           'You are the Lyme Hype studio agent inside a desktop content-creation app, helping develop scripts and creative direction for short-form reels. Be a concrete, useful collaborator: draft, revise, answer structural questions. Plain prose, no markdown headers.',

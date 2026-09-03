@@ -1,56 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  effectiveParameters,
   handoffsFor,
   modelPickerOrder,
   reconcileModel,
   type CatalogModel
 } from '@shared/model-catalog'
-import type { NodeManifest, NodeToolDef, ToolIcon } from '@shared/node-manifest'
-import type { ConnectorView, MediaType, TrainedStyle, VoiceEntry } from '@shared/types'
+import { THIN_PROMPT_CHARS, promptIsThin } from '@shared/generation-policy'
+import {
+  EMPTY_NODES,
+  Icon,
+  MEDIA_ROLES,
+  TakesStepper,
+  acceptedMedia,
+  enhanceImagesFor,
+  hWheelRef,
+  readyConnectorIds
+} from './node-panel/support'
+import { SettingSheets } from './node-panel/SettingSheets'
+import { TakePreview } from './node-panel/TakePreview'
+import type { NodeManifest, NodeToolDef } from '@shared/node-manifest'
+import type { ConnectorView, TrainedStyle, VoiceEntry } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { Button } from './ui/Button'
-
-const ICONS: Record<ToolIcon, React.JSX.Element> = {
-  generate: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 15l5-5 4 4 3-3 4 4" /></>,
-  brush: <><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4Z" /><path d="M13.5 6.5 17.5 10.5" /></>,
-  expand: <><rect x="8" y="8" width="8" height="8" rx="1" /><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></>,
-  eraser: <><path d="M4 16 12 8l6 6-6 6H6Z" /><path d="M10 20h10" /></>,
-  upscale: <><path d="M12 20V5" /><path d="M6 11l6-6 6 6" /><path d="M4 21h16" /></>,
-  crop: <><path d="M7 3v14h14" /><path d="M3 7h14v14" /></>,
-  play: <path d="M5 4l14 8-14 8Z" />,
-  extend: <><path d="M4 12h13" /><path d="M13 7l5 5-5 5" /><path d="M21 4v16" /></>,
-  wave: <path d="M4 12h3l3-7 4 14 3-7h3" />,
-  music: <><circle cx="7" cy="18" r="3" /><circle cx="18" cy="15" r="3" /><path d="M10 18V5l11-2v13" /></>,
-  mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0" /><path d="M12 18v3" /></>,
-  person: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
-  images: <><rect x="3" y="5" width="14" height="14" rx="2" /><path d="M21 8v11H9" /></>,
-  caption: <><path d="M4 6h16M4 12h10M4 18h13" /></>,
-  trash: <><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13" /></>,
-  eye: <><circle cx="12" cy="12" r="3" /><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z" /></>,
-  face: <><circle cx="12" cy="12" r="9" /><path d="M9 10h.01M15 10h.01M8.5 15a5 5 0 0 0 7 0" /></>
-}
-
-function Icon(props: { name: ToolIcon }): React.JSX.Element {
-  return (
-    <svg className="np-icon" viewBox="0 0 24 24" aria-hidden="true">
-      {ICONS[props.name]}
-    </svg>
-  )
-}
-
-/** Stable empty array so the not-open case never hands zustand a fresh reference. */
-const EMPTY_NODES: ReturnType<typeof useStudio.getState>["nodes"] = []
-
-function readyConnectorIds(connectors: ConnectorView[]): string[] {
-  return connectors.filter((c) => c.authType === 'none' || c.hasCredential).map((c) => c.id)
-}
-
-/**
- * One renderer for every creative node. What varies between nodes lives in the manifest
- * (docs/build-plan.md Phase 16), so adding a node is adding a record rather than a
- * component — which is what makes connector intake able to propose one at all.
- */
 export function NodePanel(props: {
   manifest: NodeManifest
   connectors: ConnectorView[]
@@ -80,6 +53,14 @@ export function NodePanel(props: {
   const [takes, setTakes] = useState(1)
   const [styleId, setStyleId] = useState('')
   const [refs, setRefs] = useState<string[]>([])
+  // Per-reference role (gemini's typed refs: object/character/style) and the
+  // img2img inspiration dial (local models) — both only rendered when the
+  // picked model can actually consume them.
+  const [refTypes, setRefTypes] = useState<Record<string, 'object' | 'character' | 'style'>>({})
+  const [refStrength, setRefStrength] = useState(0.6)
+  const [lightbox, setLightbox] = useState(false)
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhanceError, setEnhanceError] = useState<string | null>(null)
   const [voice, setVoice] = useState('')
   const [voiceList, setVoiceList] = useState<VoiceEntry[]>([])
   const [loraKind, setLoraKind] = useState<'subject' | 'style'>('subject')
@@ -136,13 +117,23 @@ export function NodePanel(props: {
   // The same model is often resold by several connectors (eleven v3 on both ElevenLabs
   // and Yapper). Two identically-labelled pills that route differently is exactly the
   // ambiguity the pill row exists to remove, so collisions carry their connector.
-  // Setting an end frame narrows the row to models that can actually take one. muapi's
-  // FLF models are deliberately absent from `video-frame-conditioning` — its MCP video
-  // tool has a single image_url and no end-frame parameter, so they could never run it.
+  // Attached media re-frames the model row to models that can actually take it:
+  // an end frame narrows to frame-conditioning; a start image alone narrows to
+  // i2v. Without this, a t2v-only model (seedance fast) accepted a start image
+  // in the UI and died at the connector — the "control that cannot run" bug,
+  // observed live 2026-08-30. muapi's FLF models are deliberately absent from
+  // `video-frame-conditioning` — its MCP video tool has a single image_url and
+  // no end-frame parameter, so they could never run it.
   const endFrameSet = !!(nodeInputs[manifest.id] ?? {})['endFrame']
-  const rowCapability = endFrameSet && manifest.media === 'video'
-    ? 'video-frame-conditioning'
-    : tool.capability
+  const startFrameSet = !!(
+    (nodeInputs[manifest.id] ?? {})['startFrame'] ?? (nodeInputs[manifest.id] ?? {})['sourceImage']
+  )
+  const rowCapability =
+    manifest.media === 'video' && endFrameSet
+      ? 'video-frame-conditioning'
+      : manifest.media === 'video' && startFrameSet && tool.capability === 'video-gen-t2v'
+        ? 'video-gen-i2v'
+        : tool.capability
 
   const picker = useMemo(() => {
     const rows = rowCapability ? modelPickerOrder(rowCapability, ready) : []
@@ -162,6 +153,99 @@ export function NodePanel(props: {
   )
   const model: CatalogModel | null = reconciled.model
   const canRun = rowCapability === null || !!model
+  const thin = promptIsThin(prompt)
+
+  // The picked model's own parameter surface replaces the manifest's generic rows —
+  // "the UI displays options based on the model". A value still valid on the new
+  // surface survives the model switch; anything else resets to that row's default.
+  const paramDefs = useMemo(
+    () => effectiveParameters(manifest.parameters, model ?? undefined),
+    [manifest, model]
+  )
+  useEffect(() => {
+    setParams((prev) =>
+      Object.fromEntries(
+        paramDefs.map((p) => [p.id, p.options.includes(prev[p.id]) ? prev[p.id] : p.options[0]])
+      )
+    )
+  }, [paramDefs])
+
+  // References follow the picked model's actual contract: gated off when the
+  // model can't consume them, capped at its maxRefs (a single-ref model
+  // replaces on pick), typed only where typing exists (gemini).
+  const refsCapable = !model || model.capabilities.includes('image-ref-conditioning')
+  const maxRefs = model?.maxRefs
+  const addRef = (src: string): void => {
+    setRefs((r) => {
+      if (r.includes(src)) return r
+      if (maxRefs === 1) return [src]
+      if (maxRefs && r.length >= maxRefs) return r
+      return [...r, src]
+    })
+  }
+  const cycleRefType = (src: string): void => {
+    const order = ['object', 'character', 'style'] as const
+    setRefTypes((t) => ({ ...t, [src]: order[(order.indexOf(t[src] ?? 'object') + 1) % 3] }))
+  }
+
+  /** Images the enhancer can actually LOOK at: everything visual attached to this
+   *  node (references, frames, the person/source stills). Video inputs are skipped
+   *  — the vision path only carries images. Capped so a big reference set doesn't
+   *  balloon one rewrite call. */
+  const enhanceImages = useMemo(
+    () => enhanceImagesFor(refs, nodeInputs[manifest.id]),
+    [refs, nodeInputs, manifest.id]
+  )
+
+  /** Read the brief (and any attached reference images) and rewrite it into a
+   *  fuller generation prompt. Runs on the same multi-turn conversation plumbing
+   *  the Storyboard's ✨ and the Motion graphics wizard use — vision included. */
+  async function enhancePrompt(): Promise<void> {
+    const text = prompt.trim()
+    if (!text || enhancing) return
+    setEnhancing(true)
+    setEnhanceError(null)
+    try {
+      const isVideo = manifest.media === 'video'
+      const result = await bridge.scripting.turn({
+        conversationId: `enhance-${manifest.id}-${Date.now()}`,
+        prompt: [
+          enhanceImages.length > 0
+            ? `The attached ${enhanceImages.length === 1 ? 'image is a reference' : 'images are references'} for this generation — read ${enhanceImages.length === 1 ? 'it' : 'them'} and keep the subject, wardrobe, palette and style consistent with what you see.`
+            : '',
+          `The user's brief: ${text}`,
+          '',
+          isVideo
+            ? 'Rewrite it as ONE compact paragraph prompt for an AI video model covering: subject and action, what moves and how, camera move and framing, lighting and mood, and style. Keep it a single continuous shot — no scene lists, no shot numbers.'
+            : 'Rewrite it as ONE compact paragraph prompt for an AI image model covering: subject, composition and framing, lighting, lens/render style, colour and mood.',
+          model ? `Target model: ${model.label}.` : '',
+          "Stay faithful to the user's intent — enrich it, never replace it. Reply with ONLY the prompt text: no preamble, no quotes, no markdown."
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        imagePaths: enhanceImages.length > 0 ? enhanceImages : undefined,
+        systemPrompt:
+          'You author precise, evocative prompts for AI image and video generation models. You reply with only the prompt text.'
+      })
+      if (result?.ok && result.text.trim()) setPrompt(result.text.trim())
+      else setEnhanceError(result?.error ?? 'Enhance failed.')
+    } catch (error) {
+      setEnhanceError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setEnhancing(false)
+    }
+  }
+
+  // A canvas node's "img2img" action seeds its image as a reference here.
+  const pendingRefs = useStudio((s) => s.pendingRefs)
+  const clearPendingRefs = useStudio((s) => s.clearPendingRefs)
+  useEffect(() => {
+    if (pendingRefs && pendingRefs.manifestId === manifest.id) {
+      addRef(pendingRefs.src)
+      clearPendingRefs()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRefs, manifest.id])
 
   // A handoff moves the artifact to a DIFFERENT node, so self-targets are dropped —
   // "deepfake · as the source performance" offered inside Deepfake is noise. Nodes whose
@@ -193,7 +277,7 @@ export function NodePanel(props: {
     }
   }
 
-  function run(): void {
+  function run(asTyped = false): void {
     if (blockedReason || !prompt.trim()) return
 
     const exec = tool.exec ?? 'agent'
@@ -235,6 +319,7 @@ export function NodePanel(props: {
     const sourceSrc = activeTake?.src
 
     stageGenerate(manifest.id, {
+      skipRefine: asTyped,
       label: `${manifest.id}_${Date.now().toString().slice(-4)}`,
       mediaType: manifest.media,
       prompt: prompt.trim(),
@@ -242,7 +327,23 @@ export function NodePanel(props: {
       modelId: model?.id,
       connectorId: style ? (style.connectorId ?? 'fal') : model?.connectorId,
       modelHint: styleHint ?? model?.providerModelId,
-      referenceImagePaths: refs.length > 0 ? refs : undefined,
+      // Typed refs only exist on gemini; everywhere else the flat list rides as-is.
+      referenceImagePaths: (() => {
+        const objectRefs =
+          model?.connectorId === 'gemini'
+            ? refs.filter((r) => (refTypes[r] ?? 'object') === 'object')
+            : refs
+        return objectRefs.length > 0 ? objectRefs : undefined
+      })(),
+      characterReferencePaths:
+        model?.connectorId === 'gemini' && refs.some((r) => refTypes[r] === 'character')
+          ? refs.filter((r) => refTypes[r] === 'character')
+          : undefined,
+      styleReferencePaths:
+        model?.connectorId === 'gemini' && refs.some((r) => refTypes[r] === 'style')
+          ? refs.filter((r) => refTypes[r] === 'style')
+          : undefined,
+      refStrength: refs.length > 0 && model?.connectorId === 'comfyui' ? refStrength : undefined,
       maskDataUrl: tool.editorMode === 'mask' ? editorMask : undefined,
       // A masked edit needs the image it is editing, not just the mask.
       sourceMediaPath: tool.editorMode === 'mask' ? sourceSrc : inputs['sourceVideo'],
@@ -252,7 +353,21 @@ export function NodePanel(props: {
       extendVideoPath: tool.id === 'extend' ? sourceSrc : undefined,
       aspectRatio: params['aspect'],
       resolution: params['resolution'],
-      durationSec: params['duration'] ? parseInt(params['duration'], 10) : undefined
+      durationSec: params['duration'] ? parseInt(params['duration'], 10) : undefined,
+      // Exact-model pinning where the tool takes a literal model name: gemini and
+      // comfyui wrappers, and muapi (whose enum ids the catalog now carries verbatim
+      // from the live probe). Other connectors keep the advisory modelHint.
+      model:
+        !style &&
+        (model?.connectorId === 'gemini' ||
+          model?.connectorId === 'comfyui' ||
+          model?.connectorId === 'muapi')
+          ? model.providerModelId
+          : undefined,
+      imageSize: params['size'],
+      thinkingLevel: params['thinking'],
+      personGeneration: params['person'],
+      steps: params['steps'] ? parseInt(params['steps'], 10) : undefined
     })
   }
 
@@ -277,21 +392,6 @@ export function NodePanel(props: {
   /** Settings whose value is a piece of media picked off the canvas. Each maps to the
    *  same handoff role name, so a pill-delivered artifact and a hand-picked one land
    *  in the same slot. */
-  const MEDIA_ROLES: Record<string, { role: string; media: MediaType }> = {
-    startFrame: { role: 'startFrame', media: 'image' },
-    endFrame: { role: 'endFrame', media: 'image' },
-    sourceMedia: { role: 'sourceVideo', media: 'video' },
-    person: { role: 'faceSource', media: 'image' }
-  }
-
-  /** Media a setting will accept, so a drop is refused before it lands rather than
-   *  silently putting a video where a start frame belongs. */
-  function acceptedMedia(kind: string): MediaType | null {
-    if (kind === 'refs' || kind === 'startFrame' || kind === 'endFrame' || kind === 'person') return 'image'
-    if (kind === 'sourceMedia') return manifest.id === 'deepfake' ? 'video' : 'video'
-    return null
-  }
-
   function acceptsDrop(kind: string, types: readonly string[]): boolean {
     if (!types.includes('application/lyme-node')) return false
     return acceptedMedia(kind) !== null
@@ -299,7 +399,7 @@ export function NodePanel(props: {
 
   function linkCanvasNode(kind: string, src: string): void {
     if (kind === 'refs') {
-      setRefs(refs.includes(src) ? refs : [...refs, src])
+      addRef(src)
       return
     }
     const mediaRole = MEDIA_ROLES[kind]
@@ -323,54 +423,15 @@ export function NodePanel(props: {
 
   return (
     <div className="np">
-      <div
-        className={`np-preview${hasArtifact ? ' filled' : ''}`}
-        style={{ aspectRatio: manifest.previewAspect }}
-      >
-        {activeTake?.status === 'rendering' && <span className="np-spin" />}
-        {activeTake?.status === 'error' && (
-          <span className="np-empty np-err">{activeTake.error}</span>
-        )}
-        {manifest.previewHolds === 'dataset' && (
-          <span className="np-grid">
-            {dataset.map((src) => (
-              <button key={src} className="np-cell on" onClick={() => toggleDatasetImage(manifest.id, src)}>
-                <img src={src} alt="" />
-              </button>
-            ))}
-            {dataset.length === 0 && (
-              <span className="np-empty">
-                no images yet
-                <br />
-                use “add images”
-              </span>
-            )}
-          </span>
-        )}
-        {manifest.previewHolds === 'artifact' && !activeTake && (
-          <span className="np-empty">
-            nothing yet
-            <br />
-            describe it below
-          </span>
-        )}
-        {hasArtifact && activeTake.src && manifest.media === 'image' && (
-          <img className="np-art" src={activeTake.src} alt={activeTake.label} />
-        )}
-        {hasArtifact && activeTake.src && manifest.media === 'video' && (
-          <video className="np-art" src={activeTake.src} muted playsInline />
-        )}
-        {hasArtifact && activeTake.src && manifest.media === 'audio' && (
-          <span className="np-empty">{activeTake.label}</span>
-        )}
-        {stage.takes.length > 1 && (
-          <span className="np-nav">
-            <button onClick={() => selectTake(manifest.id, stage.activeIndex - 1)}>‹</button>
-            take {stage.activeIndex + 1} / {stage.takes.length}
-            <button onClick={() => selectTake(manifest.id, stage.activeIndex + 1)}>›</button>
-          </span>
-        )}
-      </div>
+      <TakePreview
+        manifest={manifest}
+        activeTake={activeTake}
+        stage={stage}
+        dataset={dataset}
+        toggleDatasetImage={toggleDatasetImage}
+        selectTake={selectTake}
+        setLightbox={setLightbox}
+      />
 
       <div className="np-tools">
         {manifest.tools.map((t) => {
@@ -393,15 +454,24 @@ export function NodePanel(props: {
             </button>
           )
         })}
-      </div>
-
-      <div className="np-settings">
-        {manifest.settings.map((s) => {
+        {/* Settings live in the same strip as the tools now — compact icon+value
+            buttons instead of the old giant squares (Joseph, 2026-08-30). All the
+            square's behavior (popovers, drag-drop targets, cycle clicks) carries over. */}
+        {manifest.settings.some((s) => s.kind !== 'takes') && <span className="np-tools-sep" />}
+        {/* Takes is deliberately absent here — it renders as a ± stepper beside the
+            Generate button, where the quantity it controls actually applies. */}
+        {manifest.settings.filter((s) => s.kind !== 'takes').map((s) => {
           const value = settingValue(s.kind)
+          const refsOff = s.kind === 'refs' && !refsCapable
           return (
             <button
               key={s.id}
-              className={`np-set${value !== 'none' ? ' on' : ''}${dropTarget === s.id ? ' drop' : ''}`}
+              title={
+                refsOff
+                  ? `${model?.label ?? 'this model'} can’t take reference images`
+                  : `${s.label.toLowerCase()}: ${value}`
+              }
+              className={`np-tool np-tool-set${value !== 'none' ? ' set' : ''}${openSetting === s.id ? ' on' : ''}${dropTarget === s.id ? ' drop' : ''}${refsOff ? ' off' : ''}`}
               onDragOver={(e) => {
                 if (!acceptsDrop(s.kind, e.dataTransfer.types)) return
                 e.preventDefault()
@@ -418,10 +488,6 @@ export function NodePanel(props: {
                 linkCanvasNode(s.kind, node.data.src)
               }}
               onClick={() => {
-                if (s.kind === 'takes') {
-                  setTakes(takes >= 8 ? 1 : takes === 1 ? 2 : takes === 2 ? 4 : 8)
-                  return
-                }
                 if (s.kind === 'loraKind') {
                   setLoraKind(loraKind === 'subject' ? 'style' : 'subject')
                   return
@@ -434,125 +500,61 @@ export function NodePanel(props: {
               }}
             >
               <Icon name={s.icon} />
-              <b>{s.label}</b>
               <em>{value}</em>
             </button>
           )
         })}
       </div>
 
-      {openSetting === 'style' && (
-        <div className="np-pop">
-          {(props.styles ?? []).length === 0 && (
-            <span className="np-pop-empty">no trained styles yet — Create a LoRA first</span>
-          )}
-          <button
-            className={`np-pill${styleId === '' ? ' on' : ''}`}
-            onClick={() => setStyleId('')}
-          >
-            none
-          </button>
-          {(props.styles ?? []).map((s) => (
-            <button
-              key={s.id}
-              className={`np-pill${styleId === s.id ? ' on' : ''}`}
-              onClick={() => setStyleId(s.id)}
-            >
-              {s.name}
-            </button>
-          ))}
+      <SettingSheets
+        manifest={manifest}
+        openSetting={openSetting}
+        setOpenSetting={setOpenSetting}
+        model={model}
+        nodes={nodes}
+        canvasImages={canvasImages}
+        dataset={dataset}
+        toggleDatasetImage={toggleDatasetImage}
+        nodeInputs={nodeInputs}
+        setNodeInput={setNodeInput}
+        refs={refs}
+        setRefs={setRefs}
+        refTypes={refTypes}
+        addRef={addRef}
+        cycleRefType={cycleRefType}
+        maxRefs={maxRefs}
+        styleId={styleId}
+        setStyleId={setStyleId}
+        voice={voice}
+        setVoice={setVoice}
+        voiceList={voiceList}
+        trainError={trainError}
+        styles={props.styles}
+      />
+
+      {lightbox && activeTake?.src && (
+        <div className="np-lightbox" onClick={() => setLightbox(false)}>
+          <img src={activeTake.src} alt={activeTake.label} />
         </div>
       )}
 
-      {openSetting && MEDIA_ROLES[manifest.settings.find((s) => s.id === openSetting)?.kind ?? ''] && (
-        <div className="np-pop">
-          {(() => {
-            const kind = manifest.settings.find((s) => s.id === openSetting)!.kind
-            const { role, media } = MEDIA_ROLES[kind]
-            const options = nodes.filter(
-              (n) => n.data.mediaType === media && n.data.status === 'ready' && n.data.src
-            )
-            const current = (nodeInputs[manifest.id] ?? {})[role]
-            if (options.length === 0) {
-              return <span className="np-pop-empty">no {media} on the canvas to use</span>
-            }
-            return options.map((n) => (
-              <button
-                key={n.id}
-                className={`np-ref${current === n.data.src ? ' on' : ''}`}
-                title={n.data.label}
-                onClick={() =>
-                  setNodeInput(manifest.id, role, current === n.data.src ? undefined : n.data.src)
-                }
-              >
-                {media === 'image' ? (
-                  <img src={n.data.src} alt={n.data.label} />
-                ) : (
-                  <video src={n.data.src} muted />
-                )}
-              </button>
-            ))
-          })()}
-        </div>
-      )}
-
-      {openSetting === 'voice' && (
-        <div className="np-pop">
-          <button className={`np-pill${voice === '' ? ' on' : ''}`} onClick={() => setVoice('')}>
-            default
-          </button>
-          {voiceList.map((v) => (
+      {refs.length > 0 && model?.connectorId === 'comfyui' && (
+        <div className="np-strength">
+          <span className="np-lbl">REF STRENGTH</span>
+          {(
+            [
+              [0.35, 'close'],
+              [0.6, 'balanced'],
+              [0.85, 'loose']
+            ] as const
+          ).map(([v, label]) => (
             <button
-              key={v.name}
-              className={`np-pill${voice === v.name ? ' on' : ''}`}
-              title={v.tags}
-              onClick={() => setVoice(v.name)}
+              key={v}
+              className={`np-chip${refStrength === v ? ' on' : ''}`}
+              title={`img2img denoise ${v}`}
+              onClick={() => setRefStrength(v)}
             >
-              {v.name}
-            </button>
-          ))}
-          {voiceList.length === 0 && (
-            <span className="np-pop-empty">no voices — connect ElevenLabs to browse them</span>
-          )}
-        </div>
-      )}
-
-      {openSetting === 'dataset' && (
-        <div className="np-pop">
-          {canvasImages.length === 0 && (
-            <span className="np-pop-empty">no images on the canvas to train on</span>
-          )}
-          {canvasImages.map((n) => (
-            <button
-              key={n.id}
-              className={`np-ref${dataset.includes(n.data.src ?? '') ? ' on' : ''}`}
-              title={n.data.label}
-              onClick={() => toggleDatasetImage(manifest.id, n.data.src ?? '')}
-            >
-              <img src={n.data.src} alt={n.data.label} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {trainError && <div className="np-local np-err">{trainError}</div>}
-
-      {openSetting === 'refs' && (
-        <div className="np-pop">
-          {canvasImages.length === 0 && (
-            <span className="np-pop-empty">no images on the canvas to reference</span>
-          )}
-          {canvasImages.map((n) => (
-            <button
-              key={n.id}
-              className={`np-ref${refs.includes(n.data.src ?? '') ? ' on' : ''}`}
-              title={n.data.label}
-              onClick={() => {
-                const src = n.data.src ?? ''
-                setRefs(refs.includes(src) ? refs.filter((r) => r !== src) : [...refs, src])
-              }}
-            >
-              <img src={n.data.src} alt={n.data.label} />
+              {label}
             </button>
           ))}
         </div>
@@ -569,15 +571,16 @@ export function NodePanel(props: {
       ) : (
         <div className="np-models">
           <div className="np-lbl">
-            MODEL · {picker.filter((m) => m.ready).length} can {endFrameSet ? 'first→last' : tool.label}
+            MODEL · {picker.filter((m) => m.ready).length} can{' '}
+            {endFrameSet ? 'first→last' : startFrameSet && manifest.media === 'video' ? 'animate the image' : tool.label}
           </div>
-          <div className="np-track">
+          <div className="np-track" ref={hWheelRef}>
             {picker.length === 0 && <span className="np-none">no model can do this</span>}
             {picker.map((m) => (
               <button
                 key={m.id}
                 className={`np-pill${m.id === model?.id ? ' on' : ''}${m.ready ? '' : ' dim'}`}
-                title={`${m.label} · ${m.connectorId}${m.note ? ` · ${m.note}` : ''}`}
+                title={`${m.label} · ${m.connectorId}${m.cost !== undefined ? ` · ${m.cost === 0 ? '$0' : `~$${m.cost}`}` : ''}${m.note ? ` · ${m.note}` : ''}`}
                 onClick={() => (m.ready ? setNodeModel(manifest.id, m.id) : openSettings('connectors'))}
               >
                 {m.pillLabel}
@@ -613,33 +616,53 @@ export function NodePanel(props: {
         onChange={(e) => setPrompt(e.target.value)}
       />
 
-      {manifest.parameters.length > 0 && (
+      <div className="np-enhance-row">
+        <button
+          className="np-chip np-enhance"
+          disabled={!prompt.trim() || enhancing}
+          title={
+            enhanceImages.length > 0
+              ? `Rewrite this into a richer prompt — the model will look at your ${enhanceImages.length === 1 ? 'reference image' : `${enhanceImages.length} reference images`} too`
+              : 'Rewrite this into a richer, more specific generation prompt'
+          }
+          onClick={() => void enhancePrompt()}
+        >
+          {enhancing ? 'enhancing…' : `✨ enhance${enhanceImages.length > 0 ? ' + refs' : ''}`}
+        </button>
+        {enhanceError && <span className="np-enhance-err">{enhanceError}</span>}
+      </div>
+
+      {paramDefs.length > 0 && (
         <div className="np-params">
-          {manifest.parameters
-            .filter((p) => !p.perModel)
-            .map((p) => (
-              <div key={p.id} className="np-param">
-                {p.options?.map((o) => (
-                  <button
-                    key={o}
-                    className={`np-chip${params[p.id] === o ? ' on' : ''}`}
-                    onClick={() => setParams({ ...params, [p.id]: o })}
-                  >
-                    {o}
-                  </button>
-                ))}
-              </div>
-            ))}
+          {paramDefs.map((p) => (
+            <div key={p.id} className="np-param" ref={hWheelRef}>
+              {p.options.map((o) => (
+                <button
+                  key={o}
+                  className={`np-chip${params[p.id] === o ? ' on' : ''}`}
+                  onClick={() => setParams({ ...params, [p.id]: o })}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
       )}
 
-      <Button
-        variant="block-primary"
-        disabled={!!blockedReason || !prompt.trim()}
-        onClick={run}
-      >
-        {blockedReason ?? `${tool.verb}${takes > 1 && !needsMask ? ` ${takes}` : ''}`}
-      </Button>
+      <div className="np-run-row">
+        {manifest.settings.some((s) => s.kind === 'takes') && !needsMask && (
+          <TakesStepper takes={takes} setTakes={setTakes} />
+        )}
+        <Button
+          variant="block-primary"
+          disabled={!!blockedReason || !prompt.trim()}
+          onClick={() => run()}
+        >
+          {blockedReason ?? (thin ? '✦ Enhance & generate' : `${tool.verb}${takes > 1 && !needsMask ? ` ${takes}` : ''}`)}
+        </Button>
+        {thin && !blockedReason && <button className="np-astyped" onClick={() => run(true)} title={`Under ${THIN_PROMPT_CHARS} characters — short prompts leave subject count and anatomy to chance. This skips the automatic rewrite.`}>as typed</button>}
+      </div>
 
       <Button
         variant="block"
@@ -655,7 +678,7 @@ export function NodePanel(props: {
       {handoffs.length > 0 && (
         <div className="np-cont">
           <div className="np-lbl">CONTINUE IN</div>
-          <div className="np-track">
+          <div className="np-track" ref={hWheelRef}>
             {handoffs.map((h) => (
               <button
                 key={`${h.to}-${h.role}`}

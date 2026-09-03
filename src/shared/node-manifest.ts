@@ -32,6 +32,7 @@ export type ToolIcon =
   | 'trash'
   | 'eye'
   | 'face'
+  | 'upload'
 
 /**
  * How a tool actually runs. Most go through the agent, but audio's four jobs are direct
@@ -138,7 +139,9 @@ export const IMAGE_NODE: NodeManifest = {
   ],
   settings: [
     { id: 'style', label: 'STYLE', kind: 'style', icon: 'person' },
-    { id: 'refs', label: 'REFS', kind: 'refs', icon: 'images' },
+    // Labeled for the action users actually take (Joseph, 2026-08-30): the square
+    // opens the reference modal whose primary affordance is uploading an image.
+    { id: 'refs', label: 'UPLOAD', kind: 'refs', icon: 'upload' },
     TAKES
   ],
   parameters: [
@@ -147,7 +150,7 @@ export const IMAGE_NODE: NodeManifest = {
     { id: 'seed', kind: 'seed', perModel: true }
   ],
   commit: 'canvas',
-  commitLabel: 'Finish → add to canvas',
+  commitLabel: 'Done → clear panel',
   promptPlaceholder: 'citrus-slice vinyl record spinning in fog, studio light'
 }
 
@@ -175,7 +178,7 @@ export const VIDEO_NODE: NodeManifest = {
     { id: 'resolution', kind: 'resolution', options: ['720p', '1080p'] }
   ],
   commit: 'canvas',
-  commitLabel: 'Finish → add to canvas',
+  commitLabel: 'Done → clear panel',
   promptPlaceholder: 'lantern spirit rising from a river of flames, wide shot'
 }
 
@@ -202,7 +205,7 @@ export const AUDIO_NODE: NodeManifest = {
     { id: 'format', kind: 'format', options: ['mp3', 'wav'] }
   ],
   commit: 'canvas',
-  commitLabel: 'Finish → add to canvas',
+  commitLabel: 'Done → clear panel',
   promptPlaceholder: 'the lyme doesn’t lie. it just doesn’t care.'
 }
 
@@ -249,7 +252,7 @@ export const DEEPFAKE_NODE: NodeManifest = {
   ],
   parameters: [{ id: 'aspect', kind: 'aspect', options: ['9:16', '16:9'] }],
   commit: 'canvas',
-  commitLabel: 'Finish → add to canvas',
+  commitLabel: 'Done → clear panel',
   promptPlaceholder: 'the lyme doesn’t lie. it just doesn’t care.'
 }
 

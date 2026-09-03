@@ -317,7 +317,8 @@ export async function runSelfTest(mainWindow: BrowserWindow): Promise<void> {
   //     network request in initialize/tools-list).
   const wrappers: { file: string; env: Record<string, string>; tool: string }[] = [
     { file: 'gemini-mcp.cjs', env: { GEMINI_API_KEY: 'selftest-dummy' }, tool: 'gemini_generate_image' },
-    { file: 'openai-image-mcp.cjs', env: { OPENAI_API_KEY: 'selftest-dummy' }, tool: 'openai_generate_image' }
+    { file: 'openai-image-mcp.cjs', env: { OPENAI_API_KEY: 'selftest-dummy' }, tool: 'openai_generate_image' },
+    { file: 'comfyui-mcp.cjs', env: {}, tool: 'comfy_generate_image' }
   ]
   for (const wrapper of wrappers) {
     try {

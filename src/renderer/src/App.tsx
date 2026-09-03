@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { AsidePanel } from './components/AsidePanel'
+import { BootSplash } from './components/BootSplash'
 import { CanvasArea } from './components/CanvasArea'
 import { CombineDialog } from './components/CombineDialog'
 import { CutRoom } from './components/CutRoom'
@@ -8,6 +9,7 @@ import { PanelResizeHandle } from './components/PanelResizeHandle'
 import { PlayView } from './components/PlayView'
 import { Settings } from './components/settings/Settings'
 import { SessionsRail } from './components/SessionsRail'
+import { StatusStrip } from './components/StatusStrip'
 import { TitleBar } from './components/TitleBar'
 import { PANEL_SIZES, useStudio } from './store'
 
@@ -35,6 +37,7 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="app">
+      <BootSplash />
       <TitleBar />
       <div className="body">
         {loaded && (
@@ -86,6 +89,7 @@ export default function App(): React.JSX.Element {
           </>
         )}
       </div>
+      {loaded && <StatusStrip />}
       {combine && <CombineDialog />}
       {settingsOpen && <Settings />}
     </div>

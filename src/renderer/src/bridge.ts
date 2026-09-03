@@ -1,5 +1,6 @@
 import type {
   AgentPingResult,
+  ComfyState,
   AgentStreamEvent,
   ChatRealtyArticleDraftInput,
   ChatRealtyArticleDraftResult,
@@ -22,6 +23,7 @@ import type {
   ConversationTurnResult,
   CutExportResult,
   GenerationParams,
+  GenerationRecord,
   GenerationResult,
   ImprovePromptResult,
   LocalToolResult,
@@ -30,9 +32,11 @@ import type {
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
+  ProjectSummary,
   SecretReport,
   SecretRequest,
   ShotBreakdownResult,
+  SystemStatus,
   TimelineExportSpec
 } from '@shared/types'
 
@@ -43,6 +47,21 @@ export interface Bridge {
     load(): Promise<PersistedState | null>
     save(state: PersistedState): Promise<void>
     saveSync(state: PersistedState): void
+    openFile(): Promise<{ sessions: unknown[] | null; error: string | null } | null>
+    closeToProject(
+      session: unknown
+    ): Promise<{ ok: boolean; dir: string | null; error: string | null } | null>
+    recentGenerations(): Promise<GenerationRecord[] | null>
+    systemStatus(): Promise<SystemStatus | null>
+    listProjects(): Promise<ProjectSummary[] | null>
+    openProject(dir: string): Promise<{ session: unknown | null; error: string | null } | null>
+    reportUncommitted(count: number): void
+    onCommitAll(callback: () => void): () => void
+    commitAllDone(): void
+  }
+  comfyui: {
+    status(): Promise<ComfyState | null>
+    onStatus(callback: (state: ComfyState) => void): () => void
   }
   agent: {
     ping(prompt: string): Promise<AgentPingResult | null>
@@ -62,6 +81,7 @@ export interface Bridge {
   media: {
     pickFile(kind: 'image' | 'video' | 'audio'): Promise<{ name: string; path: string } | null>
     pickFiles(kind: 'image' | 'video' | 'audio'): Promise<string[] | null>
+    ensureThumb(assetUrl: string): Promise<string | null>
     import(
       kind: 'image' | 'video' | 'audio'
     ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null>
@@ -172,7 +192,31 @@ function createBrowserMock(): Bridge {
       },
       saveSync: (next) => {
         state = next
-      }
+      },
+      openFile: async () => ({ sessions: null, error: 'File dialogs need the Electron app.' }),
+      closeToProject: async () => ({
+        ok: false,
+        dir: null,
+        error: 'Saving a session to disk needs the Electron app.'
+      }),
+      recentGenerations: async () => [],
+      systemStatus: async () => ({
+        ffmpeg: null,
+        workspace: '(browser preview)',
+        connectors: 0,
+        projects: 0,
+        build: 'browser preview',
+        stale: false
+      }),
+      listProjects: async () => [],
+      openProject: async () => ({ session: null, error: 'Opening projects needs the Electron app.' }),
+      reportUncommitted: () => {},
+      onCommitAll: () => () => {},
+      commitAllDone: () => {}
+    },
+    comfyui: {
+      status: async () => null,
+      onStatus: () => () => {}
     },
     agent: {
       ping: async () => ({
@@ -209,6 +253,7 @@ function createBrowserMock(): Bridge {
     media: {
       pickFile: async () => null,
       pickFiles: async () => null,
+      ensureThumb: async () => null,
       import: async () => null,
       importUrl: async () => ({
         name: '',
@@ -327,6 +372,7 @@ function createBrowserMock(): Bridge {
       // every tile reads "needs X" and every model pill is dim, so the readiness and
       // routing UI — the part most likely to regress — was untestable in preview.
       list: async () => [
+        { id: 'comfyui', name: 'ComfyUI (local)', kind: 'stdio', authType: 'none', secretFieldLabel: '', hasCredential: true },
         { id: 'muapi', name: 'muapi', kind: 'stdio', authType: 'apiKey', secretFieldLabel: 'API key', hasCredential: true },
         { id: 'elevenlabs', name: 'ElevenLabs', kind: 'stdio', authType: 'apiKey', secretFieldLabel: 'API key', hasCredential: true },
         { id: 'gemini', name: 'Gemini', kind: 'stdio', authType: 'apiKey', secretFieldLabel: 'API key', hasCredential: true },
@@ -369,6 +415,7 @@ function createElectronBridge(): Bridge {
     isElectron: true,
     window: lyme.window,
     sessions: lyme.sessions,
+    comfyui: lyme.comfyui,
     agent: lyme.agent,
     scripting: lyme.scripting,
     media: lyme.media,

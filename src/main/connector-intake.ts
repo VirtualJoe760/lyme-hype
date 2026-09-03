@@ -57,234 +57,26 @@ const PROPOSABLE: Record<ModelCapability, boolean> = {
   'bg-remove': true
 }
 
-const TIERS: ClassificationConfidence[] = ['schema', 'name', 'description']
+import {
+  TIERS,
+  any,
+  type FieldRole,
+  type SchemaField,
+  readSchema,
+  tokenize,
+  weaker
+} from './connector-intake/schema'
+import {
+  indexRoles,
+  inferMedia,
+  outputTokens,
+  type Media,
+  type MediaGuess,
+  type RoleIndex
+} from './connector-intake/roles'
 
-function weaker(a: ClassificationConfidence, b: ClassificationConfidence): ClassificationConfidence {
-  return TIERS.indexOf(a) >= TIERS.indexOf(b) ? a : b
-}
-
-/** `sourceVideoAssetId` → source video asset id; `images_data_url` → images data url. One
- *  token stream makes camelCase, snake_case and kebab-case servers match the same rules. */
-function tokenize(text: string): string[] {
-  return text
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean)
-    .map((t) => t.toLowerCase())
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-interface SchemaField {
-  name: string
-  tokens: string[]
-  type: string | null
-  isArray: boolean
-  required: boolean
-}
-
-interface SchemaFacts {
-  present: boolean
-  fields: SchemaField[]
-}
-
-function readType(prop: Record<string, unknown>): { type: string | null; isArray: boolean } {
-  const raw = prop['type']
-  const type = typeof raw === 'string' ? raw : Array.isArray(raw) ? String(raw[0] ?? '') : null
-  if (type === 'array') return { type: 'array', isArray: true }
-  return { type, isArray: false }
-}
-
-function requiredNames(schema: Record<string, unknown>): Set<string> {
-  const raw = schema['required']
-  return new Set(Array.isArray(raw) ? raw.filter((r): r is string => typeof r === 'string') : [])
-}
-
-/** One level of nesting is walked because a wrapper object hides both halves of the job:
- *  a `{input: {command}}` tool must still trip the side-effect screen. Deeper than that is
- *  where field names stop describing the call and start describing a payload. */
-function collectFields(
-  props: Record<string, unknown>,
-  required: Set<string>,
-  prefix: string,
-  depth: number
-): SchemaField[] {
-  const out: SchemaField[] = []
-  for (const [name, value] of Object.entries(props)) {
-    const prop = isRecord(value) ? value : {}
-    const { type, isArray } = readType(prop)
-    const path = prefix ? `${prefix}.${name}` : name
-    const isRequired = required.has(name)
-    out.push({ name: path, tokens: tokenize(path), type, isArray, required: isRequired })
-    const nested = prop['properties']
-    if (depth > 0 && isRecord(nested)) {
-      const nestedRequired = isRequired ? requiredNames(prop) : new Set<string>()
-      out.push(...collectFields(nested, nestedRequired, path, depth - 1))
-    }
-  }
-  return out
-}
-
-function readSchema(inputSchema: unknown): SchemaFacts {
-  if (!isRecord(inputSchema)) return { present: false, fields: [] }
-  const props = inputSchema['properties']
-  if (!isRecord(props)) return { present: false, fields: [] }
-  const fields = collectFields(props, requiredNames(inputSchema), '', 1)
-  // A tool that declares `properties: {}` published a contract saying "no arguments" — that
-  // is a schema, and residue review should not read it as a server that told us nothing.
-  return { present: true, fields }
-}
-
-type FieldRole =
-  | 'prompt'
-  | 'text'
-  | 'voice'
-  | 'mask'
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'startFrame'
-  | 'endFrame'
-  | 'startVideo'
-  | 'sourceRef'
-  | 'targetRef'
-  | 'trainingImages'
-  | 'trainingControl'
-  | 'loraRef'
-  | 'referenceImages'
-  | 'scaleFactor'
-  | 'duration'
-  | 'aspect'
-  | 'outputCount'
-  | 'dimension'
-  | 'frameRate'
-
-const any =(f: SchemaField, ...tokens: string[]): boolean => tokens.some((t) => f.tokens.includes(t))
-
-const MEDIA_HANDLE = ['url', 'uri', 'path', 'paths', 'id', 'ids', 'asset', 'assets', 'file', 'files', 'b64', 'base64', 'data', 'src', 'frame', 'reference', 'references', 'ref', 'refs']
-
-/** Fields that merely *describe* media rather than carry it — `image_size`, `num_images`,
- *  `output_format` — must never read as an image input or every generator looks like an editor. */
-const MEDIA_MODIFIER = ['size', 'count', 'num', 'number', 'width', 'height', 'quality', 'format', 'ratio', 'aspect', 'strength', 'scale', 'resolution', 'model', 'type', 'length', 'duration', 'fps']
-
-function carriesMedia(f: SchemaField, kinds: string[]): boolean {
-  if (!any(f, ...kinds)) return false
-  if (any(f, ...MEDIA_MODIFIER)) return false
-  return f.tokens.length === 1 || any(f, ...MEDIA_HANDLE)
-}
-
-const ROLE_TESTS: Record<FieldRole, (f: SchemaField) => boolean> = {
-  // `system_prompt` configures an agent and `negative_prompt` steers one — neither is the
-  // content field that makes a tool generative, and reading them as one turns ElevenLabs'
-  // create_agent into a text-to-speech tool.
-  prompt: (f) =>
-    (any(f, 'prompt', 'instruction', 'instructions') || f.tokens.join('') === 'description') &&
-    !any(f, 'system', 'negative'),
-  text: (f) => any(f, 'text', 'script', 'ssml', 'lyrics') && !any(f, 'format', 'model'),
-  voice: (f) => any(f, 'voice', 'voices', 'speaker'),
-  mask: (f) => any(f, 'mask', 'masks'),
-  image: (f) => carriesMedia(f, ['image', 'images', 'img', 'photo', 'photos', 'picture']),
-  video: (f) => carriesMedia(f, ['video', 'videos', 'footage']),
-  audio: (f) => carriesMedia(f, ['audio', 'music', 'sound', 'song', 'speech']),
-  startFrame: (f) => any(f, 'start', 'first', 'init', 'begin') && any(f, 'frame', 'image', 'img', 'photo'),
-  endFrame: (f) => any(f, 'end', 'last', 'final', 'tail') && any(f, 'frame', 'image', 'img', 'photo'),
-  startVideo: (f) => any(f, 'start', 'source', 'input', 'continue', 'previous') && any(f, 'video', 'footage'),
-  sourceRef: (f) => f.tokens[0] === 'source' && !any(f, 'video', 'audio'),
-  targetRef: (f) => f.tokens[0] === 'target',
-  trainingImages: (f) =>
-    (any(f, 'images', 'image', 'dataset') && any(f, 'data', 'zip', 'archive', 'tar', 'dataset')) ||
-    any(f, 'zip'),
-  trainingControl: (f) =>
-    any(f, 'steps', 'epochs') ||
-    (any(f, 'learning') && any(f, 'rate')) ||
-    (any(f, 'trigger') && any(f, 'word', 'phrase')),
-  loraRef: (f) => any(f, 'lora', 'loras', 'adapter', 'adapters') || (f.isArray && any(f, 'styles', 'weights')),
-  referenceImages: (f) =>
-    f.isArray &&
-    any(f, 'image', 'images', 'img', 'photo', 'photos') &&
-    any(f, 'reference', 'references', 'ref', 'refs'),
-  scaleFactor: (f) => any(f, 'scale', 'scaling', 'upscale', 'magnification'),
-  duration: (f) => any(f, 'duration', 'seconds') || (any(f, 'length') && any(f, 'ms', 'sec', 'seconds')),
-  aspect: (f) => any(f, 'aspect') || f.tokens.join('') === 'ratio',
-  outputCount: (f) => any(f, 'num', 'number', 'n') && any(f, 'images', 'outputs', 'samples', 'results'),
-  dimension: (f) => any(f, 'width', 'height') || (any(f, 'image') && any(f, 'size')),
-  frameRate: (f) => any(f, 'fps') || (any(f, 'num') && any(f, 'frames')) || (any(f, 'frame') && any(f, 'rate'))
-}
-
-/** Derived, not restated: `ROLE_TESTS` is a total `Record<FieldRole, …>`, so adding a role to
- *  the union fails to compile until it has a test, and it is then indexed automatically. */
-const ROLES = Object.keys(ROLE_TESTS) as FieldRole[]
-
-type RoleIndex = Record<FieldRole, SchemaField[]>
-
-function indexRoles(facts: SchemaFacts): RoleIndex {
-  const index = Object.fromEntries(ROLES.map((r) => [r, [] as SchemaField[]])) as RoleIndex
-  for (const field of facts.fields) {
-    for (const role of ROLES) if (ROLE_TESTS[role](field)) index[role].push(field)
-  }
-  return index
-}
-
-type Media = 'image' | 'video' | 'audio'
-
-const MEDIA_WORDS: Record<Media, string[]> = {
-  video: ['video', 'videos', 'animate', 'animation', 'motion', 'clip', 'clips', 'veo', 'i2v', 't2v', 'reel'],
-  image: ['image', 'images', 'img', 'picture', 'photo', 'photos', 'draw', 'paint', 'inpaint', 'poster', 'thumbnail'],
-  audio: ['audio', 'speech', 'tts', 'voice', 'music', 'song', 'sound', 'sfx', 'narration', 'dub', 'dubbing']
-}
-
-/**
- * `text_to_speech` outputs speech; `video_to_music` outputs music; `muapi_video_from_image`
- * outputs video. The preposition says which side of the name is the *output* — reading the
- * whole name instead lands `video_to_music` on video, which is exactly backwards.
- */
-function outputTokens(tokens: string[]): string[] {
-  const to = Math.max(tokens.lastIndexOf('to'), tokens.lastIndexOf('into'))
-  if (to >= 0 && to < tokens.length - 1) return tokens.slice(to + 1)
-  const from = tokens.indexOf('from')
-  if (from > 0) return tokens.slice(0, from)
-  return tokens
-}
-
-function mediaFromWords(tokens: string[]): Media | null {
-  const scoped = outputTokens(tokens)
-  for (const media of ['video', 'image', 'audio'] as Media[]) {
-    if (MEDIA_WORDS[media].some((w) => scoped.includes(w))) return media
-  }
-  return null
-}
-
-interface MediaGuess {
-  media: Media | null
-  tier: ClassificationConfidence
-  evidence: string | null
-}
-
-/**
- * Schemas do not declare outputs, so the medium is inferred — but some parameters pin it
- * anyway: `aspect_ratio` alongside a duration is a video (audio has no aspect ratio), a
- * voice field is audio, `num_images`/`width` with no duration is an image. Everything else
- * falls back to the tool's name and then its prose, at correspondingly lower confidence.
- */
-function inferMedia(roles: RoleIndex, nameTokens: string[], descriptionTokens: string[]): MediaGuess {
-  const has = (r: FieldRole): boolean => roles[r].length > 0
-  if (has('voice')) return { media: 'audio', tier: 'schema', evidence: `schema: ${roles.voice[0].name}` }
-  if (has('frameRate')) return { media: 'video', tier: 'schema', evidence: `schema: ${roles.frameRate[0].name}` }
-  if (has('duration') && has('aspect')) {
-    return { media: 'video', tier: 'schema', evidence: `schema: ${roles.duration[0].name} + ${roles.aspect[0].name}` }
-  }
-  if (!has('duration') && (has('outputCount') || has('dimension'))) {
-    const field = (roles.outputCount[0] ?? roles.dimension[0]).name
-    return { media: 'image', tier: 'schema', evidence: `schema: ${field}` }
-  }
-  const byName = mediaFromWords(nameTokens)
-  if (byName) return { media: byName, tier: 'name', evidence: `name: "${byName}" in tool name` }
-  const byDescription = mediaFromWords(descriptionTokens)
-  if (byDescription) return { media: byDescription, tier: 'description', evidence: `description: mentions "${byDescription}"` }
-  return { media: null, tier: 'description', evidence: null }
-}
+// Schema reading and role inference live in ./connector-intake/* — this file
+// is the classifier and the screening rules that act on their output.
 
 interface ClassifyContext {
   roles: RoleIndex

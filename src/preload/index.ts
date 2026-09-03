@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type {
   AgentPingResult,
+  ComfyState,
   AgentStreamEvent,
   ChatRealtyArticleDraftInput,
   ChatRealtyArticleDraftResult,
@@ -24,6 +25,7 @@ import type {
   ConversationTurnResult,
   CutExportResult,
   GenerationParams,
+  GenerationRecord,
   GenerationResult,
   ImprovePromptResult,
   LocalToolResult,
@@ -32,9 +34,11 @@ import type {
   ModelProviderDef,
   ModelProviderView,
   PersistedState,
+  ProjectSummary,
   SecretReport,
   SecretRequest,
   ShotBreakdownResult,
+  SystemStatus,
   TimelineExportSpec
 } from '../shared/types'
 
@@ -50,6 +54,35 @@ const api = {
     // Blocking save for the beforeunload flush, when there's no time to await.
     saveSync: (state: PersistedState): void => {
       ipcRenderer.sendSync(IPC.sessionsSaveSync, state)
+    },
+    openFile: (): Promise<{ sessions: unknown[] | null; error: string | null } | null> =>
+      ipcRenderer.invoke(IPC.sessionsOpenFile),
+    closeToProject: (
+      session: unknown
+    ): Promise<{ ok: boolean; dir: string | null; error: string | null } | null> =>
+      ipcRenderer.invoke(IPC.sessionsCloseToProject, session),
+    recentGenerations: (): Promise<GenerationRecord[] | null> =>
+      ipcRenderer.invoke(IPC.generationsRecent),
+    systemStatus: (): Promise<SystemStatus | null> => ipcRenderer.invoke(IPC.systemStatus),
+    listProjects: (): Promise<ProjectSummary[] | null> => ipcRenderer.invoke(IPC.projectsList),
+    openProject: (
+      dir: string
+    ): Promise<{ session: unknown | null; error: string | null } | null> =>
+      ipcRenderer.invoke(IPC.projectOpen, dir),
+    reportUncommitted: (count: number): void => ipcRenderer.send(IPC.stagesCount, count),
+    onCommitAll: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on(IPC.stagesCommitAll, listener)
+      return () => ipcRenderer.removeListener(IPC.stagesCommitAll, listener)
+    },
+    commitAllDone: (): void => ipcRenderer.send(IPC.stagesCommitted)
+  },
+  comfyui: {
+    status: (): Promise<ComfyState | null> => ipcRenderer.invoke(IPC.comfyStatus),
+    onStatus: (callback: (state: ComfyState) => void): (() => void) => {
+      const listener = (_e: unknown, state: ComfyState): void => callback(state)
+      ipcRenderer.on(IPC.comfyStream, listener)
+      return () => ipcRenderer.removeListener(IPC.comfyStream, listener)
     }
   },
   agent: {
@@ -84,6 +117,8 @@ const api = {
       ipcRenderer.invoke(IPC.mediaPickFile, kind),
     pickFiles: (kind: 'image' | 'video' | 'audio'): Promise<string[] | null> =>
       ipcRenderer.invoke(IPC.mediaPickFiles, kind),
+    ensureThumb: (assetUrl: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.mediaEnsureThumb, assetUrl),
     import: (
       kind: 'image' | 'video' | 'audio'
     ): Promise<{ name: string; src: string; mediaType: 'image' | 'video' | 'audio' } | null> =>

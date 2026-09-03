@@ -1,0 +1,683 @@
+<title>Asset Library & Sheets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitcount+Prop+Single:wght@400;700&family=Jost:wght@300;400;500;600&display=swap">
+
+<style>
+  /* Tokens lifted from src/renderer/src/styles/theme.css so this mockup and the
+     app cannot drift. Zest (the theme in use) is the light ground; Lime Cut is
+     the dark one. Accent stays rationed, per that file's own note. */
+  :root {
+    --bg: #f1fae3;
+    --panel: #ffffff;
+    --panel-raised: #fbfff3;
+    --border: #d3e8b8;
+    --text: #1e2b12;
+    --text-soft: #6c7a54;
+    --accent: #7bc311;
+    --accent-dim: #5c9a0b;
+    --accent-ink: #16240a;
+    --danger: #d3552e;
+    --ok: #3fae5a;
+    --radius: 12px;
+
+    --shell: #e7f4d3;
+    --note: #4a6b1f;
+    --note-bg: rgba(123, 195, 17, 0.09);
+    --new-bg: rgba(123, 195, 17, 0.16);
+    --shadow: 0 1px 2px rgba(30, 43, 18, 0.06), 0 8px 24px rgba(30, 43, 18, 0.05);
+
+    --brand: 'Bitcount Prop Single', 'Cascadia Code', Consolas, monospace;
+    --body: 'Jost', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Code', Consolas, 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  :root:not([data-theme="light"]) {
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15171a;
+      --panel: #1d2023;
+      --panel-raised: #242830;
+      --border: #30343a;
+      --text: #edeff1;
+      --text-soft: #9aa0a8;
+      --accent: #c6f135;
+      --accent-dim: #7c9421;
+      --accent-ink: #16240a;
+      --danger: #e2543a;
+      --ok: #4ade80;
+      --radius: 9px;
+
+      --shell: #101215;
+      --note: #b8d96a;
+      --note-bg: rgba(198, 241, 53, 0.07);
+      --new-bg: rgba(198, 241, 53, 0.14);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #15171a;
+    --panel: #1d2023;
+    --panel-raised: #242830;
+    --border: #30343a;
+    --text: #edeff1;
+    --text-soft: #9aa0a8;
+    --accent: #c6f135;
+    --accent-dim: #7c9421;
+    --accent-ink: #16240a;
+    --danger: #e2543a;
+    --ok: #4ade80;
+    --radius: 9px;
+
+    --shell: #101215;
+    --note: #b8d96a;
+    --note-bg: rgba(198, 241, 53, 0.07);
+    --new-bg: rgba(198, 241, 53, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--shell);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 34px;
+  }
+
+  /* ---------- page head ---------- */
+  .masthead { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+  }
+  h1 {
+    font-family: var(--brand);
+    font-weight: 700;
+    font-size: clamp(26px, 4vw, 38px);
+    letter-spacing: 0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lede { max-width: 62ch; color: var(--text-soft); font-size: 16px; }
+  .lede strong { color: var(--text); font-weight: 500; }
+
+  /* ---------- frame switcher ---------- */
+  .switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    align-self: flex-start;
+  }
+  .switch button {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-soft);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 7px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .switch button:hover { color: var(--text); background: var(--panel-raised); }
+  .switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .switch button[aria-selected="true"] {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: var(--accent-dim);
+  }
+  .switch .n { opacity: 0.6; }
+  .switch button[aria-selected="true"] .n { opacity: 0.75; }
+
+  /* ---------- app shell ---------- */
+  .frame { display: none; flex-direction: column; gap: 18px; }
+  .frame.on { display: flex; }
+
+  .app {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .mark { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); flex: none; }
+  .wordmark { font-family: var(--brand); font-size: 15px; letter-spacing: 0.03em; }
+  .dots { margin-left: auto; display: flex; gap: 6px; }
+  .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--border); display: block; }
+
+  .body-grid { display: grid; grid-template-columns: 168px 1fr 292px; min-height: 470px; }
+  @media (max-width: 900px) { .body-grid { grid-template-columns: 1fr; } .rail, .aside { display: none; } }
+
+  .rail { border-right: 1px solid var(--border); padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .rail h4, .aside h4 {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--text-soft); font-weight: 400; margin: 0 0 8px 2px;
+  }
+  .sess { font-size: 13px; padding: 6px 8px; border-radius: 7px; color: var(--text-soft); }
+  .sess.on { background: var(--panel); color: var(--text); border-left: 2px solid var(--accent); }
+
+  .main { padding: 0; display: flex; flex-direction: column; min-width: 0; }
+  .tabs {
+    display: flex; gap: 2px; padding: 9px 14px; border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .tab {
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; color: var(--text-soft);
+    border: 1px solid transparent;
+  }
+  .tab.on { color: var(--text); background: var(--panel); border-color: var(--border); }
+  .tab.new { color: var(--accent-dim); background: var(--new-bg); border-color: var(--accent-dim); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tab.new { color: var(--accent); } }
+  :root[data-theme="dark"] .tab.new { color: var(--accent); }
+  .tab-note { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--text-soft); }
+
+  .stage { padding: 16px; flex: 1; min-width: 0; }
+
+  .aside { border-left: 1px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .aside-title {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-soft); text-align: center;
+  }
+
+  /* ---------- shared bits ---------- */
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--text-soft); }
+  .tiny { font-size: 12px; }
+  .mono { font-family: var(--mono); }
+
+  .btn {
+    font-family: var(--body); font-size: 12px; padding: 6px 11px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text-soft);
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-dim); font-weight: 500; }
+  .btn.wide { display: block; width: 100%; text-align: center; padding: 9px; }
+
+  .field {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 10px; font-size: 13px; color: var(--text-soft); line-height: 1.5;
+  }
+  .field .ph { color: var(--text-soft); opacity: 0.75; }
+
+  .label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-soft);
+  }
+
+  /* asset thumbs — flat colour blocks standing in for real renders */
+  .thumb {
+    border-radius: 8px; border: 1px solid var(--border); position: relative; overflow: hidden;
+    aspect-ratio: 3 / 4; display: flex; align-items: flex-end; padding: 6px;
+    font-family: var(--mono); font-size: 9px; color: #f4f6ee; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+  .thumb.wide { aspect-ratio: 16 / 9; }
+  .t-paladin { background: linear-gradient(150deg, #7a5a2a, #c8a04e 60%, #3d2c14); }
+  .t-rogue   { background: linear-gradient(150deg, #1d3140, #2f6076 60%, #101c24); }
+  .t-chapel  { background: linear-gradient(150deg, #4a3f6b, #8d7fb8 55%, #221d33); }
+  .t-forge   { background: linear-gradient(150deg, #5c2a1c, #b4552c 60%, #2a130c); }
+  .t-prop    { background: linear-gradient(150deg, #2f4a2a, #6d9a45 60%, #16240a); }
+  .t-voice   { background: linear-gradient(150deg, #3a3a44, #6b6b7e 60%, #1c1c22); }
+
+  .star { position: absolute; top: 5px; right: 6px; font-size: 11px; color: var(--accent); text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+  .kindtag {
+    position: absolute; top: 5px; left: 6px; font-family: var(--mono); font-size: 8px;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 5px; border-radius: 4px;
+    background: rgba(0,0,0,0.55); color: #eef3e4;
+  }
+
+  /* annotation strip under each frame */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr)); gap: 12px; }
+  .note {
+    border-left: 2px solid var(--accent); background: var(--note-bg);
+    padding: 10px 12px; border-radius: 0 8px 8px 0;
+  }
+  .note b { display: block; font-size: 13px; margin-bottom: 3px; color: var(--text); font-weight: 600; }
+  .note span { font-size: 13px; color: var(--text-soft); }
+  .note.exists { border-left-color: var(--text-soft); background: transparent; }
+
+  .caption { font-size: 14px; color: var(--text-soft); max-width: 70ch; }
+  .caption b { color: var(--text); font-weight: 500; }
+
+  footer {
+    border-top: 1px solid var(--border); padding-top: 18px; color: var(--text-soft);
+    font-size: 13px; display: flex; flex-direction: column; gap: 6px;
+  }
+  footer code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .frame.on { animation: rise 0.22s ease-out; }
+    @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">Lyme Hype · concept · 2026-09-01</div>
+    <h1>Asset Library &amp; Sheets</h1>
+    <p class="lede">Five screens for the character/location pipeline, drawn inside the app shell you already have and using
+      <strong>theme.css</strong>'s own tokens. Assets are the real ones from <strong>Wow Generations</strong>.
+      Green markers are new surfaces; grey markers are things that already exist and get reused.</p>
+  </header>
+
+  <nav class="switch" role="tablist" aria-label="Mockup screens">
+    <button role="tab" aria-selected="true" data-f="lib"><span class="n">01</span> Library</button>
+    <button role="tab" aria-selected="false" data-f="char"><span class="n">02</span> Character sheet</button>
+    <button role="tab" aria-selected="false" data-f="loc"><span class="n">03</span> Location sheet</button>
+    <button role="tab" aria-selected="false" data-f="tag"><span class="n">04</span> @ references</button>
+    <button role="tab" aria-selected="false" data-f="scene"><span class="n">05</span> Scene composer</button>
+  </nav>
+
+  <!-- ============ 01 LIBRARY ============ -->
+  <section class="frame on" id="f-lib">
+    <p class="caption"><b>The Library is a fourth tab, not a Settings page.</b> Trained styles live in Settings because they're
+      configuration; this is working material you open fifty times a session.</p>
+
+    <div class="app">
+      <div class="titlebar"><span class="mark"></span><span class="wordmark">lyme hype</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="body-grid">
+        <div class="rail">
+          <h4>Sessions</h4>
+          <div class="sess on">Wow Generations</div>
+          <div class="sess">R-001 · Untitled</div>
+        </div>
+
+        <div class="main">
+          <div class="tabs">
+            <span class="tab">Canvas</span><span class="tab">Storyboard</span><span class="tab">Scripting</span>
+            <span class="tab new">Library</span>
+            <span class="tab-note">shared across every project</span>
+          </div>
+          <div class="stage">
+            <div class="row" style="margin-bottom:12px">
+              <span class="btn primary">All 14</span><span class="btn">Characters 3</span><span class="btn">Locations 2</span>
+              <span class="btn">Props 5</span><span class="btn">Voices 3</span><span class="btn">Styles 1</span>
+              <span class="btn" style="margin-left:auto">★ Favorites</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px">
+              <div>
+                <div class="thumb t-paladin"><span class="kindtag">Character</span><span class="star">★</span>Bront · sheet</div>
+                <div class="tiny mono muted" style="margin-top:4px">8 cells</div>
+              </div>
+              <div>
+                <div class="thumb t-rogue"><span class="kindtag">Character</span><span class="star">★</span>Sylvie · sheet</div>
+                <div class="tiny mono muted" style="margin-top:4px">8 cells</div>
+              </div>
+              <div>
+                <div class="thumb t-chapel"><span class="kindtag">Location</span><span class="star">★</span>Silver Chapel</div>
+                <div class="tiny mono muted" style="margin-top:4px">4 views</div>
+              </div>
+              <div>
+                <div class="thumb t-forge"><span class="kindtag">Location</span>The Forge</div>
+                <div class="tiny mono muted" style="margin-top:4px">3 views</div>
+              </div>
+              <div>
+                <div class="thumb t-prop"><span class="kindtag">Prop</span>Warhammer</div>
+                <div class="tiny mono muted" style="margin-top:4px">from Bront</div>
+              </div>
+              <div>
+                <div class="thumb t-voice"><span class="kindtag">Voice</span>Bront · gravel</div>
+                <div class="tiny mono muted" style="margin-top:4px">ElevenLabs</div>
+              </div>
+            </div>
+
+            <div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel)">
+              <div class="label" style="margin-bottom:6px">Lineage — Warhammer</div>
+              <div class="tiny mono muted">Bront · sheet &nbsp;→&nbsp; Warhammer &nbsp;→&nbsp; 6 scenes</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside">
+          <div class="aside-title">Create</div>
+          <div class="field" style="text-align:center;padding:16px 10px"><div class="label">New</div>
+            <div class="tiny" style="margin-top:6px">Character sheet</div></div>
+          <div class="field" style="text-align:center;padding:16px 10px"><div class="label">New</div>
+            <div class="tiny" style="margin-top:6px">Location sheet</div></div>
+          <div class="field" style="text-align:center;padding:16px 10px;opacity:0.6"><div class="tiny">Generate image</div></div>
+          <div class="field" style="text-align:center;padding:16px 10px;opacity:0.6"><div class="tiny">Generate video</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><b>One typed store</b><span>Characters, locations, props, voices and styles in a single list with kind filters — not four separate features.</span></div>
+      <div class="note"><b>Lineage is recorded</b><span><span class="mono">derivedFrom</span> shows the warhammer descended from Bront's sheet. Change the sheet, and you can see what inherits.</span></div>
+      <div class="note exists"><b>Reuses: Trained styles</b><span>Same workspace-level storage pattern, moved out of Settings into a working surface.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 02 CHARACTER SHEET ============ -->
+  <section class="frame" id="f-char">
+    <p class="caption"><b>Two decisions and a grid — one screen, not a six-stage wizard.</b> Motion graphics earns its stages because each
+      feeds the next. This doesn't.</p>
+
+    <div class="app">
+      <div class="titlebar"><span class="mark"></span><span class="wordmark">lyme hype</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="body-grid">
+        <div class="rail">
+          <h4>Sessions</h4>
+          <div class="sess on">Wow Generations</div>
+        </div>
+
+        <div class="main">
+          <div class="tabs">
+            <span class="tab on">Canvas</span><span class="tab">Storyboard</span><span class="tab">Scripting</span><span class="tab new">Library</span>
+          </div>
+          <div class="stage">
+            <div class="label" style="margin-bottom:8px">Casting grid · pick the face of the show</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              <div class="thumb t-paladin">v1</div>
+              <div class="thumb t-paladin" style="outline:2px solid var(--accent);outline-offset:2px">v2 ✓</div>
+              <div class="thumb t-paladin">v3</div>
+              <div class="thumb t-paladin">v4</div>
+            </div>
+            <div style="margin-top:14px;padding:11px 12px;border:1px solid var(--accent-dim);border-radius:8px;background:var(--new-bg)">
+              <b style="font-size:13px">Fix the design now</b>
+              <div class="tiny muted" style="margin-top:3px">Last cheap moment to change the shield crest, the beard, the armour trim.
+                After this, twenty scenes reference it.</div>
+              <div class="row" style="margin-top:8px"><span class="btn">Adjust &amp; re-run</span><span class="btn primary">Approve → build sheet</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside">
+          <div class="aside-title">Character sheet</div>
+
+          <div>
+            <div class="label" style="margin-bottom:5px">Who — the likeness</div>
+            <div class="row">
+              <div class="thumb t-paladin" style="width:44px;aspect-ratio:1"></div>
+              <div class="thumb t-paladin" style="width:44px;aspect-ratio:1"></div>
+              <span class="btn">+ add</span>
+            </div>
+            <div class="tiny mono muted" style="margin-top:4px">→ characterReferencePaths</div>
+          </div>
+
+          <div>
+            <div class="label" style="margin-bottom:5px">How — the look</div>
+            <div class="row">
+              <div class="thumb t-chapel" style="width:44px;aspect-ratio:1"></div>
+              <span class="tiny muted">Painterly WoW · style asset</span>
+            </div>
+            <div class="tiny mono muted" style="margin-top:4px">→ styleReferencePaths</div>
+          </div>
+
+          <div>
+            <div class="label" style="margin-bottom:5px">Lock list</div>
+            <div class="field">Braided copper beard, silver-and-gold plate, crest of the Silver Hand on the pauldron,
+              amber eyes, warhammer on the back.</div>
+            <div class="tiny muted" style="margin-top:4px">Anything left out gets invented.</div>
+          </div>
+
+          <div>
+            <div class="label" style="margin-bottom:5px">Sheet cells</div>
+            <div class="row tiny">
+              <span class="btn primary">Front</span><span class="btn primary">¾</span><span class="btn primary">Profile</span>
+              <span class="btn primary">Back</span><span class="btn">Neutral</span><span class="btn">Angry</span><span class="btn">Grin</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><b>Who vs how is already real</b><span>The app has <span class="mono">characterReferencePaths</span> and <span class="mono">styleReferencePaths</span> today. This screen is the missing UI, not new plumbing.</span></div>
+      <div class="note"><b>An explicit "fix it now" step</b><span>The one interaction worth insisting on — the tutorial is emphatic that this is the last cheap moment.</span></div>
+      <div class="note exists"><b>Reuses: BatchResultsGrid</b><span>The casting grid is the compare-and-pick component the Motion graphics batch stage already uses.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 03 LOCATION SHEET ============ -->
+  <section class="frame" id="f-loc">
+    <p class="caption"><b>Same screen, different defaults</b> — plus an escape hatch, so nobody builds a location sheet for a shot they use once.</p>
+
+    <div class="app">
+      <div class="titlebar"><span class="mark"></span><span class="wordmark">lyme hype</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="body-grid">
+        <div class="rail"><h4>Sessions</h4><div class="sess on">Wow Generations</div></div>
+
+        <div class="main">
+          <div class="tabs"><span class="tab on">Canvas</span><span class="tab">Storyboard</span><span class="tab">Scripting</span><span class="tab new">Library</span></div>
+          <div class="stage">
+            <div class="label" style="margin-bottom:8px">Silver Chapel · master + views</div>
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
+              <div class="thumb t-chapel wide" style="aspect-ratio:16/10">Master</div>
+              <div class="thumb t-chapel wide" style="aspect-ratio:4/3">View 1 · altar</div>
+              <div class="thumb t-chapel wide" style="aspect-ratio:4/3">View 2 · window</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+              <div class="thumb t-chapel wide" style="aspect-ratio:4/3">View 3 · high angle</div>
+              <div class="thumb t-chapel wide" style="aspect-ratio:4/3">View 4 · floor level</div>
+              <div class="field" style="display:flex;align-items:center;justify-content:center;text-align:center">
+                <span class="tiny">+ another view</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside">
+          <div class="aside-title">Location sheet</div>
+          <div>
+            <div class="label" style="margin-bottom:5px">Visual language from</div>
+            <div class="row"><div class="thumb t-paladin" style="width:44px;aspect-ratio:1"></div><span class="tiny muted">Bront · sheet</span></div>
+            <div class="tiny mono muted" style="margin-top:4px">→ styleReferencePaths</div>
+          </div>
+          <div>
+            <div class="label" style="margin-bottom:5px">The place</div>
+            <div class="field">A cold stone chapel, tall stained glass throwing coloured light across the flagstones, candle banks
+              at the altar, banners of the Silver Hand.</div>
+          </div>
+          <div>
+            <div class="label" style="margin-bottom:5px">Views to generate</div>
+            <div class="row tiny">
+              <span class="btn primary">Toward subject</span><span class="btn primary">Toward window</span>
+              <span class="btn primary">High angle</span><span class="btn primary">Floor level</span>
+            </div>
+          </div>
+          <span class="btn primary wide">Generate 4 views</span>
+          <div style="border-top:1px solid var(--border);padding-top:10px">
+            <div class="tiny muted" style="margin-bottom:6px">Only need it once?</div>
+            <span class="btn wide">One-off cutaway — skip the sheet</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><b>Views are reusable shots</b><span>Four presets from the tutorial — toward subject, toward the light, high, floor — plus free-form. Each becomes a taggable reference.</span></div>
+      <div class="note"><b>The escape hatch is a button</b><span>Without it people build sheets for one-off shots and the library fills with things used once.</span></div>
+      <div class="note exists"><b>Reuses: the sheet screen</b><span>Same component as 02 with <span class="mono">kind: 'location'</span>; only the presets and labels change.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 04 @ TAGGING ============ -->
+  <section class="frame" id="f-tag">
+    <p class="caption"><b>The one to build first.</b> It's the step the tutorial calls out as most commonly botched, and it improves every
+      prompt box in the app — not just this pipeline.</p>
+
+    <div class="app">
+      <div class="titlebar"><span class="mark"></span><span class="wordmark">lyme hype</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="body-grid">
+        <div class="rail"><h4>Sessions</h4><div class="sess on">Wow Generations</div></div>
+
+        <div class="main">
+          <div class="tabs"><span class="tab on">Canvas</span><span class="tab">Storyboard</span><span class="tab">Scripting</span><span class="tab new">Library</span></div>
+          <div class="stage">
+            <div class="label" style="margin-bottom:6px">Prompt</div>
+            <div class="field" style="font-size:14px;line-height:1.9;color:var(--text)">
+              <span class="chip" data-k="character">@Bront</span> kneels at the altar in
+              <span class="chip" data-k="location">@SilverChapel · view 1</span>, helmet under one arm, candlelight on the plate.
+              <span class="ph">|</span>
+            </div>
+
+            <div style="margin-top:10px;border:1px solid var(--accent-dim);border-radius:8px;overflow:hidden">
+              <div class="label" style="padding:7px 10px;background:var(--new-bg)">Picker — typing “@” opens the library</div>
+              <div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px">
+                <div class="row"><div class="thumb t-paladin" style="width:26px;aspect-ratio:1"></div><span class="tiny">Bront · character sheet</span><span class="tiny mono muted" style="margin-left:auto">character</span></div>
+                <div class="row"><div class="thumb t-rogue" style="width:26px;aspect-ratio:1"></div><span class="tiny">Sylvie · character sheet</span><span class="tiny mono muted" style="margin-left:auto">character</span></div>
+                <div class="row"><div class="thumb t-chapel" style="width:26px;aspect-ratio:1"></div><span class="tiny">Silver Chapel · view 1</span><span class="tiny mono muted" style="margin-left:auto">location</span></div>
+                <div class="row"><div class="thumb t-voice" style="width:26px;aspect-ratio:1"></div><span class="tiny">Bront · gravel baritone</span><span class="tiny mono muted" style="margin-left:auto">voice</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside">
+          <div class="aside-title">What the call becomes</div>
+          <div class="field mono tiny" style="line-height:1.8;color:var(--text)">
+            characterReferencePaths: [<br>&nbsp;&nbsp;bront/front.png,<br>&nbsp;&nbsp;bront/three-quarter.png<br>]<br><br>
+            referenceImagePaths: [<br>&nbsp;&nbsp;chapel/view-1.png<br>]<br><br>
+            styleReferencePaths: [<br>&nbsp;&nbsp;painterly-wow.png<br>]
+          </div>
+          <div class="tiny muted">Each chip binds to the role its kind implies. You write a sentence; the app assembles a
+            correctly-typed multi-reference call underneath.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><b>Chips carry a role, not just a path</b><span>A character chip means “preserve this likeness”; a style chip means “match the look, not the content”. Both are existing fields.</span></div>
+      <div class="note"><b>Dialogue gets tagged too</b><span>A line followed by a voice chip. Skip it and a multi-character scene starts mixing voices halfway through.</span></div>
+      <div class="note"><b>Every prompt box benefits</b><span>Image, video, motion graphics, scripting — the picker is one component reused everywhere.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ 05 SCENE COMPOSER ============ -->
+  <section class="frame" id="f-scene">
+    <p class="caption"><b>Beats are objects, so any one of them can be re-run alone.</b> That's what turns “swap one thing instead of
+      starting over” from advice into a button.</p>
+
+    <div class="app">
+      <div class="titlebar"><span class="mark"></span><span class="wordmark">lyme hype</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="body-grid">
+        <div class="rail"><h4>Sessions</h4><div class="sess on">Wow Generations</div></div>
+
+        <div class="main">
+          <div class="tabs"><span class="tab">Canvas</span><span class="tab">Storyboard</span><span class="tab on">Scripting</span><span class="tab new">Library</span>
+            <span class="tab-note">scene composer lives here</span></div>
+          <div class="stage">
+            <div class="row" style="margin-bottom:10px">
+              <span class="label">Cast</span>
+              <span class="chip" data-k="character">@Bront</span>
+              <span class="chip" data-k="location">@SilverChapel · view 1</span>
+              <span class="chip" data-k="voice">@Bront/voice</span>
+              <span class="btn" style="margin-left:auto">15s ▾</span>
+            </div>
+            <div class="field" style="margin-bottom:12px;color:var(--text)">He kneels to pray, and the candles gutter as something moves behind him.</div>
+
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div class="beat">
+                <span class="bt mono">0–2s</span>
+                <span class="bd">Wide on the altar. <span class="chip" data-k="character">@Bront</span> walks into frame, sets the helmet down.</span>
+                <span class="btn">↻</span>
+              </div>
+              <div class="beat">
+                <span class="bt mono">2–6s</span>
+                <span class="bd">Push in to a medium. He kneels. “Light guide my hand.” <span class="chip" data-k="voice">@Bront/voice</span></span>
+                <span class="btn">↻</span>
+              </div>
+              <div class="beat" style="border-color:var(--accent-dim);background:var(--new-bg)">
+                <span class="bt mono">6–11s</span>
+                <span class="bd">Candles gutter. Rack focus past his shoulder to the dark of the nave.</span>
+                <span class="btn primary">↻ regenerate</span>
+              </div>
+              <div class="beat">
+                <span class="bt mono">11–15s</span>
+                <span class="bd">Cut to <span class="chip" data-k="location">@SilverChapel · view 3</span>, high angle. He is alone.</span>
+                <span class="btn">↻</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="aside">
+          <div class="aside-title">Beat 3</div>
+          <div class="thumb t-chapel wide"></div>
+          <div class="row"><span class="btn">Swap reference</span><span class="btn">Trim head/tail</span></div>
+          <div class="tiny muted">Regenerating one beat leaves the other three untouched — same references, same world.</div>
+          <span class="btn primary wide">Send scene to timeline</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><b>Timestamped beats, already proven</b><span>Two independent tutorials converged on 2-second beats, and the Motion graphics animate stage already emits that format. Generalise it, don't rebuild it.</span></div>
+      <div class="note"><b>Per-beat regeneration</b><span>The difference between a demo and a pipeline: fix beat 3 without paying for beats 1, 2 and 4 again.</span></div>
+      <div class="note exists"><b>Reuses: Scripting + Play view</b><span>Multi-turn conversation with vision input already lives here; trim already exists in Play view.</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>Tokens taken from <code>src/renderer/src/styles/theme.css</code> — Zest in light, Lime Cut in dark. Spec: <code>docs/ui/character-sheets-and-assets.md</code></div>
+    <div>Flat colour blocks stand in for real renders; every asset name is from the live Wow Generations project.</div>
+  </footer>
+</div>
+
+<style>
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 5px;
+    border: 1px solid var(--accent-dim); background: var(--new-bg); color: var(--text);
+    white-space: nowrap;
+  }
+  .chip[data-k="location"] { border-color: var(--text-soft); background: transparent; }
+  .chip[data-k="voice"] { border-style: dashed; }
+
+  .beat {
+    display: flex; align-items: flex-start; gap: 10px;
+    border: 1px solid var(--border); background: var(--panel);
+    border-radius: 8px; padding: 9px 10px;
+  }
+  .beat .bt { font-size: 11px; color: var(--text-soft); flex: none; width: 52px; padding-top: 2px; font-variant-numeric: tabular-nums; }
+  .beat .bd { font-size: 13px; line-height: 1.6; flex: 1; min-width: 0; }
+  .beat .btn { flex: none; }
+</style>
+
+<script>
+  const buttons = document.querySelectorAll('.switch button');
+  const frames = document.querySelectorAll('.frame');
+  buttons.forEach((b) => {
+    b.addEventListener('click', () => {
+      buttons.forEach((o) => o.setAttribute('aria-selected', String(o === b)));
+      frames.forEach((f) => f.classList.toggle('on', f.id === 'f-' + b.dataset.f));
+    });
+  });
+</script>

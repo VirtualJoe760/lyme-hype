@@ -71,6 +71,10 @@ const YAPPER_REST_LABEL = 'API key (yap_live_…)'
 
 export function ConnectorsTab(): React.JSX.Element {
   const [connectors, setConnectors] = useState<ConnectorView[]>([])
+  // A connector with no credential is added, not connected — the tiles used to
+  // claim "installed"/"Added" either way, which is exactly how a vault this
+  // profile could not decrypt still looked like a configured app.
+  const credentialed = new Set(connectors.filter((c) => c.hasCredential).map((c) => c.id))
   const [suggestions, setSuggestions] = useState<ConnectorSuggestion[]>([])
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState<DraftConnector>(EMPTY_DRAFT)
@@ -287,7 +291,11 @@ export function ConnectorsTab(): React.JSX.Element {
               style={{ background: TILE_GRADIENT[s.id] ?? 'linear-gradient(135deg, #3d4a1f, #97b73e)' }}
             >
               <span className="tile-mark">{tileMark(s.name)}</span>
-              {s.installed && <span className="tile-badge">✓ installed</span>}
+              {s.installed && (
+                <span className={`tile-badge${credentialed.has(s.id) ? '' : ' needs-key'}`}>
+                  {credentialed.has(s.id) ? '✓ ready' : '! needs key'}
+                </span>
+              )}
             </div>
             <div className="tile-body">
               <div className="tile-name">
@@ -304,7 +312,13 @@ export function ConnectorsTab(): React.JSX.Element {
                 ↗ Setup page
               </Button>
               {s.installed ? (
-                <StatusChip kind="ok">✓ Added</StatusChip>
+                credentialed.has(s.id) ? (
+                  <StatusChip kind="ok">✓ Ready</StatusChip>
+                ) : (
+                  // "Added" on a connector with no usable key reads as
+                  // "connected" and hides the one thing left to do.
+                  <StatusChip>Needs key</StatusChip>
+                )
               ) : s.available ? (
                 <Button variant="mini-primary" onClick={() => void addSuggestion(s)}>
                   + Add

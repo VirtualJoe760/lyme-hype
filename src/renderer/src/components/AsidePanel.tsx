@@ -1,6 +1,7 @@
+import type { MediaType } from '@shared/types'
 import { useEffect, useState } from 'react'
 import { findManifest } from '@shared/node-manifest'
-import type { ConnectorView, TrainedStyle } from '@shared/types'
+import type { ConnectorView, GenerationRecord, TrainedStyle } from '@shared/types'
 import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { ChatRealtyPull } from './ChatRealtyPull'
@@ -27,6 +28,7 @@ type Screen =
   | 'link'
   | 'motion'
   | 'pull'
+  | 'recover'
 
 const TILES: { key: Screen; glyph: string; label: string; blurb: string }[] = [
   { key: 'video', glyph: '▶', label: 'Generate video', blurb: 'Prompt → video via the connected tools' },
@@ -38,7 +40,8 @@ const TILES: { key: Screen; glyph: string; label: string; blurb: string }[] = [
   { key: 'deepfake', glyph: '☺', label: 'Deepfake', blurb: 'Reference person → speech → lip-sync/face' },
   { key: 'upload', glyph: '↑', label: 'Upload', blurb: 'A file from this machine' },
   { key: 'link', glyph: '⛓', label: 'Link', blurb: 'Download a direct media URL' },
-  { key: 'pull', glyph: '⌂', label: 'Listing photos', blurb: 'Pull real MLS photos (ChatRealty)' }
+  { key: 'pull', glyph: '⌂', label: 'Listing photos', blurb: 'Pull real MLS photos (ChatRealty)' },
+  { key: 'recover', glyph: '⟲', label: 'Recent generations', blurb: 'Every render this app made — put one back on the canvas' }
 ]
 
 const SCREEN_TITLES: Record<Screen, string> = {
@@ -52,7 +55,8 @@ const SCREEN_TITLES: Record<Screen, string> = {
   upload: 'Upload',
   link: 'Link',
   motion: 'Motion graphics',
-  pull: 'Listing photos'
+  pull: 'Listing photos',
+  recover: 'Recent generations'
 }
 
 /** Which connectors make a tile ready (ANY of them satisfies) and how to name
@@ -236,6 +240,71 @@ function UploadScreen(props: { done: () => void }): React.JSX.Element {
   )
 }
 
+/**
+ * Every render the app has produced, newest first — the recovery path for
+ * results whose renderer died before they landed (a dev reload, a crash, a
+ * closed window) and for MCP-driven generations, which never had a canvas node
+ * to begin with. The ledger lives main-side (generation-log.ts), so it survives
+ * anything that happens to this window.
+ */
+function RecoverScreen(props: { done: () => void }): React.JSX.Element {
+  const addNode = useStudio((s) => s.addNode)
+  const nodes = useStudio((s) => s.nodes)
+  const [records, setRecords] = useState<GenerationRecord[] | null>(null)
+
+  useEffect(() => {
+    void bridge.sessions.recentGenerations().then((r) => setRecords(r ?? []))
+  }, [])
+
+  if (records === null) return <div className="aside-help">Reading the generation log…</div>
+  if (records.length === 0) {
+    return <div className="aside-help">No generations logged yet. Anything you render shows up here.</div>
+  }
+
+  const onCanvas = new Set(nodes.map((n) => n.data.src).filter(Boolean))
+
+  return (
+    <div className="recover-list">
+      <div className="aside-help">
+        Newest first. Ones already on this canvas are marked — the rest are safe to bring back.
+      </div>
+      {records.map((r) => (
+        <button
+          key={r.id}
+          className={`recover-item${onCanvas.has(r.src) ? ' on-canvas' : ''}`}
+          title={r.prompt}
+          onClick={() => {
+            addNode({
+              label: `${r.mediaType}_${r.id.slice(-4)}`,
+              mediaType: r.mediaType,
+              source: 'generate',
+              src: r.src
+            })
+            props.done()
+          }}
+        >
+          <span className="recover-thumb">
+            {r.mediaType === 'image' ? (
+              <img src={r.thumbSrc ?? r.src} alt="" />
+            ) : r.mediaType === 'video' ? (
+              <video src={r.src} muted preload="metadata" />
+            ) : (
+              <span className="recover-glyph">♪</span>
+            )}
+          </span>
+          <span className="recover-meta">
+            <b>{r.prompt.slice(0, 70) || r.mediaType}</b>
+            <em>
+              {new Date(r.at).toLocaleString()} · {r.note ?? r.mediaType}
+              {onCanvas.has(r.src) ? ' · on canvas' : ''}
+            </em>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function LinkScreen(props: { done: () => void }): React.JSX.Element {
   const addNode = useStudio((s) => s.addNode)
   const [link, setLink] = useState('')
@@ -285,7 +354,29 @@ function LinkScreen(props: { done: () => void }): React.JSX.Element {
   )
 }
 
+/** What dropping a node of `kind` on a tile means — mirrors the node toolbar's
+ *  img2img / → video / extend buttons. Null = this tile does not take that media.
+ *  While dragging, Chromium hides the payload's VALUES, so `dragKind` may be
+ *  unknown; the tile then accepts on hope and the drop handler decides. */
+function tileDropRole(tileKey: string, kind: MediaType | undefined): { role: string; toolId?: string } | null {
+  if (tileKey === 'image') {
+    return kind === undefined || kind === 'image' ? { role: 'refs' } : null
+  }
+  if (tileKey === 'video') {
+    if (kind === undefined || kind === 'image') return { role: 'startFrame' }
+    if (kind === 'video') return { role: 'take', toolId: 'extend' }
+  }
+  return null
+}
+
+function dragKind(e: React.DragEvent): MediaType | undefined {
+  const k = e.dataTransfer.getData('application/lyme-node-type')
+  return k === 'image' || k === 'video' || k === 'audio' ? k : undefined
+}
+
 export function AsidePanel(): React.JSX.Element {
+  const openNodeScreenWith = useStudio((s) => s.openNodeScreenWith)
+  const nodes = useStudio((s) => s.nodes)
   const collapsed = useStudio((s) => s.asideCollapsed)
   const toggle = useStudio((s) => s.toggleAside)
   const width = useStudio((s) => s.asideWidth)
@@ -355,6 +446,32 @@ export function AsidePanel(): React.JSX.Element {
                       : `${tile.blurb} — connect any of: ${state.options}`
                   }
                   onClick={() => setScreen(tile.key)}
+                  // A node dropped on a tile opens that screen with the media
+                  // already in the right slot: image → Generate image = img2img
+                  // reference; image → Generate video = start frame; video →
+                  // Generate video = extend. Same payload the ⣿ grip sends.
+                  onDragOver={(e) => {
+                    if (!e.dataTransfer.types.includes('application/lyme-node')) return
+                    if (tileDropRole(tile.key, dragKind(e)) === null) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'link'
+                  }}
+                  onDrop={(e) => {
+                    const nodeId = e.dataTransfer.getData('application/lyme-node')
+                    const kind = e.dataTransfer.getData('application/lyme-node-type') as MediaType
+                    const handoff = tileDropRole(tile.key, kind)
+                    if (!nodeId || !handoff) return
+                    e.preventDefault()
+                    const node = nodes.find((n) => n.id === nodeId)
+                    if (!node?.data.src) return
+                    openNodeScreenWith(tile.key, {
+                      src: node.data.src,
+                      label: node.data.label,
+                      mediaType: kind,
+                      role: handoff.role,
+                      ...(handoff.toolId ? { toolId: handoff.toolId } : {})
+                    })
+                  }}
                 >
                   <span className={`create-tile-thumb sw${(index % 6) + 1}`}>
                     {tile.glyph}
@@ -394,6 +511,7 @@ export function AsidePanel(): React.JSX.Element {
         {screen === 'link' && <LinkScreen done={home} />}
         {screen === 'motion' && <MotionGraphicsWizard />}
         {screen === 'pull' && <ChatRealtyPull />}
+        {screen === 'recover' && <RecoverScreen done={home} />}
       </div>
     </div>
   )

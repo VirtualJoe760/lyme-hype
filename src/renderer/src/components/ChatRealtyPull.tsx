@@ -3,83 +3,25 @@ import { bridge } from '../bridge'
 import { useStudio } from '../store'
 import { Button } from './ui/Button'
 import type {
-  ChatRealtyArticleDraftInput,
   ChatRealtyCarouselSlideInput,
-  ChatRealtyLandingPageDraftInput
 } from '@shared/types'
+import { ListingContentDrafts } from './chat-realty/ListingContentDrafts'
+import {
+  SLIDE_KINDS,
+  emptyCarouselForm,
+  type ArticleCategory,
+  type LandingHeroType,
+  type PulledPhoto,
+  type SlideKind,
+  type TopListing
+} from './chat-realty/form-defs'
 
 type PullState = 'idle' | 'pulling' | 'done' | 'error'
 type CoverState = 'idle' | 'working' | 'done' | 'error'
-type SlideKind = ChatRealtyCarouselSlideInput['kind']
 type SlideState = 'idle' | 'working' | 'done' | 'error'
 type StageState = 'idle' | 'working' | 'done' | 'error'
-type ArticleCategory = ChatRealtyArticleDraftInput['category']
 type ArticleState = 'idle' | 'prefilling' | 'working' | 'done' | 'error'
-type LandingHeroType = NonNullable<ChatRealtyLandingPageDraftInput['heroType']>
 type LandingState = 'idle' | 'prefilling' | 'working' | 'done' | 'error'
-
-const ARTICLE_CATEGORIES: { id: ArticleCategory; label: string }[] = [
-  { id: 'market-insights', label: 'Market insights' },
-  { id: 'articles', label: 'Articles' },
-  { id: 'real-estate-tips', label: 'Real estate tips' }
-]
-
-const LANDING_HERO_TYPES: { id: LandingHeroType; label: string }[] = [
-  { id: 'photo', label: 'Hero: photo' },
-  { id: 'video', label: 'Hero: video' }
-]
-
-interface TopListing {
-  listingKey: string
-  address: string
-  city: string
-  detailUrl: string | null
-}
-
-const SLIDE_KINDS: { id: SlideKind; label: string }[] = [
-  { id: 'cma', label: 'CMA stats' },
-  { id: 'text', label: 'Text' },
-  { id: 'cta', label: 'Call to action' },
-  { id: 'banner', label: 'Banner (staged photo)' }
-]
-
-function emptyCarouselForm(): {
-  statLabels: string[]
-  statValues: string[]
-  listingPrice: string
-  scope: string
-  period: string
-  pitch: string
-  paragraph1: string
-  paragraph2: string
-  paragraph3: string
-  italicLast: boolean
-  bannerLabel: string
-  bannerCaption: string
-  bannerImageUrl: string
-} {
-  return {
-    statLabels: ['', '', '', ''],
-    statValues: ['', '', '', ''],
-    listingPrice: '',
-    scope: '',
-    period: '',
-    pitch: '',
-    paragraph1: '',
-    paragraph2: '',
-    paragraph3: '',
-    italicLast: false,
-    bannerLabel: '',
-    bannerCaption: '',
-    bannerImageUrl: ''
-  }
-}
-
-interface PulledPhoto {
-  src: string
-  label: string
-  photoIndex: number
-}
 
 export function ChatRealtyPull(): React.JSX.Element | null {
   const pull = useStudio((s) => s.pullChatRealtyPhotos)
@@ -630,135 +572,35 @@ export function ChatRealtyPull(): React.JSX.Element | null {
           {stageMessage && <div className={`cr-msg ${stageState}`}>{stageMessage}</div>}
         </div>
       )}
-      {topListing && (
-        <div className="cr-cover">
-          <p className="cr-help">
-            Draft a market-insight article on the agent&apos;s CMS for {topListing.address || 'this listing'}.
-            DRAFT only — publishing is a separate, deliberate step this app doesn&apos;t take.
-          </p>
-          <div className="cr-slide-kinds">
-            {ARTICLE_CATEGORIES.map((c) => (
-              <Button
-                key={c.id}
-                type="button"
-                variant={articleCategory === c.id ? 'mini-primary' : 'mini'}
-                onClick={() => setArticleCategory(c.id)}
-              >
-                {c.label}
-              </Button>
-            ))}
-          </div>
-          <input
-            className="link-input cr-input"
-            placeholder="Title (10-200 characters)"
-            value={articleTitle}
-            onChange={(e) => setArticleTitle(e.target.value)}
-            maxLength={200}
-          />
-          <input
-            className="link-input cr-input"
-            placeholder="Excerpt (optional, up to 300 characters)"
-            value={articleExcerpt}
-            onChange={(e) => setArticleExcerpt(e.target.value)}
-            maxLength={300}
-          />
-          <textarea
-            className="link-input cr-input cr-textarea"
-            placeholder="Content (MDX, at least 500 characters)"
-            value={articleContent}
-            onChange={(e) => setArticleContent(e.target.value)}
-            rows={6}
-          />
-          <Button
-            variant="mini"
-            type="button"
-            disabled={articleState === 'prefilling'}
-            onClick={() => void handlePrefillArticle()}
-          >
-            {articleState === 'prefilling' ? 'Fetching facts…' : '⌕ Prefill from listing facts'}
-          </Button>
-          <button
-            className="action-btn cr-btn"
-            disabled={
-              articleState === 'working' || !articleTitle.trim() || articleContent.trim().length < 500
-            }
-            onClick={() => void handleCreateArticle()}
-          >
-            {articleState === 'working'
-              ? 'Saving draft…'
-              : `✎ Save article draft (${articleContent.trim().length}/500 chars)`}
-          </button>
-          {articleMessage && <div className={`cr-msg ${articleState}`}>{articleMessage}</div>}
-        </div>
-      )}
-      {topListing && (
-        <div className="cr-cover">
-          <p className="cr-help">
-            Draft a lead-capture landing page on the agent&apos;s CMS for{' '}
-            {topListing.address || 'this listing'}. DRAFT only — publishing is a separate,
-            deliberate step this app doesn&apos;t take. Lead-form field/recipient configuration
-            isn&apos;t wired here — that sub-shape isn&apos;t documented at the field level, so
-            it&apos;s left for the CMS&apos;s own editor once the draft exists.
-          </p>
-          <input
-            className="link-input cr-input"
-            placeholder="Title"
-            value={landingTitle}
-            onChange={(e) => setLandingTitle(e.target.value)}
-          />
-          <textarea
-            className="link-input cr-input cr-textarea"
-            placeholder="Content (MDX, at least 500 characters)"
-            value={landingContent}
-            onChange={(e) => setLandingContent(e.target.value)}
-            rows={6}
-          />
-          <div className="cr-slide-kinds">
-            {LANDING_HERO_TYPES.map((h) => (
-              <Button
-                key={h.id}
-                type="button"
-                variant={landingHeroType === h.id ? 'mini-primary' : 'mini'}
-                onClick={() => setLandingHeroType(landingHeroType === h.id ? '' : h.id)}
-              >
-                {h.label}
-              </Button>
-            ))}
-          </div>
-          <input
-            className="link-input cr-input"
-            placeholder="YouTube URL (optional)"
-            value={landingYoutubeUrl}
-            onChange={(e) => setLandingYoutubeUrl(e.target.value)}
-          />
-          <input
-            className="link-input cr-input"
-            placeholder="Theme override (optional)"
-            value={landingThemeOverride}
-            onChange={(e) => setLandingThemeOverride(e.target.value)}
-          />
-          <Button
-            variant="mini"
-            type="button"
-            disabled={landingState === 'prefilling'}
-            onClick={() => void handlePrefillLandingPage()}
-          >
-            {landingState === 'prefilling' ? 'Fetching facts…' : '⌕ Prefill from listing facts'}
-          </Button>
-          <button
-            className="action-btn cr-btn"
-            disabled={
-              landingState === 'working' || !landingTitle.trim() || landingContent.trim().length < 500
-            }
-            onClick={() => void handleCreateLandingPage()}
-          >
-            {landingState === 'working'
-              ? 'Saving draft…'
-              : `⬈ Save landing page draft (${landingContent.trim().length}/500 chars)`}
-          </button>
-          {landingMessage && <div className={`cr-msg ${landingState}`}>{landingMessage}</div>}
-        </div>
-      )}
+      <ListingContentDrafts
+        topListing={topListing}
+        articleCategory={articleCategory}
+        setArticleCategory={setArticleCategory}
+        articleState={articleState}
+        articleMessage={articleMessage}
+        articleTitle={articleTitle}
+        setArticleTitle={setArticleTitle}
+        articleExcerpt={articleExcerpt}
+        setArticleExcerpt={setArticleExcerpt}
+        articleContent={articleContent}
+        setArticleContent={setArticleContent}
+        handlePrefillArticle={handlePrefillArticle}
+        handleCreateArticle={handleCreateArticle}
+        landingHeroType={landingHeroType}
+        setLandingHeroType={setLandingHeroType}
+        landingState={landingState}
+        landingMessage={landingMessage}
+        landingTitle={landingTitle}
+        setLandingTitle={setLandingTitle}
+        landingContent={landingContent}
+        setLandingContent={setLandingContent}
+        landingYoutubeUrl={landingYoutubeUrl}
+        setLandingYoutubeUrl={setLandingYoutubeUrl}
+        landingThemeOverride={landingThemeOverride}
+        setLandingThemeOverride={setLandingThemeOverride}
+        handlePrefillLandingPage={handlePrefillLandingPage}
+        handleCreateLandingPage={handleCreateLandingPage}
+      />
     </div>
   )
 }

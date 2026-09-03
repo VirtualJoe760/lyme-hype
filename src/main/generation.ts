@@ -1,4 +1,8 @@
 import { app } from 'electron'
+import { guardedGeneration } from './generation-guard'
+import { describeLlmCost, llmBilling } from './llm-billing'
+import { ensureComfyUI } from './comfyui-host'
+import { promptLanguageFor } from '@shared/model-catalog'
 import type { GenerationParams, GenerationResult } from '@shared/types'
 import {
   assetPathForUrl,
@@ -11,6 +15,7 @@ import { resolveClaudeAuthOverride } from './claude-auth'
 import { listConnectors, resolveHttpHeaders } from './connectors-store'
 import { readSecretValue } from './credential-vault'
 import { uploadLocalFileToFal } from './fal-training'
+import { recordGeneration } from './generation-log'
 import { resolveActiveProvider } from './model-providers'
 import { hasYapperRestKey, uploadLocalMediaToYapper } from './yapper-rest'
 
@@ -31,8 +36,10 @@ function loadSdk(): Promise<AgentSdk> {
 }
 
 // Generation (a tool call plus, for async services, a poll loop) is far slower
-// than a chat turn — give it real headroom.
-const GENERATION_TIMEOUT_MS = 300_000
+// than a chat turn — give it real headroom. 10 min, not 5: the local ComfyUI
+// engine may cold-boot the server AND load a 16GB checkpoint before its first
+// sample (observed >300s on the 3090 from cold; warm calls take seconds).
+const GENERATION_TIMEOUT_MS = 600_000
 // Caps only the *orchestration* LLM spend; the generation tool itself bills on
 // the connector's own account, outside the agent's cost accounting.
 const ORCHESTRATION_BUDGET_USD = 1.5
@@ -74,15 +81,49 @@ const DANGEROUS_TOOLS_BY_SERVER: Record<string, string[]> = {
   elevenlabs: ['make_outbound_call', 'create_agent', 'add_knowledge_base_to_agent']
 }
 
+/**
+ * The slice of this process's environment a spawned MCP server genuinely needs:
+ * an interpreter on PATH, a temp dir, and the Windows system roots. Everything
+ * else is weight in a config that has a hard size ceiling.
+ */
+const CHILD_ENV_KEYS = [
+  'PATH',
+  'Path',
+  'PATHEXT',
+  'SystemRoot',
+  'windir',
+  'ComSpec',
+  'SystemDrive',
+  'TEMP',
+  'TMP',
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'ProgramData',
+  'ProgramFiles',
+  'ProgramFiles(x86)',
+  'NUMBER_OF_PROCESSORS',
+  'LANG',
+  'LC_ALL'
+]
+
+function inheritedChildEnv(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const key of CHILD_ENV_KEYS) {
+    const value = process.env[key]
+    if (typeof value === 'string' && value.length > 0) env[key] = value
+  }
+  return env
+}
+
 async function buildMcpServers(restrictIds?: string[]): Promise<{
   servers: Record<string, McpServerConfig>
-  allowedTools: string[]
   disallowedTools: string[]
   attached: string[]
   skipped: string[]
 }> {
   const servers: Record<string, McpServerConfig> = {}
-  const allowedTools: string[] = []
   const disallowedTools: string[] = []
   const attached: string[] = []
   const skipped: string[] = []
@@ -101,8 +142,15 @@ async function buildMcpServers(restrictIds?: string[]): Promise<{
       // leaves the server with no PATH and nothing to resolve `npx`/`node` with —
       // mcp-client.ts merges process.env for exactly this reason, and generation
       // silently didn't, which is why no stdio connector ever attached.
+      //
+      // But copying ALL of process.env costs ~7 KB PER SERVER inside the config
+      // the SDK hands its subprocess, and Windows caps a command line at 32,767
+      // characters: four connectors fit, five did not, and generation started
+      // failing with `spawn ENAMETOOLONG` before a single network call (verified
+      // 2026-08-31). Only what a child actually needs to find its interpreter and
+      // its temp dir travels now.
       const env: Record<string, string> = {
-        ...(process.env as Record<string, string>),
+        ...inheritedChildEnv(),
         ...(def.env ?? {})
       }
       if (def.secretKey && token && def.authType !== 'oauth') env[def.secretKey] = token
@@ -120,16 +168,15 @@ async function buildMcpServers(restrictIds?: string[]): Promise<{
       skipped.push(def.id)
       continue
     }
-    // `mcp__<server>` allows every tool from that server and nothing else — the
-    // canUseTool backstop still hard-denies any non-MCP tool.
-    allowedTools.push(`mcp__${name}`)
+    // No allowedTools: bare `mcp__<server>` entries would pre-approve whole
+    // servers and shadow canUseTool (the strict per-server gate in runGeneration).
     for (const tool of DANGEROUS_TOOLS_BY_SERVER[def.id] ?? []) {
       disallowedTools.push(`mcp__${name}__${tool}`)
     }
     attached.push(def.id)
   }
 
-  return { servers, allowedTools, disallowedTools, attached, skipped }
+  return { servers, disallowedTools, attached, skipped }
 }
 
 function llmAuthEnv(): { env: Record<string, string> | null; model: string | undefined } {
@@ -157,6 +204,51 @@ function buildPrompt(params: GenerationParams): string {
   if (params.resolution) lines.push(`Resolution: ${params.resolution}.`)
   if (params.modelHint) {
     lines.push(`Model preference: use a ${params.modelHint} model if the connected tools offer one.`)
+  }
+  if (params.model) {
+    lines.push(
+      `Exact model REQUIRED: pass \`model: "${params.model}"\` to the generation tool's model parameter. If no connected tool accepts that model id, reply RESULT_ERROR rather than substituting a different model.`
+    )
+  }
+  // Chinese-origin models (Seedance/Seedream, Kling, Wan, Qwen, Hunyuan, Vidu…)
+  // follow Chinese prompts measurably better — they were captioned in Chinese.
+  // The orchestrating LLM does the translation; the user never sees Chinese.
+  if (promptLanguageFor(params.model) === 'zh') {
+    lines.push(
+      'PROMPT LANGUAGE: this model is Chinese-native. Translate the description above into natural Simplified Chinese — preserving cinematic intent, style terms, and any camera direction — and pass THE CHINESE TEXT as the tool\'s prompt parameter. If the tool errors on the non-ASCII text (an encoding/surrogate error), retry the SAME call once with the original English prompt instead of failing. Keep every other parameter and all of your own replies (including the RESULT_* line) in English.'
+    )
+  } else if (!params.model) {
+    lines.push(
+      'PROMPT LANGUAGE: if the model you choose is from a Chinese-native family (Seedance, Seedream, Kling, Wan, Qwen, Hunyuan, Vidu, PixVerse, MiniMax/Hailuo), translate the description into natural Simplified Chinese for the tool\'s prompt parameter — these models follow Chinese prompts better. If the tool errors on non-ASCII text, retry once with the English prompt. Your own replies stay in English.'
+    )
+  }
+  if (params.imageSize) {
+    lines.push(`Output size: pass \`image_size: "${params.imageSize}"\` if the tool supports it.`)
+  }
+  if (params.thinkingLevel) {
+    lines.push(`Pass \`thinking_level: "${params.thinkingLevel}"\` if the tool supports it.`)
+  }
+  if (params.resolution) {
+    lines.push(`Video resolution: pass \`resolution: "${params.resolution}"\` if the tool supports it.`)
+  }
+  if (params.personGeneration) {
+    lines.push(`Pass \`person_generation: "${params.personGeneration}"\` if the tool supports it.`)
+  }
+  if (params.steps) {
+    lines.push(`Pass \`steps: ${params.steps}\` if the tool supports it.`)
+  }
+  if (params.refStrength && params.referenceImagePaths?.length) {
+    lines.push(`Pass \`strength: ${params.refStrength}\` if the tool has an img2img strength parameter.`)
+  }
+  if (params.characterReferencePaths?.length) {
+    lines.push(
+      `CHARACTER reference images on disk (preserve this exact person's likeness): ${params.characterReferencePaths.join(' | ')} — pass as character_reference_paths if the tool has it, else include with the other reference images.`
+    )
+  }
+  if (params.styleReferencePaths?.length) {
+    lines.push(
+      `STYLE reference images on disk (match their look, not their content): ${params.styleReferencePaths.join(' | ')} — pass as style_reference_paths if the tool has it, else include with the other reference images.`
+    )
   }
   if (params.referenceImagePaths?.length) {
     lines.push(
@@ -198,14 +290,20 @@ function buildPrompt(params: GenerationParams): string {
       lines.push(`Pass its current length, ${params.extendVideoDurationSec} seconds, as previous_duration_seconds.`)
     }
   }
-  if (params.sourceMediaPath || params.referenceAudioPaths?.length || params.referenceImagePaths?.length) {
+  if (
+    params.sourceMediaPath ||
+    params.referenceAudioPaths?.length ||
+    params.referenceImagePaths?.length ||
+    params.characterReferencePaths?.length ||
+    params.styleReferencePaths?.length
+  ) {
     lines.push(
       "If the target generation tool needs a hosted URL rather than a local path, and one of your attached connectors exposes its own file-upload tool (e.g. a *_upload_file tool), call that first to get a URL, then pass the returned URL to the generation tool."
     )
   }
   if (params.referenceImagePaths?.length) {
     lines.push(
-      "Some reference-driven tools (e.g. muapi's muapi_image_edit) accept only a single input image via image_url, not a list — if the tool you pick has that shape, upload and use just the first reference path and treat the description as the edit instruction; do not try to pass multiple images to a single-image parameter."
+      "Some reference-driven tools accept only a single input image — muapi's muapi_image_edit via image_url, comfyui's comfy_generate_image via reference_image_path — if the tool you pick has that shape, pass just the first reference path there; do not try to pass multiple images to a single-image parameter."
     )
   }
   lines.push(
@@ -237,16 +335,35 @@ function maskDataUrlToPath(dataUrl: string): string | undefined {
   return assetPathForUrl(saved.url) ?? undefined
 }
 
-export async function runGeneration(params: GenerationParams): Promise<GenerationResult> {
+export async function runGenerationOnce(params: GenerationParams): Promise<GenerationResult> {
   const fail = (error: string): GenerationResult => ({ ok: false, mediaType: params.mediaType, error })
 
   if (!params.prompt.trim()) return fail('Enter a prompt to generate.')
+
+  // ComfyUI runs on demand, not from boot. A run pinned to it waits for the
+  // server (cold start ≈ 20 s, worst case 3 min); an unrestricted image run
+  // only kicks the start off, because the agent may pick a cloud connector
+  // and the wrapper itself waits for health if it does pick the local one.
+  if (params.mediaType === 'image') {
+    const pinned = params.connectorId === 'comfyui'
+    const eligible = pinned || (!params.connectorId && (!params.connectorIds || params.connectorIds.includes('comfyui')))
+    if (pinned && !(await ensureComfyUI())) {
+      return fail('ComfyUI did not come up — see the status strip at the foot of the studio.')
+    }
+    if (eligible && !pinned) void ensureComfyUI()
+  }
 
   const stderrTail: string[] = []
 
   params = {
     ...params,
     referenceImagePaths: params.referenceImagePaths
+      ?.map(toDiskPath)
+      .filter((p): p is string => p !== null),
+    characterReferencePaths: params.characterReferencePaths
+      ?.map(toDiskPath)
+      .filter((p): p is string => p !== null),
+    styleReferencePaths: params.styleReferencePaths
       ?.map(toDiskPath)
       .filter((p): p is string => p !== null),
     startFramePath: params.startFramePath ? (toDiskPath(params.startFramePath) ?? undefined) : undefined,
@@ -265,7 +382,7 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       : params.connectorId
         ? [params.connectorId]
         : undefined
-  const { servers, allowedTools, disallowedTools, attached, skipped } = await buildMcpServers(restrictIds)
+  const { servers, disallowedTools, attached, skipped } = await buildMcpServers(restrictIds)
   if (attached.length === 0) {
     return fail(
       restrictIds
@@ -334,15 +451,20 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
   const { env: authEnv, model } = llmAuthEnv()
 
   // Hard backstop: this agent runs on the user's machine, so it may ONLY call
-  // the attached generation MCP tools — never a built-in (Bash/Write/etc.).
-  // allowedTools pre-authorizes the MCP servers so they run without a prompt;
-  // anything else reaches canUseTool and is denied. No bypassPermissions.
+  // tools from the EXACT servers this run attached — never a built-in
+  // (Bash/Write/etc.) and never a server inherited from the environment (a
+  // live run 2026-08-30 saw the nested agent offered a claude.ai-connected
+  // server from the OPERATOR'S session and try it first). Bare allowedTools
+  // entries pre-approve whole servers before canUseTool is consulted (the SDK
+  // warns CLAUDE_SDK_CAN_USE_TOOL_SHADOWED), so allowedTools is deliberately
+  // NOT passed — every call falls through to this callback. No bypassPermissions.
   //
   // Second backstop: some connectors expose tools that SPEND MONEY or mutate
   // credentials alongside their generation tools (muapi ships account_topup —
-  // a Stripe checkout — plus keys_create/keys_delete). The server-level
-  // allowlist would pre-authorize those too, so deny them by name here.
+  // a Stripe checkout — plus keys_create/keys_delete). Denied by pattern here
+  // AND by exact name via disallowedTools (belt and suspenders).
   const DENIED_TOOL_RE = /topup|top_up|checkout|payment|billing|purchase|keys_create|keys_delete|key_create|key_delete|delete_account/i
+  const attachedServers = new Set(Object.keys(servers))
   const canUseTool = async (
     toolName: string,
     input: Record<string, unknown>
@@ -350,8 +472,15 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     | { behavior: 'allow'; updatedInput: Record<string, unknown> }
     | { behavior: 'deny'; message: string }
   > => {
+    // ToolSearch only loads deferred MCP tool schemas — the agent needs it
+    // BEFORE it can call any attached server's tools (observed in live runs).
+    if (toolName === 'ToolSearch') return { behavior: 'allow', updatedInput: input }
     if (!toolName.startsWith('mcp__')) {
       return { behavior: 'deny', message: `Blocked non-generation tool: ${toolName}` }
+    }
+    const serverName = toolName.split('__')[1] ?? ''
+    if (!attachedServers.has(serverName)) {
+      return { behavior: 'deny', message: `Blocked tool from unattached server: ${toolName}` }
     }
     if (DENIED_TOOL_RE.test(toolName)) {
       return { behavior: 'deny', message: `Blocked spend/credential tool: ${toolName}` }
@@ -367,6 +496,15 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
       : buildPrompt(params)
     // The SDK reports a failed subprocess as a bare "exited with code 1"; without this
     // the actual cause (a connector that won't launch, a rejected option) is invisible.
+    // A config that cannot be spawned should say so in words. Windows' limit is
+    // 32,767 characters for the whole command line; the config is the bulk of it.
+    const configSize = JSON.stringify(servers).length
+    if (configSize > 24_000) {
+      console.warn(
+        `[generation] MCP config is ${configSize} chars across ${Object.keys(servers).length} connector(s) — ` +
+          'close to the Windows command-line limit. Restrict the generation to one connector if this fails.'
+      )
+    }
     const stream = query({
       prompt,
       options: {
@@ -379,7 +517,6 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
         abortController: abort,
         maxTurns: 12,
         maxBudgetUsd: ORCHESTRATION_BUDGET_USD,
-        allowedTools,
         disallowedTools,
         canUseTool,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -395,11 +532,25 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
 
     let text = ''
     let costUsd: number | null = null
+    let promptUsed: string | undefined
 
     for await (const message of stream) {
       if (message.type === 'assistant') {
         for (const block of message.message.content) {
           if (block.type === 'text') text += block.text
+          // Capture what the agent ACTUALLY sent to each tool — the ground truth
+          // for prompt-language routing (the zh translation is verified here, not
+          // taken on the agent's word). Logged and carried on the result.
+          if (block.type === 'tool_use') {
+            const input = block.input as Record<string, unknown> | undefined
+            const sent = typeof input?.['prompt'] === 'string' ? (input['prompt'] as string) : undefined
+            if (sent) promptUsed = sent
+            console.error(
+              '[generation:tool]',
+              block.name,
+              JSON.stringify(input ?? {}).slice(0, 500)
+            )
+          }
         }
       } else if (message.type === 'result') {
         if ('total_cost_usd' in message && typeof message.total_cost_usd === 'number') {
@@ -438,13 +589,30 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
     const saved = fileMatch
       ? importFileAsset(fileMatch[1].trim())
       : await importUrlAsset(urlMatch![1].trim(), params.mediaType)
+    // The SDK's figure is the agent's TOKEN cost, never the connector's charge
+    // (which lands on the connector's own account and is not observable here).
+    // Label it as such, and count it as dollars only when it actually is.
+    const llmLabel = describeLlmCost(costUsd)
+    const note = `via ${attached.join(', ')}${llmLabel ? ` · ${llmLabel}` : ''}`
+    const billedUsd = llmBilling() === 'api' ? costUsd : null
+    // Log before returning: if the renderer that asked for this is already gone
+    // (reload, crash, or an MCP-driven call with no UI), the ledger is the only
+    // thing that can hand the result back later.
+    recordGeneration({
+      src: saved.url,
+      thumbSrc: saved.thumbUrl,
+      mediaType: params.mediaType,
+      prompt: params.prompt,
+      note
+    })
     return {
       ok: true,
       src: saved.url,
       thumbSrc: saved.thumbUrl,
       mediaType: params.mediaType,
-      note: `via ${attached.join(', ')}${costUsd != null ? ` · $${costUsd.toFixed(3)}` : ''}`,
-      costUsd
+      note,
+      promptUsed,
+      costUsd: billedUsd
     }
   } catch (error) {
     const base =
@@ -460,4 +628,13 @@ export async function runGeneration(params: GenerationParams): Promise<Generatio
   } finally {
     clearTimeout(timeout)
   }
+}
+
+/**
+ * What every caller gets: the single-shot runner wrapped in the safeguard
+ * (prompt refinement for thin prompts and local models; vision verify-and-retry
+ * for local images). See generation-guard.ts for why negatives are not it.
+ */
+export async function runGeneration(params: GenerationParams): Promise<GenerationResult> {
+  return guardedGeneration(params, runGenerationOnce)
 }

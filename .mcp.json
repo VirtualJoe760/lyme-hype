@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "lyme-hype": {
+      "command": "node",
+      "args": ["resources/lyme-mcp-bridge.cjs"]
+    }
+  }
+}

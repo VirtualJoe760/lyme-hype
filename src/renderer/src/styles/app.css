@@ -2,7 +2,8 @@
 
 .app {
   display: grid;
-  grid-template-rows: 46px 1fr;
+  /* titlebar · body · status strip (auto: 22px once the local engine reports, 0 until then) */
+  grid-template-rows: 46px minmax(0, 1fr) auto;
   /* minmax(0, 1fr) keeps wide content (the timeline's ruler) from inflating
    * the column track: a scroll container's intrinsic width is its CONTENT's
    * width, and an auto track grows to fit it — pushing the aside off-screen. */
@@ -227,7 +228,11 @@
 .panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 8px 12px;
+  /* Never scroll the panel itself sideways — wide rows (.np-track/.np-param) are
+     their own horizontal scroll zones; the extra side padding gives the wheel a
+     "scroll the panel vertically" landing area beside them. */
+  overflow-x: hidden;
+  padding: 4px 14px 12px;
   min-height: 0;
 }
 
@@ -428,7 +433,9 @@
 /* ---------- media node ---------- */
 
 .media-node {
-  width: 104px;
+  /* The React Flow wrapper always carries an explicit width (default 104,
+     user-resizable via the drag handles) — the node fills it. */
+  width: 100%;
   background: var(--panel-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -444,7 +451,10 @@
 
 .media-node .thumb {
   position: relative;
-  height: 62px;
+  /* Auto height: an image/video thumb takes the media's true aspect ratio
+     (9:16 renders tall, 16:9 wide); placeholders keep the old 62px box. */
+  height: auto;
+  min-height: 62px;
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -491,10 +501,27 @@
 
 .media-node .thumb-img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  min-height: 48px;
+  max-height: 300px;
+  object-fit: contain;
   border-radius: 6px;
+  background: var(--bg);
 }
+.react-flow__resize-control.handle { background: var(--accent); border-color: var(--accent); }
+.react-flow__resize-control.line { border-color: var(--accent-dim); }
+
+/* Node action bar (floats above the selected node). */
+.node-actions {
+  display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px;
+}
+.node-actions button {
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+  color: var(--text); font-family: var(--mono); font-size: 9.5px; padding: 4px 8px;
+  cursor: pointer; white-space: nowrap;
+}
+.node-actions button:hover { border-color: var(--accent-dim); color: var(--accent); }
 
 .media-node.rendering .thumb {
   background: var(--panel);
@@ -3219,7 +3246,21 @@
   overflow: hidden; display: grid; place-items: center;
 }
 .np-preview.filled { border-color: var(--accent-dim); }
-.np-art { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* contain, not cover: the preview's aspect is fixed, the take's isn't — show the
+   whole image letterboxed rather than a crop (Joseph, 2026-08-30). Click = lightbox.
+   Absolutely positioned because as a grid item its percentage height resolved to
+   auto (grid row sized BY the item), so the img laid out at intrinsic aspect and
+   the container's overflow:hidden cropped it — object-fit never applied. */
+.np-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+img.np-art { cursor: zoom-in; }
+.np-lightbox {
+  position: fixed; inset: 0; z-index: 90; background: rgba(0, 0, 0, .8);
+  display: grid; place-items: center; cursor: zoom-out;
+}
+.np-lightbox img {
+  max-width: 94vw; max-height: 90vh; object-fit: contain;
+  border-radius: 8px; border: 1px solid var(--border);
+}
 .np-empty {
   font-family: var(--mono); font-size: 10px; color: var(--text-soft);
   text-align: center; line-height: 1.7; padding: 8px;
@@ -3230,11 +3271,24 @@
   animation: np-pulse 1.3s infinite;
 }
 @keyframes np-pulse { 50% { opacity: .3; } }
+/* The nav chips sit on a FIXED dark scrim, so their ink is fixed light — var(--text)
+   here was dark-on-dark in the light themes (invisible ‹ › glyphs in Zest). */
 .np-nav {
   position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 7px; align-items: center; background: rgba(10, 12, 8, .78);
-  border-radius: 20px; padding: 3px 9px; font-family: var(--mono); font-size: 9px; color: var(--text);
+  border-radius: 20px; padding: 3px 9px; font-family: var(--mono); font-size: 9px; color: #f2f5ec;
 }
+/* Carousel arrows on the preview edges — always rendered, greyed at one take. */
+.np-car {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+  width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(242, 245, 236, .35);
+  background: rgba(10, 12, 8, .72); color: #f2f5ec; font-size: 14px; line-height: 1;
+  display: grid; place-items: center; cursor: pointer;
+}
+.np-car.prev { left: 6px; }
+.np-car.next { right: 6px; }
+.np-car:hover:not(:disabled) { color: var(--accent); border-color: var(--accent-dim); }
+.np-car:disabled { opacity: .25; cursor: not-allowed; }
 .np-nav button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0 2px; }
 
 .np-tools { display: flex; gap: 4px; margin-bottom: 10px; }
@@ -3247,17 +3301,17 @@
 .np-tool.off { opacity: .3; cursor: not-allowed; }
 .np-icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
-.np-settings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
-.np-set {
-  aspect-ratio: 1; border: 1px solid var(--border); border-radius: 7px; background: var(--bg);
-  padding: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; text-align: center; cursor: pointer; color: var(--text-soft);
+/* Settings ride in the tools strip as compact icon+value buttons (the old
+   3-up giant squares are gone — 2026-08-30). */
+.np-tools-sep { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--border); flex: none; }
+.np-tool-set { flex-direction: column; display: flex; align-items: center; justify-content: center; gap: 1px; }
+.np-tool-set em {
+  font-family: var(--mono); font-size: 6.5px; font-style: normal; color: var(--text-soft);
+  max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.np-set:hover { border-color: var(--accent-dim); }
-.np-set b { font-family: var(--mono); font-size: 8px; font-weight: 400; letter-spacing: .04em; }
-.np-set em { font-family: var(--mono); font-size: 8.5px; font-style: normal; color: var(--text); }
-.np-set.on { border-color: var(--accent-dim); }
-.np-set.on em, .np-set.on .np-icon { color: var(--accent); }
+.np-tool-set.set { border-color: var(--accent-dim); }
+.np-tool-set.set em, .np-tool-set.set .np-icon { color: var(--accent); }
+.np-tool-set.drop { border-color: var(--accent); background: rgba(198, 241, 53, .1); }
 
 .np-models, .np-cont { position: relative; margin-bottom: 9px; }
 .np-cont { border-top: 1px solid var(--border); padding-top: 9px; margin-top: 3px; }
@@ -3295,8 +3349,38 @@
 }
 .np-prompt:focus { outline: none; border-color: var(--accent-dim); }
 
-.np-params { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 10px; }
-.np-param { display: flex; gap: 5px; }
+/* Recent generations — the orphan-recovery list. */
+.recover-list { display: flex; flex-direction: column; gap: 6px; }
+.recover-item {
+  display: flex; gap: 8px; align-items: center; text-align: left; padding: 6px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer;
+}
+.recover-item:hover { border-color: var(--accent-dim); }
+.recover-item.on-canvas { opacity: .55; }
+.recover-thumb {
+  width: 44px; height: 44px; flex: none; border-radius: 5px; overflow: hidden;
+  background: var(--panel-raised); display: grid; place-items: center;
+}
+.recover-thumb img, .recover-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.recover-glyph { color: var(--text-soft); font-size: 16px; }
+.recover-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.recover-meta b { font-size: 11px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recover-meta em {
+  font-family: var(--mono); font-size: 8px; font-style: normal; color: var(--text-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ✨ prompt enhancer — rewrites the brief, reading any attached reference images. */
+.np-enhance-row { display: flex; align-items: center; gap: 7px; margin: -4px 0 9px; }
+.np-enhance { padding: 4px 9px; }
+.np-enhance:disabled { opacity: .4; cursor: not-allowed; }
+.np-enhance-err { font-family: var(--mono); font-size: 9px; color: var(--danger); }
+
+/* One parameter group per row, divider-separated — each row is its own
+   horizontal scroll zone (wheel-over-row scrolls it sideways via hWheelRef). */
+.np-params { display: flex; flex-direction: column; margin-bottom: 10px; border-top: 1px solid var(--border); }
+.np-param { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.np-param::-webkit-scrollbar { display: none; }
 .np-chip {
   font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--border); border-radius: 6px;
   padding: 3px 8px; color: var(--text-soft); background: none; cursor: pointer;
@@ -3310,9 +3394,65 @@
 .np-pop-empty { font-family: var(--mono); font-size: 9px; color: var(--text-soft); }
 .np-ref {
   width: 34px; height: 34px; border-radius: 5px; overflow: hidden; padding: 0;
-  border: 1px solid var(--border); background: none; cursor: pointer;
+  border: 1px solid var(--border); background: none; cursor: pointer; position: relative;
 }
+
+/* ---------- Reference modal (centered, dims the app — 2026-08-30) ---------- */
+.np-modal-overlay {
+  position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, .55);
+  display: grid; place-items: center;
+}
+.np-modal {
+  width: min(360px, 92vw); max-height: 72vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.np-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-soft);
+}
+.np-modal-close { background: none; border: none; color: var(--text-soft); cursor: pointer; font-size: 13px; }
+.np-modal-close:hover { color: var(--accent); }
+.np-modal-hint { font-size: 11px; line-height: 1.5; color: var(--text-soft); }
+.np-modal-upload {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px dashed var(--border); border-radius: 8px; background: var(--bg);
+  color: var(--text); padding: 14px; cursor: pointer; font-size: 12px;
+}
+.np-modal-upload:hover { border-color: var(--accent-dim); color: var(--accent); }
+.np-modal-upload .np-icon { width: 16px; height: 16px; }
+.np-modal-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: .1em; color: var(--text-soft); }
+.np-modal-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.np-modal-grid .np-ref { width: 56px; height: 56px; }
+.np-modal-grid .np-ref-type { font-size: 8px; padding: 2px 0; }
+
+/* ---------- Takes stepper beside Generate ---------- */
+.np-run-row { display: flex; gap: 6px; align-items: stretch; }
+.np-run-row > :last-child { flex: 1; }
+.np-takes {
+  display: flex; align-items: center; gap: 2px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); padding: 0 2px; flex: none;
+}
+.np-takes button {
+  width: 22px; border: none; background: none; color: var(--text-soft);
+  font-size: 13px; cursor: pointer; height: 100%;
+}
+.np-takes button:hover:not(:disabled) { color: var(--accent); }
+.np-takes button:disabled { opacity: .3; cursor: not-allowed; }
+.np-takes span { font-family: var(--mono); font-size: 10px; color: var(--text); min-width: 20px; text-align: center; }
+.np-ref-type {
+  position: absolute; left: 0; right: 0; bottom: 0; font-family: var(--mono); font-size: 7px;
+  letter-spacing: .06em; text-transform: uppercase; background: rgba(0, 0, 0, .72);
+  color: var(--accent); padding: 1px 0; cursor: pointer;
+}
+.np-strength { display: flex; gap: 5px; align-items: center; margin-bottom: 9px; }
+.np-strength .np-lbl { margin-bottom: 0; }
 .np-ref.on { border-color: var(--accent); }
+.np-ref-upload {
+  border-style: dashed; color: var(--text-soft); display: grid; place-items: center;
+  font-size: 14px; overflow: visible;
+}
+.np-ref-upload:hover { border-color: var(--accent-dim); color: var(--accent); }
 .np-ref img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* ---------- Image editor takeover (build-plan Phase 19) ---------- */
@@ -3339,5 +3479,163 @@
 .np-cell.on { border-color: var(--accent-dim); }
 .np-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .np-local.np-err { color: var(--danger); border-color: var(--danger); }
-.np-set.drop { border-color: var(--accent); background: rgba(198, 241, 53, .1); }
 .np-drophint { font-family: var(--mono); font-size: 8.5px; color: var(--text-soft); margin: -4px 0 9px; }
+
+
+/* ---------- Startup takeover (boot animation + status line) ----------
+   Covers the studio until init() has genuinely finished, so the app is never
+   handed over half-booted. Themed via tokens like everything else. */
+.boot {
+  position: fixed; inset: 0; z-index: 200; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  animation: boot-in .28s ease-out;
+}
+.boot.done { opacity: 0; pointer-events: none; transition: opacity .45s ease .1s; }
+@keyframes boot-in { from { opacity: 0 } to { opacity: 1 } }
+
+.boot-mark { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.boot-lime {
+  width: 92px; height: 92px; color: var(--accent);
+  animation: boot-rise .7s cubic-bezier(.2,.9,.25,1.1) both, boot-hue 6s linear .7s infinite;
+}
+@keyframes boot-rise {
+  from { transform: translateY(14px) scale(.82); opacity: 0 }
+  to   { transform: none; opacity: 1 }
+}
+@keyframes boot-hue { 50% { filter: hue-rotate(-18deg) } }
+
+.boot-word {
+  font-family: var(--display-font, var(--mono)); font-size: 30px; letter-spacing: .06em;
+  color: var(--text); animation: boot-rise .7s .1s cubic-bezier(.2,.9,.25,1.1) both;
+}
+.boot-rule {
+  width: 0; height: 1px; background: var(--accent);
+  animation: boot-rule .9s .35s ease-out forwards;
+}
+@keyframes boot-rule { to { width: 210px } }
+
+.boot-status {
+  position: absolute; right: 20px; bottom: 16px;
+  display: flex; align-items: baseline; gap: 8px; max-width: min(560px, 70vw);
+  font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  animation: boot-line-in .3s ease-out both;
+}
+@keyframes boot-line-in { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
+.boot-ok { color: var(--accent); }
+.boot-label { color: var(--text); letter-spacing: .05em; white-space: nowrap; }
+.boot-detail { color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-caret { color: var(--accent); animation: boot-blink 1s steps(2) infinite; }
+@keyframes boot-blink { 50% { opacity: 0 } }
+
+/* A tile that is added but unusable must not read as connected. */
+.tile-badge.needs-key {
+  background: var(--warn-bg, #7a5a12);
+  color: var(--warn-ink, #ffe9b0);
+}
+
+/* ---------- Status strip: the local engine's one line of terminal context ---------- */
+.status-strip {
+  flex: none; height: 22px; display: flex; align-items: center; gap: 9px; min-width: 0;
+  padding: 0 10px; border-top: 1px solid var(--border); background: var(--panel);
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-soft);
+}
+.status-strip .ss-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-soft); flex: none; }
+.status-strip.ready .ss-dot { background: var(--accent); }
+.status-strip.loading .ss-dot,
+.status-strip.starting .ss-dot { background: var(--accent-dim); animation: boot-blink 1.1s steps(2) infinite; }
+.status-strip.error .ss-dot { background: var(--danger); }
+.status-strip .ss-name { color: var(--text); letter-spacing: .06em; }
+.status-strip .ss-label { flex: none; }
+.status-strip .ss-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .75; }
+.status-strip .ss-mem { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; opacity: .8; }
+.status-strip .ss-mem + .ss-owned { margin-left: 0; }
+.status-strip .ss-owned { margin-left: auto; flex: none; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; opacity: .6; }
+
+/* "as typed" escape hatch beside a thin-prompt Generate button */
+.np-astyped {
+  background: none; border: none; padding: 2px 6px; margin-top: 4px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-soft); cursor: pointer; text-decoration: underline dotted;
+}
+.np-astyped:hover { color: var(--text); }
+
+/* ---------- Canvas trash: drop target, badge, recently-deleted popover ---------- */
+.trash-wrap { position: absolute; right: 14px; bottom: 14px; z-index: 7; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.trash-can {
+  position: relative; width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text-soft);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,.12); transition: transform .12s ease, border-color .12s ease, color .12s ease;
+}
+.trash-can svg { width: 18px; height: 18px; }
+.trash-can:hover, .trash-can.open { color: var(--text); border-color: var(--text-soft); }
+.trash-can.over { transform: scale(1.12); border-color: var(--danger); color: var(--danger); }
+.trash-badge {
+  position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--accent); color: var(--accent-ink);
+  font-family: var(--mono); font-size: 10px; line-height: 18px; text-align: center;
+}
+.trash-pop {
+  width: 300px; max-height: 360px; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(0,0,0,.18); overflow: hidden;
+}
+.trash-head { display: flex; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-soft); }
+.trash-empty { padding: 14px 12px; font-size: 12px; color: var(--text-soft); }
+.trash-list { overflow-y: auto; display: flex; flex-direction: column; }
+.trash-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.trash-row img, .trash-glyph { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; background: var(--panel-raised); flex: none; display: flex; align-items: center; justify-content: center; color: var(--text-soft); font-size: 12px; }
+.trash-label { flex: 1; min-width: 0; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; flex-direction: column; }
+.trash-label small { font-family: var(--mono); font-size: 9.5px; color: var(--text-soft); }
+.trash-foot { display: flex; align-items: center; gap: 6px; padding: 8px 10px; font-size: 11px; }
+.trash-foot .muted { flex: 1; color: var(--text-soft); }
+.conn-mini.danger { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- Node drag as a "take this somewhere" gesture ---------- */
+/* Let hit-testing see THROUGH the node being dragged, so the zone under the
+   pointer (trash can inside the canvas, a lane, a tile) is what gets found. */
+.react-flow__node.dragging { pointer-events: none; }
+[data-drop-target] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tl-lane[data-drop-target] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.create-tile[data-drop-target] { transform: scale(1.02); }
+/* The can answers a drag the same way whichever protocol carried it — the ⣿
+   grip's native drag (.over) or a node drag (data-drop-target): bigger, red,
+   unmistakably "this will delete". */
+.trash-can.over,
+.trash-can[data-drop-target] {
+  transform: scale(1.4);
+  outline: none;
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--danger) 18%, transparent), 0 4px 16px rgba(0,0,0,.2);
+}
+.trash-can.over svg,
+.trash-can[data-drop-target] svg { width: 22px; height: 22px; }
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none;
+  /* Parked off-screen until a drag positions it: at (0,0) it sat in the title
+     bar as a stray "≡" box (2026-09-02). */
+  transform: translate(-1000px, -1000px);
+  display: flex; align-items: center; gap: 8px; padding: 5px 9px 5px 5px;
+  background: var(--panel); border: 1px solid var(--accent-dim); border-radius: 9px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22); font-size: 12px; color: var(--text); max-width: 220px;
+}
+.drag-ghost img, .drag-ghost-glyph { width: 30px; height: 30px; border-radius: 6px; object-fit: cover; background: var(--panel-raised); display: flex; align-items: center; justify-content: center; color: var(--text-soft); flex: none; }
+.drag-ghost-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The real fix: an author `display: flex` beats the browser's default
+   `[hidden] { display: none }`, so the chip ignored `hidden` entirely and stayed
+   on screen — a stray "≡" box wherever the last drag ended. */
+.drag-ghost[hidden] { display: none; }
+
+/* ---------- monitor zoom + clip fit ---------- */
+.tl-monitor-wrap { flex: none; height: 100%; max-width: 48%; overflow: auto; display: flex; }
+.tl-monitor-wrap.zoomed { align-items: flex-start; }
+.tl-monitor-wrap.zoomed .tl-monitor { height: auto; }
+.tl-zoom {
+  font-family: var(--mono); font-size: 10px; padding: 3px 4px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text-soft);
+}
+.tl-fit { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--border); }
+.tl-fit label { display: inline-flex; align-items: center; gap: 3px; font-family: var(--mono); font-size: 9.5px; color: var(--text-soft); }
+.tl-fit input { width: 52px; font-family: var(--mono); font-size: 10px; padding: 2px 4px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); color: var(--text); }

@@ -1,3 +1,4 @@
+import type { ClipTransform } from '@shared/types'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -57,6 +58,8 @@ export interface ResolvedTimelineClip {
   trimOut: number
   /** Video clip's own embedded audio silenced. */
   audioMuted?: boolean
+  /** How the clip sits in the frame — the same fit the monitor drew. */
+  transform?: ClipTransform
   /** Whether the source actually carries an audio stream. Motion-graphics
    *  overlays (and many stills-derived clips) don't — referencing a missing
    *  [i:a] would kill the whole export, so video-track clips only join the mix
@@ -172,17 +175,30 @@ export function buildMultitrackArgs(clips: ResolvedTimelineClip[], outPath: stri
       chain.push(`trim=start=${fmtSec(clip.trimIn)}:end=${fmtSec(clip.trimOut)}`)
     }
     chain.push(`setpts=PTS-STARTPTS+${fmtSec(start)}/TB`)
-    chain.push(`scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease`)
-    if (isBase) {
-      // Base track covers the full canvas (letterboxed) — exactly the old
-      // single-track normalize, now positioned in time instead of concatenated.
-      chain.push(`pad=${OUT_W}:${OUT_H}:(ow-iw)/2:(oh-ih)/2:color=black`)
+    // The clip's fit, identical to what the monitor showed (ClipTransform):
+    //   contain — scale down to fit, bars where the aspect differs (the old default)
+    //   cover   — scale up until the frame is filled; the overlay crops the rest
+    //   custom  — the contain size × scale, nudged by an offset
+    // Every clip composites onto the opaque black [base], so nothing needs a pad
+    // step any more: a letterbox is just black showing through.
+    const t = clip.transform ?? { fit: 'contain', scale: 1, offsetX: 0, offsetY: 0 }
+    if (t.fit === 'cover') {
+      chain.push(`scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase`)
+    } else {
+      chain.push(`scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease`)
+      if (t.fit === 'custom' && t.scale !== 1) {
+        chain.push(`scale=trunc(iw*${t.scale.toFixed(4)}/2)*2:trunc(ih*${t.scale.toFixed(4)}/2)*2`)
+      }
     }
     chain.push('setsar=1', `fps=${FPS}`)
     filters.push(`[${input}:v]${chain.join(',')}[v${i}]`)
     const out = `[cmp${i}]`
-    // Non-base clips center at their scaled size: alpha blends, opaque = PiP.
-    const position = isBase ? '0:0' : '(W-w)/2:(H-h)/2'
+    // Centered, plus the custom offset as a fraction of the frame. Base or not
+    // makes no difference now — the base is just the lowest opaque layer.
+    void isBase
+    const dx = t.fit === 'custom' ? Math.round((t.offsetX / 100) * OUT_W) : 0
+    const dy = t.fit === 'custom' ? Math.round((t.offsetY / 100) * OUT_H) : 0
+    const position = `(W-w)/2${dx >= 0 ? '+' : ''}${dx}:(H-h)/2${dy >= 0 ? '+' : ''}${dy}`
     filters.push(
       `${composite}[v${i}]overlay=${position}:enable='between(t,${fmtSec(start)},${fmtSec(end)})'${out}`
     )
@@ -281,6 +297,7 @@ export async function exportTimeline(
       startTime: clip.startTime,
       trimIn: clip.trimIn,
       trimOut: clip.trimOut,
+      transform: clip.transform,
       audioMuted: clip.audioMuted,
       hasAudio: info?.hasAudio,
       inputDecoder: info?.vp9Alpha ? 'libvpx-vp9' : undefined

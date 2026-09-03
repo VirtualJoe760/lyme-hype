@@ -15,7 +15,7 @@ Sequencing, not spec. What each phase covers is already written down in the othe
 Goal: an empty window that runs on Windows, with the Agent SDK wired into the main process.
 
 - [x] electron-vite scaffold, TypeScript strict, hand-rolled (the create-tool is interactive). Stack pinned by the dev machine's Node 21 (nvm): electron-vite 2.3 / Vite 5 / React 18 / Electron 38 — see the implementation notes in [architecture/platform-decisions.md](architecture/platform-decisions.md#implementation-notes-phase-1).
-- [x] Claude Agent SDK (0.1.77) in the main process — authenticates via this machine's existing Claude Code login, no API key needed. Verified standalone and in-app ("LINK OK", ~$0.10/ping).
+- [x] Claude Agent SDK (0.1.77) in the main process — authenticates via this machine's existing Claude Code login, no API key needed. Verified standalone and in-app ("LINK OK"; ~$0.10 of tokens per ping — plan consumption on the login, not a charge).
 - [x] `BrowserWindow` chrome in the **Lime Cut** skin (frameless window, custom titlebar/toolbar, per the kickoff prompt's pick).
 - **Done criteria met:** `npm run dev` opens the window; the "Agent link" card in the aside gets a real reply. `LYME_SELFTEST=1 npm run dev` runs the headless plumbing check (vault, sessions, secure modal, agent) and exits.
 - Ref: [architecture/platform-decisions.md](architecture/platform-decisions.md) (Electron decision, Windows-first build order).
@@ -165,7 +165,14 @@ Answered to unblock the build; each is cheap to revisit, and the reasoning is re
 revisiting is an argument rather than a coin flip.
 
 - [x] **Leaving without Finish → staged takes persist per node, for the session.** Discarding punishes a cheap, exploratory action, and a confirm dialog taxes every exit to protect the rare one. Staging lives in session state so it survives navigation and dies with the session.
-- [x] **Finish commits the take on screen.** "The artifact is the subject" — one preview, one commit. Committing all N would dump three rejected takes on the canvas every time.
+- [~] **Finish commits the take on screen** — REVERSED 2026-08-31 (Joseph): every
+      finished generation now lands on the canvas immediately (`placeTakeOnCanvas`),
+      because a render that cost real money must never sit somewhere the user can
+      lose track of. Unwanted nodes are cheap to delete; lost renders are not.
+      Staging still exists for paging/iterating takes, the preview marks a take
+      "on canvas", commit is idempotent (`StagedTake.nodeId`), and the button is
+      now "Done → clear panel" rather than a promise to add what is already there.
+      Original decision: **Finish commits the take on screen.** "The artifact is the subject" — one preview, one commit. Committing all N would dump three rejected takes on the canvas every time.
 - [x] **Settings squares stay three: Style / Refs / Takes.** Seed is per-model (Krea 2 has it, Veo 3.1 explicitly does not), so it belongs in the manifest's parameter list where it can appear conditionally — not as a fixed square that lies on half the models.
 - [x] **Erase survives, renamed "remove bg".** One model and background-only, but it needs no mask and no prompt, so a one-click tool is genuinely the right shape. Object erase is a masked edit and lives in Inpaint. The honest label is the fix, not deletion.
 - [x] **Expand and Reframe become modes of the canvas editor.** All three are direct manipulation of the image at size; three surfaces for one interaction would be the clutter the redesign exists to remove.
@@ -269,6 +276,14 @@ shippable.
 
 ## Phase 23 — Projects as folders (the structural one)
 
+> **2026-08-31 incident feeding this phase:** a harness (`LYME_TEST`) instance booted the
+> full renderer against the shared `sessions.json` while the real app was open — last
+> writer won and a session rename was lost. Immediate fix: headless modes no longer boot
+> a renderer at all (verified: harness runs leave sessions.json byte-identical). The
+> durable fix is this phase: per-project files make cross-instance clobber structurally
+> narrower, and the store should also learn compare-before-write (refuse to overwrite a
+> file that changed since load) when it moves.
+
 Today every session lives in one global `sessions.json` and every asset is a uuid in a flat
 `userData/assets/`. **116 files / 28.8 MB are currently orphaned — nothing references any of
 them, and nothing in `src/main/` ever deletes an asset.**
@@ -293,6 +308,367 @@ Documents/Lyme Hype/              ← workspace root, user-chosen
       references them, or a `_recovered/` folder.
 - [ ] **Asset lifecycle falls out for free** — deleting a project deletes its assets because they
       live inside it. No reference counting to maintain.
+
+### Phase 23 progress (2026-08-31) — sessions ARE projects
+
+Closing the gap that made a live session invisible to the project opener:
+
+- [x] **Every session mirrors to the workspace automatically** — on load and on
+      every persist, the active session is written to
+      `Documents\Lyme Hype\<slug>\`. Sessions and projects were two disconnected
+      worlds; a session you never explicitly closed simply did not exist to
+      "open a project" (that's why "Wow Generations" was nowhere in the picker).
+- [x] **Self-describing project files** — `<slug>.lymeproj.json` instead of a
+      folder full of identical `project.json` files. Legacy `project.json` still
+      reads, and a folder keeps whatever file it already uses.
+- [x] **Stable project identity** — `Session.projectDir` records where a session
+      lives, so saving again UPDATES that project instead of cloning
+      `wow-generations-2` beside it (`saveProject()`).
+- [x] **In-app project browser** — ↺ in the Sessions rail lists real projects
+      (name, saved date, node count, asset size) instead of sending the user into
+      a file dialog; "Open from a file instead…" remains for backups.
+- [ ] Assets still live in `userData/assets`, not inside the project folder — the
+      remaining half of Phase 23, and what makes a project genuinely portable.
+- [ ] Deleting a project from the app (the folder + its assets together).
+
+### One userData, and a 700-line ceiling (2026-08-31)
+
+- [x] **`consolidateUserData()`** — userData now lives at
+      `Documents\Lyme Hype\.app`, set before `app.whenReady()`. Documents is not
+      virtualized, so every launcher agrees; the packaged-host split cannot
+      recur. Migration moves assets AND the state files as a unit, `Local State`
+      included: safeStorage keeps its AES key there and DPAPI-protects only that
+      key, so a vault copied without it decrypts to nothing — which is exactly
+      how a vault holding a WORKING muapi key read as "never configured".
+      Verified from the desktop icon: 180 assets, every connector ready, no key
+      re-entered.
+- [x] **Undecryptable secrets are reported**, not silently treated as absent
+      (`readSecretValue`), and the Create tiles now say `✓ READY` vs
+      `! NEEDS KEY` instead of `✓ Added` for both.
+- [x] **700-line ceiling met repo-wide** (AGENTS.md §5). Every split typechecks,
+      builds, and was runtime-verified in the launched app:
+      | file | was | now | split into |
+      |---|---|---|---|
+      | `store.ts` | 2426 | 678 | `store/*`: types, helpers, context + five action slices behind a `StoreCtx` |
+      | `model-catalog.ts` | 1212 | 226 | `model-catalog/*`: catalog-types + one file per media |
+      | `NodePanel.tsx` | 999 | 693 | `node-panel/*`: support, SettingSheets, TakePreview |
+      | `CutRoom.tsx` | 805 | 687 | `cut-room/*`: helpers, TimelineToolbar, TimelineMonitor |
+      | `ChatRealtyPull.tsx` | 764 | 606 | `chat-realty/*`: form-defs, ListingContentDrafts |
+      | `types.ts` | 743 | 15 | barrel over `types/*` (7 domains) |
+      | `connector-intake.ts` | 729 | 522 | `connector-intake/*`: schema, roles |
+      The originals stay the entry point — a barrel, the `create()` body, or the
+      component itself — so no consumer's imports changed.
+
+### Two data folders: the packaged-host container (2026-08-31)
+
+The real bug behind "the canvas is partially missing". Not a stale build -- two
+copies of userData.
+
+Claude Code on Windows is an MSIX-packaged app, so any process it launches gets
+a virtualized AppData: writes to `%APPDATA%\lyme-hype` land in
+`%LOCALAPPDATA%\Packages\<host>\LocalCache\Roaming\lyme-hype`, while reads
+fall through to the real profile. Lyme Hype launched from inside that host built
+a COMPLETE second copy -- 180 assets and the whole credential vault -- that the
+same app launched from the Start menu could not see. Hence 404s on every
+thumbnail and every connector reading as unconfigured, while an agent-launched
+instance looked perfect. Two views disagreeing is what made it so hard to see;
+it also means an agent CANNOT verify the user's app by launching it itself.
+
+- [x] **`recoverStrandedUserData()`** -- globs `%LOCALAPPDATA%\Packages\*      LocalCache\Roaming\lyme-hype`, copies missing assets and newer state
+      files into the real profile. Runs **every boot**, not once: development
+      keeps writing new media into the container, so a one-shot fix would
+      strand tomorrow's work.
+- [x] **`rekeyFromEnvFile()`** -- safeStorage/DPAPI is scoped to the app
+      container that encrypted it, so an adopted vault copies across intact and
+      still will not open. Connectors whose key is in the repo's `.env.local`
+      get re-encrypted in this profile automatically (gemini, chatrealty).
+      muapi and ElevenLabs are not in `.env.local` and need one trip through
+      the secure modal.
+- [x] **The silent catch is no longer silent** -- `readSecretValue()` treated
+      "cannot decrypt" as "no key", which is exactly why a full vault looked
+      like an app that had never been configured. It now warns once per id.
+- [x] **`boot.log` in userData** -- a Start-menu launch has no console, so every
+      diagnostic main printed was discarded on precisely the launch that
+      misbehaved. Mirrored to disk, it is what cracked this.
+- [ ] Structural end-state: assets belong in the project folder under
+      `Documents\Lyme Hype` (Phase 23's remaining half). Documents is NOT
+      virtualized -- both contexts already share it -- so media kept there
+      cannot diverge in the first place.
+
+Verified from the desktop icon (the user's real launch, not an agent one):
+assets=180 in the real profile, zero 404s, thumbnails and video posters render,
+and video/image/motion-graphics tiles read ready.
+
+### One backend, ComfyUI on demand (2026-09-02)
+
+Joseph's machine paged to a standstill: 1 GB of 32 GB free, commit 78.9 of 79.5 GB.
+The 43 GB was ComfyUI — the one Lyme Hype starts at boot — running LoRA jobs that a
+second Claude Code session (the lyme-hype-lab work) had queued into it over port 8188.
+Flux + encoders + LoRA overflow a 24 GB card into RAM, and nothing in the app noticed.
+Two more copies of the app were also running: each Claude Code session's MCP bridge
+booted its own headless Electron. Closing the studio fixed the lag, because the studio
+owned the ComfyUI process — so from the user's chair, Lyme Hype was the problem.
+
+- [x] **One backend per machine** (`mcp-hub.ts`, rewritten bridge): fixed pipe name,
+      N bridges per backend, the studio takes over while open, headless exits when
+      idle, bridges reconnect and replay the handshake. Details: tooling/mcp-server.md.
+- [x] **ComfyUI starts on demand, not at boot** (`ensureComfyUI` before a local image
+      run; unrestricted runs only kick it off), **stops after 10 idle minutes** unless
+      its queue has a job (anyone's), and the wrapper no longer spawns a server at all.
+- [x] **Memory watchdog** (`comfyui-watchdog.ts`): every 10 s, committed bytes of the
+      owned server + free RAM. Over `LYME_COMFY_MAX_GB` (default 20) or under 1.5 GB
+      free → `POST /api/free` (unload models); three strikes → kill, status strip says
+      why, restarts on the next generation. Shown live as `12.3 GB` in the strip. A
+      ComfyUI the user started themselves is never watched or killed.
+- [x] `LYME_TEST=comfy_watchdog` proves the sampler and the relieve→relieve→kill policy
+      against a 1.2 GB Python balloon — no GPU, no model.
+- Still true: the lab project should run its own ComfyUI on another port; its jobs die
+  with the studio otherwise. That is its config, not this repo's.
+
+### Monitor: fit, zoom, open large (2026-09-02)
+
+The paladin clip showed thin black bars in the 9:16 monitor. Measured: the
+source is 724×1268 (ratio 1.751, not 1.778), so contain-scaling it into
+1080×1920 leaves ~14 px of black top and bottom — real in the export too, not
+a monitor artefact (`signalstats` on the exported first frame: top rows luma 16
+for Letterbox, 100 for Fill frame). Every clip was letterboxed with no way to
+change it, in preview or export.
+
+- [x] **Per-clip fit** (`ClipTransform` on `TimelineClip`): Letterbox (contain,
+      the old default), Fill frame (cover — scale up and crop), Custom (scale
+      relative to the contain size + x/y offset in % of frame). Set from the
+      toolbar when a clip is selected; persisted with the clip.
+- [x] **Preview and export agree by construction.** The monitor draws each layer
+      with the clip's fit (`object-fit` / transform); `ffmpeg.ts` maps the same
+      three cases (`force_original_aspect_ratio=increase` for cover, a second
+      scale for custom, overlay position for the offset). The old base-track
+      `pad` step is gone — every clip composites onto the opaque black base, so
+      a letterbox is simply black showing through.
+- [x] **Monitor zoom** (Premiere's program-monitor menu): Fit · ⅛ · ¼ · ⅓ · ½ ·
+      100% · Custom, as fractions of the real 1080×1920 output; the monitor
+      scrolls when larger than its panel.
+- [x] **Double-click the monitor** opens the top-most video clip in Play view.
+- Default stays Letterbox: cropping silently is the worse surprise. Fill frame
+  is one click.
+
+### Drag a node onto things (2026-09-02)
+
+"Dragging a node toward the timeline drags the canvas down instead." A React
+Flow drag only knows how to reposition; what was wanted is to drop the node
+ON a target — a timeline lane, the trash, a Create tile.
+
+- [x] `autoPanOnNodeDrag` off — leaving the canvas is the point, not a reason
+      to pan after the pointer.
+- [x] **One payload, every target.** The drag END finds the zone under the
+      pointer and synthesizes the exact `application/lyme-node` drop the ⣿ grip
+      already sends (`canvas-drag.ts`). The timeline's lanes — ghost lanes,
+      real lanes, type checks, snapping — and the trash can needed no changes.
+      The node snaps back to where it started; the canvas never strands it.
+- [x] **Create tiles accept a node** and open with it in the right slot, mirroring
+      the node toolbar: image → Generate image = img2img reference; image →
+      Generate video = start frame; video → Generate video = extend.
+- [x] Zone under the pointer highlights; once the pointer leaves the canvas a
+      ghost chip (thumbnail + label) follows it, because React Flow clips the
+      real node at the canvas edge. **The highlight is a `data-drop-target`
+      attribute, not a class**: React owns `className` on those elements and
+      rewrites it on every re-render, and a node drag re-renders the canvas every
+      frame — the first version's class vanished before it could be seen
+      (Joseph: "the trash should get bigger and red"). React leaves attributes it
+      did not set alone; verified to survive a re-render. The can answers both
+      protocols (grip `.over`, node-drag attribute) identically: scale 1.4,
+      danger red, glow.
+- [x] **The ghost chip must honour `hidden`.** Its `display: flex` outranked the
+      browser's default `[hidden] { display: none }`, so the chip was never
+      actually hidden — it sat at (0,0) as a stray "≡" box in the title bar and
+      then wherever the last drag ended (Joseph: "a broken node"). Now an explicit
+      `.drag-ghost[hidden] { display: none }`, and it parks off-screen until a
+      drag positions it. Lesson: any element toggled via `hidden` that also has
+      an author `display` needs the `[hidden]` override spelled out.
+- The grip still works for the same drops; "→ timeline" on the toolbar remains
+  the append-to-end shortcut.
+
+### Canvas trash (2026-09-02)
+
+A deleted image could not be brought back — Ctrl+Z did nothing, because delete
+was delete. A generation is paid for or waited for; one keypress must not end
+it.
+
+- [x] **Every delete path lands in the session's trash**: the node toolbar ✕,
+      the Delete/Backspace key (React Flow `remove` changes, captured *before*
+      they are applied), and dropping a node's grip on the can. `Session.trash`,
+      newest first, capped at 50, persisted with the session.
+- [x] **The can** sits bottom-right of the canvas with a count badge; it is a
+      drop target (`application/lyme-node`), and clicking it opens Recently
+      deleted — thumbnail, label, when — with Restore per item and Empty trash
+      behind a two-click confirm.
+- [x] **Ctrl+Z / Cmd+Z on the canvas restores the most recent delete** (ignored
+      while typing in an input). The restored node is focused.
+- Trash forgets the NODE, never the file: assets stay in the store and in
+  Recent generations. Timeline clips of a trashed node leave with it and are
+  not auto-restored.
+
+### Hallucination guard for image generation (2026-09-02)
+
+Prompted by a z-image-turbo render of "a bulldog grinding a rail" that grew a
+second dog's head out of the first one's legs. Joseph's instinct was AI-written
+negative prompts; the templates say otherwise — **every local model runs at
+CFG 1.0, where negatives are ignored** (see comfyui.md). Built instead, all in
+`src/main/generation-guard.ts`, all through the app's OWN LLM provider as a
+single no-tools turn (the Enhance shape — no agent orchestration overhead):
+
+- [x] **Say it in the positive prompt.** Before a generation, a rewrite states
+      subject count, anatomy and framing outright. Automatic for local models
+      (the only channel they read) and for **thin prompts under 60 characters
+      on any connector** — "a dog walking through a park" leaves all of that to
+      chance. The panel's button becomes `✦ Enhance & generate` with an
+      `as typed` escape hatch beside it. The take shows the prompt the model
+      actually saw (`promptUsed`), so nothing is hidden.
+- [x] **Verify and retry, local only.** After a local image, a vision check
+      answers one question — extra limbs/heads, merged or miscounted subjects,
+      wrong fingers — as strict JSON. On a defect the image is regenerated with
+      a new seed (the wrapper randomises per call), up to 2 retries; local
+      renders are free, so this costs only time. Billed connectors are never
+      auto-retried. **Rejected attempts stay in the takes carousel as failed
+      takes with the reason** — a safeguard you cannot see is one you cannot
+      trust.
+- [x] **Honest when it cannot look.** A text-only provider (some Kimi / custom
+      endpoints) fails the vision turn; the result then carries
+      `verification: { checked: false, reason }` instead of a false "clean".
+- [x] The guard's token usage is labelled on the take's note — `· guard tokens $0.011 (plan)` on the
+      login, `· guard $0.011` only under a billing provider — and never added to a dollar total
+      unless it is one (AGENTS.md §1.8).
+- [ ] Threshold and retry count are constants (`src/shared/generation-policy.ts`);
+      promote to settings once real use shows the right numbers.
+- [ ] PAG (`PerturbedAttentionGuidance`, core node) as a per-template toggle —
+      the guidance-side lever for anatomy on distilled models, ~2× sample time.
+
+### ComfyUI survived app close — and now cannot (2026-09-02)
+
+"When I closed Lyme Hype the memory issue didn't stop" — because the kill never
+ran. The wrapper spawned ComfyUI detached and left its pid in `%TEMP%`, which
+Windows virtualizes per launcher: the file was written under one launcher and
+looked for under another. Only one `[cleanup]` line was ever logged, from an
+agent session.
+
+- [x] **Main owns ComfyUI** (`comfyui-host.ts`): starts it at boot as a real
+      child with piped output, adopts orphans of its own by their spawn-flag
+      fingerprint, and kills the process tree on both quit hooks via the child
+      handle, the userData pid file, and the port owner. Three routes, because the
+      one that failed was the only one there was.
+- [x] **Status strip** — one line of terminal context at the foot of the studio:
+      `comfyui · loading z_image_turbo…` from the server's own output, so a 12 GB
+      load in the background is visible instead of silent. The boot splash
+      records where the engine was at the moment the studio opened.
+
+### Memory audit (2026-09-02)
+
+Prompted by a full-system OOM and reboot. Measured, not guessed:
+
+| what | RAM | notes |
+|---|---|---|
+| Studio window with a 9-node session | ~490 MB | main 143 · renderer 142 · gpu 148 · utility 58 |
+| `--mcp` instance (Claude Code keeps it alive all session) | ~225 MB | a full Electron just to serve 14 tools |
+| ComfyUI (spawned by us) at the moment of the OOM | 7.5 GB + 3 parked models | **the actual culprit** |
+| Claude Code itself | ~2.9 GB / 15 procs | not ours |
+
+The app is not the problem: half a gigabyte for an Electron studio with a live
+canvas and multitrack timeline is unremarkable. What ate the machine was
+ComfyUI's default of parking every model it has used in system RAM (flux 16 GB +
+z-image 12 + krea2 13 = 40 GB on a 32 GB box).
+
+- [x] **ComfyUI: one model, in VRAM.** `--highvram --cache-none` at spawn, and
+      `/api/free` on every checkpoint switch (`resources/comfyui-mcp.cjs`).
+- [x] **Media-role picker decoded full-size originals** — one `<img>` of the
+      2K–4K source per canvas node, plus `<video>` tiles at Chromium's default
+      `preload=auto`, buffering every clip the moment the sheet opened. Now the
+      256px companion and `preload="none"` with a poster.
+- [x] Already right, confirmed: canvas nodes use the 256px thumbnail (commit
+      1664c00); the asset protocol streams instead of buffering; the Cut Room
+      monitor mounts only the clips under the playhead, not the whole timeline;
+      every SDK generation clears its timeout in `finally`; connector test
+      children are tree-killed (`taskkill /T`).
+- [ ] The `--mcp` instance is ~225 MB of Electron for a tool server. Fine for
+      now; if it matters, `--mcp` mode could skip the GPU process
+      (`app.disableHardwareAcceleration()` before ready) since it never opens a
+      window.
+- [ ] VRAM is a non-issue today: 1.4 GB used of 24 at idle, and one image model
+      is 12–16 GB. It becomes one only if two models are ever wanted resident.
+
+### Launching a stale build (2026-08-31)
+
+A fix can look like it did not work because `electron .` runs whatever is
+already in `out/` — a window opened before a rebuild keeps the OLD renderer AND
+the old main process, and Vite HMR never touches main. This cost a full session:
+a thumbnail bug was chased that had already been fixed in a build the open
+window had never loaded. Three defences, so it cannot happen quietly again:
+
+- [x] **The Start-menu shortcut builds when it needs to.** It now runs
+      `scripts/launch.ps1`, which compares the newest mtime under `src/`,
+      `resources/`, `electron.vite.config.ts` and `package.json` against
+      `out/main/index.js`, rebuilds only if something is newer, then launches.
+      Measured: unchanged repo launches in 3.6s with no build; a touched source
+      file rebuilds first. A failed build falls through to the last good `out/`
+      with a warning rather than leaving no app at all.
+      (ASCII + BOM: PowerShell 5.1 reads an unmarked `.ps1` as ANSI, and an em
+      dash in a comment is a parser error.)
+- [x] **The app states which build it is.** `electron.vite.config.ts` stamps
+      compile time + short commit into main (`__BUILD_STAMP__` →
+      `src/main/build-info.ts`), surfaced in `system:status` and printed on the
+      boot line: `ready  studio online · build 2026-08-31 15:18 · 1664c00`.
+      Local time deliberately — a UTC stamp reading 22:16 beside a 15:16 clock
+      recreates the exact confusion it exists to end.
+- [x] **The app notices when it is behind.** `sourceIsNewerThanBuild()` walks
+      the same watched paths at boot; when source is newer the boot line reads
+      `STALE BUILD (…) — source has changed since; run npm start`. Packaged
+      builds have no source tree, so they are never flagged.
+- `npm start` (build-then-launch) remains for terminal launches; `npm run dev`
+  for HMR; `npm run app` / `electron .` deliberately still launch what exists.
+
+### Canvas media on restore (2026-08-31)
+
+"On boot the thumbnails and content in the canvas are partially missing"
+(Joseph). Nothing was lost — every asset and thumbnail was on disk and valid.
+Two separate causes:
+
+- [x] **Video nodes had no poster frame.** Clips saved before posters existed
+      carry no `thumbSrc`, and the `<video preload="metadata">` fallback loads
+      metadata WITHOUT decoding a frame, so `#t=0.5` had nothing to paint — a
+      blank node over perfectly good media. Fixed both ends: the fallback now
+      uses `preload="auto"`, and `media:ensure-thumb` (`ensureThumbForUrl()`)
+      backfills a real ffmpeg poster on load, cached on disk, so it costs
+      nothing from the second boot on. Deliberately not awaited by `init()`.
+- [x] **A cancelled thumbnail never retried.** `lyme-asset://` requests get
+      cancelled when a node re-renders mid-flight — and boot does exactly that,
+      mounting the canvas, rescuing takes and backfilling thumbs in quick
+      succession. A cancelled `<img>` shows the broken glyph permanently since
+      the browser never retries. `AssetImg` retries once with a cache-busting
+      suffix (ignored by the handler, which resolves on pathname alone).
+- [x] **404s are no longer silent** — the protocol handler warns, so "the canvas
+      lost my media" is diagnosable next time instead of invisible.
+
+Verified: fresh boot renders all five nodes including both video posters, zero
+broken images, zero 404s.
+
+### Startup takeover (2026-08-31)
+
+A standardized boot experience, so the studio is never handed over half-booted
+(Joseph): `BootSplash` covers the app until `init()` genuinely finishes.
+
+- [x] **`system:status` IPC** — ffmpeg source, workspace path, ready connector
+      ids, project count. The splash reports facts, not a fake progress bar.
+- [x] **Real steps** — `init()` pushes `bootSteps` as each stage lands (media
+      engine → workspace → sessions restored → connectors → ready). On this
+      machine they all land inside ~200ms, so the splash holds a **1500ms
+      minimum beat**: readable without ever claiming work that hasn't happened.
+- [x] **One status line, bottom right** — the current step only, not a log
+      (Joseph, 2026-08-31). The brand animation owns the center.
+- [x] **Owns its own exit** — the component stays mounted through the `.done`
+      fade and unmounts itself ~650ms later. Unmounting on `booted` (the first
+      version) made the fade dead code; leaving it mounted forever would have
+      swallowed every click, since the takeover sits above the whole app.
+
+Verified live over CDP: splash present through boot with all five real lines,
+`.done` at ~1.6s, gone by ~2.4s.
 
 ## Phase 24 — Hamburger menu + real keyboard accelerators
 
@@ -344,6 +720,286 @@ No `build` config and no electron-builder exist yet. Beyond adding them, four th
 - [ ] Agent auth: generation currently rides *this machine's* Claude Code login. Another machine
       has none, and needs its own.
 
+# Part four — every connector alive (2026-08-29) ← CURRENT FOCUS
+
+The tooling layer landed 2026-08-29 (see `tooling/`): live feature tests
+(`src/main/utils/*_test.ts`), the app as an MCP server (`--mcp` + bridge, 14 tools), Claude
+Code skills, and headless credential import. Joseph's direction: **wire and live-test every
+connector through this layer, in the current UI, before building production mode** — the
+product vision (`product/vision.md`: channels, pipeline, analytics) waits until generation
+is fully proven.
+
+Order: **images → video → the rest.**
+
+- [x] **Image** — gemini + muapi verified live, side by side (2026-08-29). **Full Gemini
+      param surface exposed the same day** (wrapper → GenerationParams → utils → MCP tools →
+      model-conditional UI chips): per-call model, real `imageConfig` aspect (10 values,
+      live-verified 16:9→1376×768) + size tiers, thinking_level, typed object/character/
+      style refs; skills now interview for blanks. Remaining: OpenAI Images (needs
+      `OPENAI_API_KEY` import), Krea, fal image paths; live-run typed refs + thinking_level.
+- [ ] **Video** — text-to-video (per connector: gemini/Veo, muapi, fal), frame-conditioned
+      render, extend. All built, none live-run.
+- [ ] **Audio** — ElevenLabs voices/tts/sfx live-run; music and clone gated runs.
+- [ ] **Motion graphics** — reference-conditioned gen + alpha key live-run (alpha-key half
+      is free and self-tested; the billed half isn't).
+- [ ] **LoRA training** — needs a real training-image set from Joseph.
+- [ ] **Deepfake/lipsync** — needs a real talking-head clip from Joseph.
+- [ ] **ChatRealty** — needs the token entered (vault or `.env.local`).
+- [x] Fix the dead `canUseTool` spend-tool backstop in `generation.ts` — DONE 2026-08-30,
+      live-verified. `allowedTools` removed (bare server entries shadowed the callback,
+      per the SDK's own warning); every call now falls through to a strict gate:
+      ToolSearch allowed by name (loads attached servers' schemas), `mcp__*` allowed only
+      from THIS RUN'S attached servers (a live run had seen a claude.ai-connected server
+      leak in from the operator's session and get waved through), spend/credential regex
+      now actually executes, `disallowedTools` kept as the second layer.
+
+### Part four-C — ComfyUI local engine: the $0 image tier (planned 2026-08-30)
+
+Reference (install facts, API, model research, the distro decision):
+[connectors/reference/comfyui.md](connectors/reference/comfyui.md). Decision already
+closed: attach-or-spawn Joseph's existing source install (`X:\_ai\comfy\ComfyUI`,
+v0.34.0, system Python 3.12.7 + nightly torch cu130 + sage attention) — never bundle a
+runtime for personal use (the ffmpeg precedent, AGENTS.md §7); a portable
+`python_embeded` bundle is distribution-time work if the app ever ships to a machine
+without ComfyUI.
+
+- [x] **C1 — wrapper `resources/comfyui-mcp.cjs`** — built + LIVE-VERIFIED 2026-08-30
+      (full pipeline pass: harness → agent → wrapper → 3090 → asset store, $0). See the
+      reference doc's new gotchas for what the live pass surfaced (dep-skew rule,
+      `--disable-all-custom-nodes` spawn, legacy-history polling, 10-min timeout).
+      Original spec: **C1 — wrapper.** Dependency-free stdio MCP, same
+      pattern as gemini-mcp.cjs. Env: `COMFYUI_URL` (default `http://127.0.0.1:8188`),
+      `COMFYUI_PATH` + `COMFYUI_PYTHON` for spawn-if-down (health check
+      `/api/system_stats`; spawn with cwd = repo root, then poll health). Tools:
+      `comfy_generate_image(prompt, model, aspect_ratio?, width/height?, steps?, seed?)`
+      and `comfy_list_models` (which workflow templates are runnable — weights present).
+      Flow per call: load workflow template → patch prompt/dims/seed → `POST /api/prompt`
+      → poll `/api/history_v2/{id}` → `GET /api/view` → temp file → `RESULT_FILE:`.
+      Single-flight queue (one GPU); distinguish "loading model" from "generating" in
+      logs. Done when: selftest smoke-tests the wrapper's MCP protocol like the other two
+      bundled wrappers.
+- [~] **C2 — workflow templates `resources/workflows/*.json`** (API-format graphs +
+      `_meta` patch-point blocks): `flux1-schnell` built + verified; still open:
+      `z-image-turbo`, `krea2-turbo-fp8`, `qwen-image-2.0`. Each template records its required weight
+      files; the wrapper checks presence under the install's `models/` and returns a
+      RESULT_ERROR naming the missing downloads instead of a cryptic node failure.
+- [~] **C3 — connector + catalog wiring.** DONE: catalog entry (`authType: 'none'`,
+      machine-default env), secretless `LYME_IMPORT_CONNECTOR` install path, selftest
+      wrapper smoke row, `comfyui:flux1-schnell` in model-catalog with aspect+steps
+      params, `steps` plumbed end to end (GenerationParams → prompt → utils → MCP tool →
+      UI chip). Open: capability-map row, catalog.md routing note, entries for the three
+      not-yet-downloaded models. Original spec: **connector + catalog wiring.** `connector-suggestions.ts` entry id `comfyui`
+      (stdio, `authType: 'none'` — the first free connector; env carries url/path/python),
+      capability-map row, `model-catalog.ts` entries (`comfyui:z-image-turbo` etc.,
+      "$0 · local" notes, per-model `params` incl. steps), routing note in
+      `connectors/catalog.md`: free local tier leads storyboard-volume work ahead of
+      nano banana 1. Utils/MCP tools/skills need NO changes — comfyui is just another
+      connector with `model` choices (the 2026-08-29 param plumbing pays off here).
+- [ ] **C4 — live verification.** `LYME_TEST=image LYME_TEST_CONNECTOR=comfyui` against
+      flux1-schnell first ($0, no download), then the three recommended models after
+      their weights land; record real 3090 timings in the reference doc; check the UI
+      pills render the comfyui models with their param surfaces.
+- [ ] **C5 — weight download flow.** Guided, not automatic: the connector card lists the
+      three downloads (~6–25GB each) with target dirs and HF links; presence check turns
+      each model pill from "needs weights" to ready. (`extra_model_paths.yaml` stays an
+      option if Lyme-managed weights ever need their own tree.)
+- [ ] **C6 — bundled engines (committed goal, built at packaging time).** Joseph's
+      direction (2026-08-30): the shipped app — the Mac build especially — must NOT
+      require installing ComfyUI or ffmpeg separately. Architecture is resolution order,
+      the `resolveFfmpeg()` pattern generalized: **existing install first (env/config
+      path), bundled runtime as fallback.** On this Windows rig the existing source
+      install always wins (nightly torch + source-built sage attention beat any pinned
+      bundle *on this machine* — that's all "don't bundle for personal use" ever meant);
+      a fresh machine gets the bundle. Per-platform runtimes: Windows = ComfyUI portable
+      (`python_embeded`), macOS = Python + venv with torch-MPS (no CUDA on Apple
+      Silicon — a different torch build regardless, so bundles are per-platform by
+      necessity). ffmpeg: bundled LGPL build as fallback per AGENTS.md §7. Model weights
+      are never bundled (6–25GB each) — the C5 download flow serves both cases.
+- [ ] **C7 — the muapi tool families beyond raw generation** (probed live 2026-08-30 —
+      full schemas in `userData/connector-tools/muapi.json`; Joseph: "we need all of
+      these features"). Each is a small build because the connector + agent + gate
+      already exist:
+      - [ ] **Suno music node** (`muapi_audio_create`: prompt/title/tags/
+            make_instrumental, ~$0.09/full song with vocals) — its OWN node per Joseph;
+            plus `muapi_audio_from_text` SFX. A second audio provider beside ElevenLabs.
+      - [ ] **Enhance family** — `muapi_enhance_upscale` and `muapi_enhance_bg_remove`
+            back the image toolbar's greyed upscale/remove-bg tools;
+            `muapi_enhance_face_swap` (source/target/mode) is the Deepfake node's
+            face-swap stage ("one model, muapi" — confirmed live); `muapi_enhance_ghibli`
+            style transfer.
+      - [ ] **Lipsync engines** — `muapi_edit_lipsync` (9 engines, default `sync`):
+            the Deepfake lane without Yapper.
+      - [ ] **Auto-clipping** — `muapi_edit_clipping` (video_url/num_highlights/
+            aspect_ratio): long-form → shorts highlights; a production-mode repurposing
+            gem.
+      - [ ] muapi workflows (create/execute/status) — parked until a use case demands
+            them.
+- [ ] **C8 — later.** The Wan 2.1/2.2 fleet already on disk as the free VIDEO tier
+      (Joseph ruled out local video for GPU load — revisit only if that changes);
+      Krea 2 Raw as a local LoRA-training backend for Trained Styles; deeper reference
+      workflows (Krea 2 native refs / Z-Image Omni — need extra weights and per-model
+      graphs). **img2img landed 2026-08-30 and is live-verified**:
+      comfy_generate_image takes reference_image_path + strength (→ KSampler denoise —
+      1 ≈ ignore, 0.6 default, 0.3 ≈ close variation), the wrapper uploads the reference
+      via /api/upload/image and swaps the empty latent for LoadImage→ImageScale→VAEEncode
+      per the template's _meta.i2i block; all three local models carry it, the model enum
+      now rides the tool schema (fixes the agent's phantom-unavailable flake), and the
+      panel's REFS uploads flow straight through. (2026-08-30 earlier: REFS square accepts
+      direct uploads, not just canvas picks.)
+
+Then: **Part five (unwritten) — production mode**, sequenced from `product/vision.md`
+(channel store + memory files, publishing port + approval state machine, scheduler service,
+pipeline orchestrator, analytics).
+
 ## Cross-cutting, ongoing
 
 Update the relevant spec doc in the same change that implements it. Decisions made mid-build belong back in the `architecture/`, `connectors/`, or `ui/` docs, not just in code — that's how this project's planning has worked so far, and drifting from it is exactly how README's Status section went stale once already.
+
+### Generation was dead: `spawn ENAMETOOLONG` (2026-08-31)
+
+Every generation call failed instantly — before any network request — once the
+fifth connector was installed. `buildMcpServers` gave each stdio connector a full
+copy of `process.env` (~7 KB each; the comment above it explains why: without
+`PATH` the child cannot resolve `node`/`npx`). The SDK carries that map to its
+subprocess, and Windows caps a command line at 32,767 characters. Four connectors
+≈ 28 KB and worked; five ≈ 35 KB and did not.
+
+- [x] `inheritedChildEnv()` passes only what a child genuinely needs — interpreter
+      path, temp dir, Windows system roots — instead of the whole environment.
+      Config dropped to ~28 KB across four attached connectors and generation
+      works again (verified live: image, then Veo).
+- [x] The size is logged with a plain warning when it approaches the ceiling, so
+      the next time this bites it says so instead of failing as `ENAMETOOLONG`.
+- [ ] Still tight: `PATH` alone is ~2.5 KB per connector. If more connectors get
+      installed, trim harder or pass the config by file rather than argv.
+
+Proven end-to-end the same session (all four wizard stages; connector charges: one Gemini
+image ≈ $0.07 list, one Veo fast 8 s ≈ $0.90 list — the "$1.12" first reported was the SDK's
+token figure, plan consumption, not a bill):
+reference-free logo image → locally drawn black start frame → Veo 3.1 fast
+start→end interpolation (8 s, forced by `lastFrame`) → alpha key. **The keying
+comparison settled 28.1's first item empirically:** `colorkey` punched holes
+through the dark half of the logo's gradient; `lumakey` kept the letters solid.
+
+## Phase 28 — Motion graphics ON the timeline: overlays, watermarks, transitions
+
+Provenance: the JBooks Creative tutorial (transcript re-reviewed 2026-08-31; first
+reviewed 2026-08-08, which is where `MotionGraphicsWizard` came from). Re-reading it
+against the code, **the authoring half is built** — references → agent-authored prompt
+variations → batch grid → pick → start/end-frame Veo → alpha key → optional perfect
+loop. What does not exist is the half Joseph named: *applying* those graphics to the
+timeline and to clips, and transitions of any kind.
+
+### What already ships (do not rebuild)
+
+| Tutorial step | Where it lives |
+|---|---|
+| 4–5 references in | wizard stage `refs` |
+| Prompt variations from references (vision → text) | stage `variations`, via `conversations.ts` |
+| Batch generate + compare grid | stage `batch` + `BatchResultsGrid` |
+| Solid-colour start frame | drawn locally on a `<canvas>` — no generation call |
+| Start-frame → end-frame reveal | `gemini_generate_video` `start_frame_path`/`end_frame_path` (Veo forces 8 s for `lastFrame`) |
+| Perfect loop (first frame == last frame) | wizard `loop` flag → `gfx_loop` |
+| Key the black out, keep alpha | `keyAlpha` → `colorkey` → VP9/WebM `yuva420p` |
+| Alpha survives export | `ffmpeg.ts` decodes VP9 alpha with `libvpx-vp9` |
+
+### Driving the wizard through its own UI (2026-08-31; connector charges ≈ 5 Gemini images + 1 Veo fast 8 s at list)
+
+Ran all six stages by hand in the app rather than through the MCP tools. It works
+end to end and the output is good. What the run exposed:
+
+- [ ] **The animate stage defaults to full Veo 3.1 — $0.40/s, so $3.20 for the
+      mandatory 8 s.** That is the most expensive option, silently selected, on
+      the stage users iterate most. Default to `fast` (~$0.10-0.12/s) and let
+      `default` be the deliberate choice for a hero render.
+- [ ] **Cost is logged as prose, not data.** `GenerationRecord.note` carries
+      `"via gemini · $0.240"` — and that figure was the SDK's TOKEN cost, plan
+      consumption on the login, not what Gemini charged. The app has no field for
+      either number. Fixed 2026-09-02 for the token half: notes now read
+      `tokens $0.240 (plan)` or `$0.240` under a billing provider, and `costUsd`
+      is null unless it is a bill. Still missing: the connector's own charge,
+      which only the catalog price can estimate (AGENTS.md §1.8).
+- [ ] **Agent orchestration dominates small jobs.** The four batch images billed
+      $0.207-$0.355 each against a ~$0.067 list price for the image itself,
+      because every one goes through a tool-choosing agent turn. Worth a direct
+      path for batch stages, where the connector and model are already decided.
+- [ ] **Tell the prompt author to keep type in frame.** One variation came back
+      "filling the frame edge to edge" and both its images cropped the letters
+      off both sides. A one-line constraint in the variations instruction fixes it.
+- [ ] **Placing the result is a bare drag** onto Video 2, from a small grip, on a
+      canvas that has just re-laid itself out after six new nodes. Attempting it
+      grabbed the wrong node. Concrete evidence for 28.2's apply-to-clip button.
+
+Worked exactly as designed: the reference pick, the feedback→revise loop on the
+prompt variations, the 2×2 grid, the reference-reinforced final pass, the solid
+start frame drawn locally for free (50 KB, no generation call), the 2-second beat
+prompt pre-filled, and the alpha node rendering see-through on the canvas.
+
+### 28.1 — Fidelity gaps against the transcript (small, do first)
+
+- [ ] **Luma key, not just colour key.** The tutorial keys black with a *luma* key.
+      `buildAlphaKeyArgs` only does `colorkey`, which cuts on colour distance and
+      chews the soft edges that glow and gradients are made of — exactly the case
+      here, since these logos are gradient-on-black. Add `lumakey` as a mode and
+      default to it when the plate is black; keep `colorkey` for green plates.
+- [ ] **Glow pass.** The tutorial's "Deep Glow" is an After Effects plugin. A close
+      ffmpeg approximation is a blurred copy screened back over the original
+      (`split`, `gblur`, `blend=screen`) — cosmetic, cheap, and it makes keyed logos
+      read the way the reference does. Optional toggle, off by default.
+- [ ] **Batch size configurable.** v1 fixed 2 variations × 2 images = 4 (a deliberate
+      cost decision). The tutorial runs 4 × 4 = 16. Make it a control, not a constant,
+      and show the projected spend before firing.
+- [ ] **Confirm the animate prompt is time-segmented.** The tutorial's Veo prompter
+      emits 2-second beats. The wizard's placeholder shows that shape; the agent
+      instruction should require it rather than merely suggest it.
+
+### 28.2 — Graphics as timeline objects (the actual gap)
+
+Dropping a generated overlay onto Video 2 already works. What is missing is that the
+overlay has no *relationship* to what it sits over — it is just another clip at a
+time offset.
+
+- [ ] **`overlay` role on a timeline clip** — `attachedTo?: clipId`, `anchor:
+      'start' | 'end' | 'span' | 'cut'`. An anchored overlay moves and retrims WITH
+      its base clip instead of drifting the moment the base is nudged. This is the
+      difference between "a graphic that happens to be there" and "the lower-third
+      that belongs to this shot".
+- [ ] **Watermark track** — one clip marked `persistent`, looped for the whole
+      timeline duration, excluded from ripple. The tutorial's whole bonus section
+      exists to produce this; the app can currently make the asset but has nowhere
+      to say "this rides on top of everything".
+- [ ] **Apply-to-clip affordance** on the canvas node toolbar and the Cut Room clip
+      menu: `→ overlay on selected clip`, `→ watermark whole timeline`. Placement
+      today is drag-only, which is fine for one and tedious for many.
+
+### 28.3 — Transitions
+
+Two mechanisms, deliberately both, because they answer different needs:
+
+- [ ] **Generated transitions (build first).** An alpha animation centred on a cut,
+      on the track above. Needs no new export machinery — the overlay+alpha path
+      already carries it — so this is mostly authoring plus placement. Same wizard,
+      a different intent: start frame = last frame of clip A, end frame = first frame
+      of clip B, which is precisely what start/end-frame conditioning is for and a
+      capability the app already has wired.
+- [ ] **Deterministic transitions (build second).** `xfade`/`acrossfade` between two
+      adjacent clips on one track. Frame-accurate, free, instant. This is the real
+      engineering: the export graph positions clips on a shared canvas and composites,
+      whereas `xfade` needs the two inputs *overlapped and consumed in sequence*, so
+      each track becomes a concat-with-offsets chain before it reaches the overlay
+      stage. Do not fold this into 28.2 — it changes the graph builder.
+- [ ] **A transition is an object, not two trimmed clips.** `TimelineTransition
+      { id, trackId, betweenClipIds: [a, b], kind, durationSec, source: 'xfade' | assetId }`
+      so it can be retimed, swapped, or replaced without re-cutting the clips.
+
+### 28.4 — Reuse: a graphics library
+
+- [ ] **Save a generated graphic as a reusable asset** (name, tags, alpha file,
+      loop flag, native duration), stored in the workspace beside projects so it is
+      available to every project — the same shape as Trained Styles. The tutorial's
+      closing line is that you can make "hundreds or thousands of these"; that is only
+      true if they outlive the project that made them.
+- [ ] **Moodboard in-app (open question).** The 2026-08-08 decision was that mood
+      boarding happens outside the app (`cosmos.so`) and Lyme Hype starts once
+      references are in hand. Worth revisiting only if reference-gathering turns out
+      to be the friction in practice.

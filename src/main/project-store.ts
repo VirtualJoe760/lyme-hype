@@ -27,6 +27,22 @@ import { activeProjectDir, setActiveProjectDir, workspaceRoot } from './workspac
  */
 
 const PROJECT_FILE = 'project.json'
+const PROJECT_EXT = '.lymeproj.json'
+
+/** The project file inside a folder. New projects are written as
+ *  `<slug>.lymeproj.json` so the name is legible in Explorer and in any file
+ *  picker — a folder full of identical `project.json` files told the user
+ *  nothing (2026-08-31). Legacy `project.json` is still read. */
+function projectFileIn(dir: string): string | null {
+  try {
+    const named = readdirSync(dir).find((f) => f.endsWith(PROJECT_EXT))
+    if (named) return join(dir, named)
+  } catch {
+    return null
+  }
+  const legacy = join(dir, PROJECT_FILE)
+  return existsSync(legacy) ? legacy : null
+}
 
 interface ProjectFile {
   version: 1
@@ -62,7 +78,9 @@ export function projectAssetsDir(projectDir: string): string {
 
 export function readProject(projectDir: string): ProjectFile | null {
   try {
-    const parsed = JSON.parse(readFileSync(join(projectDir, PROJECT_FILE), 'utf-8'))
+    const file = projectFileIn(projectDir)
+    if (!file) return null
+    const parsed = JSON.parse(readFileSync(file, 'utf-8'))
     if (parsed?.version === 1 && parsed.session) return parsed as ProjectFile
     return null
   } catch {
@@ -72,7 +90,9 @@ export function readProject(projectDir: string): ProjectFile | null {
 
 export function writeProject(projectDir: string, session: Session): void {
   mkdirSync(projectDir, { recursive: true })
-  const file = join(projectDir, PROJECT_FILE)
+  // Keep writing to whatever file the folder already uses (so legacy projects
+  // stay one file, not two); new folders get the self-describing name.
+  const file = projectFileIn(projectDir) ?? join(projectDir, `${slugify(session.name)}${PROJECT_EXT}`)
   const tmp = `${file}.tmp`
   const payload: ProjectFile = { version: 1, session, savedAt: new Date().toISOString() }
   writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf-8')
@@ -108,6 +128,17 @@ export function listProjects(): ProjectSummary[] {
     })
   }
   return out.sort((a, b) => (a.savedAt < b.savedAt ? 1 : -1))
+}
+
+/** Save a session to its own project folder — updating the one it came from
+ *  when it has one, so closing the same session twice doesn't clone it. */
+export function saveProject(session: Session): string {
+  const existing = session.projectDir
+  if (existing && existsSync(existing)) {
+    writeProject(existing, session)
+    return existing
+  }
+  return createProject(session)
 }
 
 export function createProject(session: Session): string {

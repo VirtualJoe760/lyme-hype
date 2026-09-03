@@ -135,6 +135,34 @@ const CATALOG: CatalogEntry[] = [
     })
   },
   {
+    id: 'comfyui',
+    name: 'ComfyUI (local)',
+    blurb: 'Free image generation on your own GPU via a local ComfyUI install — $0 per image, no key.',
+    category: 'image',
+    keyPageUrl: 'https://github.com/comfyanonymous/ComfyUI',
+    available: true,
+    note: 'Attaches to a running ComfyUI (or spawns yours) via the bundled comfyui-mcp.cjs wrapper. Workflows in resources/workflows.',
+    template: () => ({
+      id: 'comfyui',
+      name: 'ComfyUI (local)',
+      kind: 'stdio',
+      command: 'node',
+      args: [join(app.getAppPath(), 'resources', 'comfyui-mcp.cjs')],
+      authType: 'none',
+      secretFieldLabel: '',
+      // Machine-specific defaults (same precedent as ChatRealty's LOCAL_DIST):
+      // Joseph's install — docs/connectors/reference/comfyui.md. Editable via
+      // the connector's env once a settings surface exists; the bundled-runtime
+      // fallback is Part four-C C6 (distribution).
+      env: {
+        COMFYUI_URL: 'http://127.0.0.1:8188',
+        COMFYUI_PATH: 'X:\\_ai\\comfy\\ComfyUI',
+        COMFYUI_PYTHON: 'F:\\python12\\python.exe'
+      },
+      docUrl: 'https://github.com/comfyanonymous/ComfyUI'
+    })
+  },
+  {
     id: 'openai',
     name: 'OpenAI Images',
     blurb: 'gpt-image-1 via our bundled wrapper — the second storyboard-tier image option alongside Gemini.',

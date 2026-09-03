@@ -78,7 +78,7 @@ Hosted MCP differs: docs describe 19 tools — the generation/enhance/edit/predi
 
 Live catalog: **591 models**, enumerable without auth at `GET https://api.muapi.ai/api/v1/models` (name, description, USD cost, `dynamic_pricing` flag, endpoint, per-model `/estimate-cost` endpoint) [verified 2026-08-09]. Category counts: Text-to-Video 99, Image-to-Video 157, Text-to-Image 68, Image-to-Image 69, Video-to-Video 69, Text-to-Audio 17, Audio-to-Video 13, 3D 8, Training 12, LoRA Support 13, Text-to-Text 44, other/tools 22.
 
-MCP tool enums use short aliases (`seedance-2`, `veo3.1`, `kling-master`); the CLI maps them onto the REST endpoints below. Listed costs are the live base price per generation (dynamic ones scale with duration/resolution). Cost tiers: $ <0.10 · $$ 0.10–0.50 · $$$ 0.50–1.50 · $$$$ >1.50.
+MCP tool enums use short aliases (`seedance-2`, `veo3.1`, `kling-master`); the CLI maps them onto the REST endpoints below. **The authoritative enum lists live in `userData/connector-tools/muapi.json`** (recorded by `LYME_PROBE_CONNECTOR=muapi`, 2026-08-30): `muapi_video_generate` = 64 models (default `kling-master` — the EXPENSIVE tier), `muapi_video_from_image` = 82 (default `kling-std`), `muapi_edit_lipsync` = 9 engines (default `sync`). Aliases are hyphenated throughout — `seedance-2`, `seedance-2-fast`, `seedance-2-vip`; there is NO `seedance-2-mini` alias in the MCP enum (an earlier agent-reported "closest match" `seedance_2_0_mini` was wrong — 2.0 Mini is REST-only). Trust the recorded schema, not agent paraphrase. Listed costs are the live base price per generation (dynamic ones scale with duration/resolution). Cost tiers: $ <0.10 · $$ 0.10–0.50 · $$$ 0.50–1.50 · $$$$ >1.50.
 
 ### Seedance (ByteDance) — [verified, live catalog]
 
@@ -186,6 +186,20 @@ Also reachable: 3D (meshy, tripo3d, hunyuan), whisper STT, gemini-tts, LLM passt
 ## Gotchas
 
 - **Three different auth carriages**: REST = `x-api-key` header; hosted MCP = `Authorization: Bearer`; stdio MCP = `MUAPI_API_KEY` env [verified]. Wiring the wrong one gives 401s that look like a bad key.
+- **`muapi_video_from_image` breaks on Seedance V1 models specifically** [verified live +
+  docs 2026-08-30]: `seedance-pro-fast` and `seedance-lite` i2v both fail with the server
+  demanding `"image_url Field required"` while the CLI submits `images_list`. Root cause
+  is muapi-cli's per-model payload mapping: muapi's own docs show the **Seedance 2.x**
+  i2v endpoints (`seedance-v2.0-i2v`, 2.5) take `images_list`, while the older V1
+  endpoints take `image_url` — the CLI apparently reuses the 2.x-style builder for V1
+  models. NOT a Lyme Hype issue: the identical call path passes with `kling-std`
+  (upload → hosted URL → image_url arg → dwarf animated, $0.26). The Seedance 2 family
+  (`seedance_2_0_mini` — underscores) is a valid enum id but **plan-gated**: Higgsfield
+  rejects with "account requires basic plan or higher" on this account [verified live
+  2026-08-30]. Practical i2v rule on the current account: **kling-*** (verified working)
+  or Veo via gemini; Seedance V1 i2v is upstream-broken via MCP, Seedance 2 i2v needs a
+  muapi plan upgrade. V1 t2v stays fine and cheapest. The CLI ships as a compiled binary
+  (npm tarball is an installer), so the payload fix belongs upstream.
 - **The MCP video tools cannot do end-frame conditioning.** `muapi_video_from_image` takes exactly one `image_url`, yet its model enum lists first-last-frame models (`seedance-2-flf`, `vidu-q2-start-end`, `vidu-q3-flf`). Start+end-frame, multi-reference (`@image1…@image9`, `<<<image_N>>>`), and omni-reference generation are **REST-only** — the 25 MCP tools have no parameters for them [verified, live schema]. Route frame-conditioned work to the Gemini connector or call muapi REST directly.
 - MCP tools also expose **no resolution parameter** — resolution is chosen by model variant (`…-480p`, `…-1080p`, `…-4k`), not an argument [verified].
 - **docs/mcp is stale vs the shipped CLI**: it claims `muapi_social_*` publishing tools (stdio) and `search_models`; live 0.2.7 has neither — it ships six `muapi_workflow_*` tools the docs page doesn't mention [verified 2026-08-09].
@@ -193,6 +207,16 @@ Also reachable: 3D (meshy, tripo3d, hunyuan), whisper STT, gemini-tts, LLM passt
 - **Seedance 2.5 "1080p"/"4K" are upscales of a native 720p render**, at 2.5–5× the 720p price — the catalog says so itself. Native 1080p exists on Seedance 2 VIP; native 4K on Seedance 2 VIP and Kling 3.0 4K [verified].
 - Midjourney here is generation-only: 4 images per run, reference guidance via `source_image_url` — **no upscale/variation/pan/describe job control** exists in the catalog [verified].
 - "Spicy" Seedance tiers advertise *reduced content-safety filtering* — treat outputs accordingly [verified, catalog descriptions].
+- **Chinese-native prompting (2026-08-30):** Seedance/Seedream, Kling, Wan, MiniMax/Hailuo,
+  Vidu, PixVerse are Chinese-origin and follow Chinese prompts better. Lyme Hype's
+  generation agent auto-translates the prompt into Simplified Chinese for these families
+  (`promptLanguageFor()` in `model-catalog.ts` — catalog tag + family-pattern fallback)
+  and reports back in English. Users always write English. **BUT muapi-cli rejects any
+  non-ASCII prompt** (UTF-8 surrogate encoding error, verified live 2026-08-30) — so via
+  the MCP connector the Chinese prompt bounces and the agent falls back to English (one
+  retry, built into the generation brief). Chinese prompting works fully on connectors
+  whose transport is UTF-8-clean (the local comfyui wrapper included); for muapi it's
+  blocked upstream until the CLI fixes its encoding.
 - Sora 2 i2v **rejects realistic human portraits** (launch policy) — use objects/scenes/stylized characters [verified, catalog description].
 - Some flagship-looking entries are third-party relays, e.g. Kling v3 Omni is "Apimart-backed" [verified, catalog description]. Vendor identity generally: muapi is operated by SamurAIGPT/Vadoo (GitHub `SamurAIGPT/muapi-cli`, enterprise contact support@vadoo.tv) — not by any model lab.
 - Face swap **does exist** (`muapi_enhance_face_swap`, image and video modes) despite the docs index not advertising it [verified, live schema].

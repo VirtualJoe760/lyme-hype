@@ -1,6 +1,9 @@
+import { spawnSync } from 'node:child_process'
+import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
+  createReadStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -8,8 +11,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { extname, join, normalize } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { app, nativeImage, net, protocol } from 'electron'
+import { resolveFfmpeg } from './ffmpeg'
 import type { MediaType } from '@shared/types'
 import { activeProjectDir } from './workspace'
 
@@ -109,11 +112,82 @@ export function registerAssetProtocol(): void {
       return new Response('Not found', { status: 404 })
     }
     const filePath = resolveAssetFile(name)
-    if (!filePath) return new Response('Not found', { status: 404 })
-    // net.fetch on a file URL streams with range support — needed for <video>
-    // seeking — and infers Content-Type from the extension.
-    return net.fetch(pathToFileURL(filePath).href)
+    if (!filePath) {
+      // Silent 404s here look like "the canvas lost my media", so name every
+      // path that was actually tried — a 404 for a file that plainly exists is
+      // otherwise unfalsifiable.
+      const project = activeProjectDir()
+      console.warn(
+        `[assets] 404 ${name}
+` +
+          `         url=${request.url}
+` +
+          `         project=${project ? join(project, 'assets', name) : '(none open)'}
+` +
+          `         legacy=${join(app.getPath('userData'), 'assets', name)}`
+      )
+      return new Response('Not found', { status: 404 })
+    }
+
+    // net.fetch on a file URL looked right but returned no Content-Length and no
+    // range support, so Chromium could not demux an mp4 at all — every video
+    // failed with MEDIA_ELEMENT_ERROR code 4 (verified 2026-08-31), which is why
+    // clips rendered as blank nodes and would not play. Media needs
+    // Accept-Ranges + Content-Length, and 206 for seeks. Streamed, not buffered,
+    // so a long clip never sits in memory.
+    const size = statSync(filePath).size
+    const type = ASSET_MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream'
+    const match = /bytes=(\d*)-(\d*)/.exec(request.headers.get('Range') ?? '')
+
+    if (match) {
+      const start = match[1] ? Number(match[1]) : 0
+      const end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1
+      if (Number.isNaN(start) || start > end || start >= size) {
+        return new Response('Range not satisfiable', {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${size}` }
+        })
+      }
+      return new Response(
+        Readable.toWeb(createReadStream(filePath, { start, end })) as unknown as ReadableStream,
+        {
+          status: 206,
+          headers: {
+            'Content-Type': type,
+            'Content-Length': String(end - start + 1),
+            'Content-Range': `bytes ${start}-${end}/${size}`,
+            'Accept-Ranges': 'bytes'
+          }
+        }
+      )
+    }
+
+    return new Response(Readable.toWeb(createReadStream(filePath)) as unknown as ReadableStream, {
+      status: 200,
+      headers: {
+        'Content-Type': type,
+        'Content-Length': String(size),
+        'Accept-Ranges': 'bytes'
+      }
+    })
   })
+}
+
+const ASSET_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac'
 }
 
 export interface SavedAsset {
@@ -139,7 +213,32 @@ const THUMB_MAX = 256
  * Best-effort by design: a format nativeImage can't read (or a video) just has no thumb,
  * and the node falls back to the original.
  */
+/** Poster frame for a video, via ffmpeg. nativeImage cannot read video, so a
+ *  video node had no thumbnail at all and its <video> painted blank on the
+ *  canvas (2026-08-31). One frame grabbed near the start is enough to make the
+ *  node recognisable without decoding the clip on every render. */
+function writeVideoThumb(sourcePath: string, baseName: string): string | undefined {
+  try {
+    const ffmpeg = resolveFfmpeg()
+    if (!ffmpeg) return undefined
+    const fileName = `thumb_${baseName}.jpg`
+    const out = join(assetsDir(), fileName)
+    const res = spawnSync(
+      ffmpeg.path,
+      // -ss before -i seeks fast; scale keeps the long edge at THUMB_MAX.
+      ['-y', '-ss', '0.5', '-i', sourcePath, '-frames:v', '1',
+       '-vf', `scale='min(${THUMB_MAX},iw)':-2`, '-q:v', '4', out],
+      { timeout: 20_000 }
+    )
+    return res.status === 0 && existsSync(out) ? `${ASSET_SCHEME}://asset/${fileName}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function writeThumb(sourcePath: string, baseName: string): string | undefined {
+  // Video gets a real poster frame; stills go through nativeImage.
+  if (mediaTypeForPath(sourcePath) === 'video') return writeVideoThumb(sourcePath, baseName)
   try {
     const image = nativeImage.createFromPath(sourcePath)
     if (image.isEmpty()) return undefined
@@ -225,6 +324,25 @@ export function assetPathForUrl(url: string): string | null {
   // traversal guard has to survive resolving across two possible directories.
   if (!name || name.includes("/") || name.includes("\\")) return null
   return resolveAssetFile(name)
+}
+
+/**
+ * Backfills a thumbnail for an asset that has none.
+ *
+ * Video nodes saved before poster frames existed carry no `thumbSrc`, and the
+ * `<video preload="metadata">` fallback paints an empty box rather than a frame
+ * — which is what made restored clips look like blank nodes on the canvas
+ * (2026-08-31). Rather than migrate every session file, the canvas asks for a
+ * poster on load and the answer is cached on disk from then on.
+ */
+export function ensureThumbForUrl(url: string): string | null {
+  const filePath = assetPathForUrl(url)
+  if (!filePath) return null
+  const baseName = stripExt(url.split('/').pop() ?? '')
+  if (!baseName) return null
+  const existing = resolveAssetFile(`thumb_${baseName}.jpg`)
+  if (existing) return `${ASSET_SCHEME}://asset/thumb_${baseName}.jpg`
+  return writeThumb(filePath, baseName) ?? null
 }
 
 /** Test helper: confirm a saved asset is readable and non-empty. */

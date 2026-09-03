@@ -86,6 +86,8 @@ export function deleteSecret(connectorId: string): void {
  * Main-process consumers only (Phase 3 will inject decrypted values into MCP
  * connection configs). Never expose over IPC, never log the return value.
  */
+const warnedUndecryptable = new Set<string>()
+
 export function readSecretValue(connectorId: string): string | null {
   const entry = readVault()[connectorId]
   if (!entry) return null
@@ -95,6 +97,17 @@ export function readSecretValue(connectorId: string): string | null {
     // An entry that exists but can't be decrypted (OS keychain/DPAPI changed,
     // different OS user, corrupted ciphertext) reads as "no credential" — the
     // caller then falls back to its unconfigured path rather than crashing.
+    //
+    // Said out loud, once per id: silently equating "cannot decrypt" with "no
+    // key" is why a whole vault adopted from a packaged host's container looked
+    // like an app that had simply never been configured (2026-08-31).
+    if (!warnedUndecryptable.has(connectorId)) {
+      warnedUndecryptable.add(connectorId)
+      console.warn(
+        `[vault] "${connectorId}" has a stored secret that THIS profile cannot decrypt — ` +
+          'it was encrypted by a different OS user or app container. Re-enter it in Settings.'
+      )
+    }
     return null
   }
 }

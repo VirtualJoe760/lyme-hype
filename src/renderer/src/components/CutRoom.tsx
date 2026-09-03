@@ -3,6 +3,24 @@ import type { TimelineClip, TimelineTrack } from '@shared/types'
 import type { MediaFlowNode } from '../store'
 import { probeDuration, useActiveSession, useStudio } from '../store'
 import { Waveform } from './MediaNode'
+import { TimelineToolbar } from './cut-room/TimelineToolbar'
+import { TimelineMonitor, type MonitorZoom } from './cut-room/TimelineMonitor'
+import {
+  FRAME_SEC,
+  HEAD_H,
+  MAX_PPS,
+  MIN_PPS,
+  RULER_H,
+  SNAP_TOLERANCE_PX,
+  TRACK_HEAD_W,
+  clipDur,
+  displayTracks,
+  fmtTime,
+  tickStep,
+  mergedTransform,
+  topVideoClip,
+  trackLive
+} from './cut-room/helpers'
 
 type ExportState =
   | { status: 'idle' }
@@ -11,48 +29,6 @@ type ExportState =
   | { status: 'error'; message: string }
 
 // Wide enough for name + the right-aligned M/S/L group on one row.
-const TRACK_HEAD_W = 150
-const RULER_H = 22
-const HEAD_H = 38
-const SNAP_TOLERANCE_PX = 8
-const MIN_PPS = 4
-const MAX_PPS = 400
-const FRAME_SEC = 1 / 30
-
-function fmtTime(t: number): string {
-  if (!Number.isFinite(t) || t < 0) return '0:00.0'
-  const m = Math.floor(t / 60)
-  const s = t % 60
-  return `${m}:${s.toFixed(1).padStart(4, '0')}`
-}
-
-function clipDur(clip: TimelineClip): number {
-  return Math.max(0.05, clip.trimOut - clip.trimIn)
-}
-
-/** Ruler tick spacing that keeps labels ≥ ~55px apart at the current zoom. */
-function tickStep(pps: number): number {
-  for (const step of [0.5, 1, 2, 5, 10, 30, 60, 120]) {
-    if (step * pps >= 55) return step
-  }
-  return 300
-}
-
-/** Display order: video tracks top (higher order above, NLE-style), audio below. */
-function displayTracks(tracks: TimelineTrack[]): TimelineTrack[] {
-  const video = tracks.filter((t) => t.type === 'video').sort((a, b) => b.order - a.order)
-  const audio = tracks.filter((t) => t.type === 'audio').sort((a, b) => a.order - b.order)
-  return [...video, ...audio]
-}
-
-/** Preview audibility/visibility: mute always wins; when anything is soloed,
- *  only soloed tracks stay live. Preview-only — export never sees solo. */
-function trackLive(track: TimelineTrack, tracks: TimelineTrack[]): boolean {
-  if (track.muted) return false
-  const anySolo = tracks.some((t) => t.soloed)
-  return !anySolo || track.soloed
-}
-
 export function CutRoom(): React.JSX.Element {
   const session = useActiveSession()
   const nodes = useStudio((s) => s.nodes)
@@ -88,7 +64,10 @@ export function CutRoom(): React.JSX.Element {
   const [razor, setRazor] = useState(false)
   const [dragClipId, setDragClipId] = useState<string | null>(null)
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const selectedClip = selectedClipId ? (clips.find((c) => c.id === selectedClipId) ?? null) : null
   const [monitorAspect, setMonitorAspect] = useState<'9:16' | '16:9'>('9:16')
+  const [monitorZoom, setMonitorZoom] = useState<MonitorZoom>('fit')
+  const openPlay = useStudio((s) => s.openPlay)
 
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const rulerRef = useRef<HTMLDivElement | null>(null)
@@ -464,131 +443,47 @@ export function CutRoom(): React.JSX.Element {
       onKeyDown={onTimelineKeyDown}
       onPointerDown={() => containerRef.current?.focus()}
     >
-      <div className="head">
-        <button
-          className="panel-btn"
-          title={collapsed ? 'Expand timeline' : 'Collapse timeline'}
-          onClick={toggleTimeline}
-        >
-          {collapsed ? '⌃' : '⌄'}
-        </button>
-        <span className="cut-title">Cut room — timeline</span>
-        {!collapsed && (
-          <>
-            <button
-              className="conn-mini"
-              title={playing ? 'Pause' : 'Play from playhead'}
-              onClick={() => setPlaying(!playing)}
-            >
-              {playing ? '❚❚' : '▶'}
-            </button>
-            <span className="tl-time">{fmtTime(playhead)}</span>
-            <button
-              className={`conn-mini${magnet ? ' tl-on' : ''}`}
-              title={`Snapping ${magnet ? 'on' : 'off'} (playhead, clip edges, whole seconds)`}
-              onClick={() => setMagnet(!magnet)}
-            >
-              🧲
-            </button>
-            <button
-              className={`conn-mini${razor ? ' tl-on' : ''}`}
-              title="Razor — click a clip to cut it at that point"
-              onClick={() => setRazor(!razor)}
-            >
-              🪒
-            </button>
-            <button className="conn-mini" title="Split clip at playhead on the selected track" onClick={splitAtPlayhead}>
-              ✂
-            </button>
-            <button className="conn-mini" title="Add video track" onClick={() => addTrack('video')}>
-              +V
-            </button>
-            <button className="conn-mini" title="Add audio track" onClick={() => addTrack('audio')}>
-              +A
-            </button>
-            <button className="conn-mini" title="Fit timeline to window (\)" onClick={fitToWindow}>
-              ⤢
-            </button>
-            <button
-              className="conn-mini"
-              title="Monitor aspect — toggle 9:16 / 16:9"
-              onClick={() => setMonitorAspect(monitorAspect === '9:16' ? '16:9' : '9:16')}
-            >
-              {monitorAspect}
-            </button>
-            <input
-              className="tl-height-slider"
-              type="range"
-              min={28}
-              max={96}
-              value={trackRowH}
-              title="Track height"
-              onChange={(e) => setTrackRowH(parseInt(e.target.value, 10))}
-            />
-          </>
-        )}
-        <span className="cut-spacer" />
-        {exp.status === 'ok' && <span className="cut-status ok" title={exp.outPath}>Exported ✓</span>}
-        {exp.status === 'error' && (
-          <span className="cut-status error" title={exp.message}>
-            Export failed
-          </span>
-        )}
-        <button
-          className="conn-mini primary-mini"
-          disabled={clips.length === 0 || exp.status === 'running'}
-          onClick={() => void handleExport()}
-        >
-          {exp.status === 'running' ? 'Exporting…' : '⬇ Export mp4'}
-        </button>
-      </div>
+      <TimelineToolbar
+        collapsed={collapsed}
+        playing={playing}
+        playhead={playhead}
+        magnet={magnet}
+        razor={razor}
+        monitorAspect={monitorAspect}
+        monitorZoom={monitorZoom}
+        setMonitorZoom={setMonitorZoom}
+        clipTransform={selectedClip ? mergedTransform(selectedClip) : null}
+        setClipTransform={(patch) => {
+          if (selectedClip) patchTimelineClip(selectedClip.id, { transform: mergedTransform(selectedClip, patch) })
+        }}
+        trackRowH={trackRowH}
+        clipCount={clips.length}
+        exportStatus={exp.status}
+        exportPath={exp.status === 'ok' ? exp.outPath : undefined}
+        exportMessage={exp.status === 'error' ? exp.message : undefined}
+        toggleTimeline={toggleTimeline}
+        setPlaying={setPlaying}
+        setMagnet={setMagnet}
+        setRazor={setRazor}
+        setMonitorAspect={setMonitorAspect}
+        setTrackRowH={setTrackRowH}
+        splitAtPlayhead={splitAtPlayhead}
+        addTrack={addTrack}
+        fitToWindow={fitToWindow}
+        handleExport={() => void handleExport()}
+      />
 
       {!collapsed && (
         <div className="tl-body">
-          <div
-            className="tl-monitor"
-            style={
-              monitorAspect === '9:16'
-                ? { aspectRatio: '9 / 16', maxWidth: 220 }
-                : { aspectRatio: '16 / 9', maxWidth: 420 }
-            }
-          >
-            {monitorVideo.length === 0 && <span className="tl-monitor-idle">▶</span>}
-            {monitorVideo.map(({ clip }) => {
-              const node = nodeFor(clip)
-              if (!node?.data.src) return null
-              return clip.mediaType === 'image' ? (
-                <img key={clip.id} className="tl-monitor-layer" src={node.data.src} alt="" />
-              ) : (
-                <video
-                  key={clip.id}
-                  className="tl-monitor-layer"
-                  src={node.data.src}
-                  muted={node.data.audioMuted === true}
-                  preload="auto"
-                  ref={(el) => {
-                    if (el) mediaRefs.current.set(clip.id, el)
-                    else mediaRefs.current.delete(clip.id)
-                  }}
-                />
-              )
-            })}
-            {monitorAudio.map(({ clip }) => {
-              const node = nodeFor(clip)
-              if (!node?.data.src) return null
-              return (
-                <audio
-                  key={clip.id}
-                  src={node.data.src}
-                  preload="auto"
-                  ref={(el) => {
-                    if (el) mediaRefs.current.set(clip.id, el)
-                    else mediaRefs.current.delete(clip.id)
-                  }}
-                />
-              )
-            })}
-          </div>
+          <TimelineMonitor
+            monitorAspect={monitorAspect}
+            monitorZoom={monitorZoom}
+            onOpenLarge={() => { const top = topVideoClip(monitorVideo); if (top) openPlay(top.nodeId) }}
+            monitorVideo={monitorVideo}
+            monitorAudio={monitorAudio}
+            nodeFor={nodeFor}
+            mediaRefs={mediaRefs}
+          />
 
           <div className="tl-scroll" ref={scrollRef}>
             <div className="tl-content" style={{ width: contentW }}>

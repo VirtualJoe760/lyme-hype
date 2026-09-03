@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { ProjectSummary } from '@shared/types'
+import { bridge } from '../bridge'
 import { useStudio } from '../store'
 
 export function SessionsRail(): React.JSX.Element {
@@ -7,6 +9,17 @@ export function SessionsRail(): React.JSX.Element {
   const collapsed = useStudio((s) => s.railCollapsed)
   const toggle = useStudio((s) => s.toggleRail)
   const createSession = useStudio((s) => s.createSession)
+  const importSessions = useStudio((s) => s.importSessions)
+  const closeSession = useStudio((s) => s.closeSession)
+  const openProject = useStudio((s) => s.openProject)
+  const [browsing, setBrowsing] = useState(false)
+  const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
+
+  useEffect(() => {
+    if (!browsing) return
+    setProjects(null)
+    void bridge.sessions.listProjects().then((p) => setProjects(p ?? []))
+  }, [browsing])
   const selectSession = useStudio((s) => s.selectSession)
   const renameSession = useStudio((s) => s.renameSession)
   const deleteSession = useStudio((s) => s.deleteSession)
@@ -38,6 +51,15 @@ export function SessionsRail(): React.JSX.Element {
           {!collapsed && (
             <button className="panel-btn" title="New session" onClick={createSession}>
               +
+            </button>
+          )}
+          {!collapsed && (
+            <button
+              className="panel-btn"
+              title="Open a previous session"
+              onClick={() => setBrowsing(true)}
+            >
+              ↺
             </button>
           )}
           <button
@@ -83,8 +105,20 @@ export function SessionsRail(): React.JSX.Element {
                   ✎
                 </button>
                 <button
+                  className="row-btn"
+                  title="Close session — saves it to your workspace folder so you can reopen it with ↺"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void closeSession(session.id).then((err) => {
+                      if (err) window.alert(`Could not close the session: ${err}`)
+                    })
+                  }}
+                >
+                  ⤓
+                </button>
+                <button
                   className="row-btn delete"
-                  title="Delete session"
+                  title="Delete session (permanent)"
                   onClick={(e) => {
                     e.stopPropagation()
                     if (window.confirm(`Delete session "${session.name}"?`)) {
@@ -99,6 +133,67 @@ export function SessionsRail(): React.JSX.Element {
           </div>
         ))}
       </div>
+      {browsing && (
+        <div className="np-modal-overlay" onClick={() => setBrowsing(false)}>
+          <div className="np-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="np-modal-head">
+              <span>Open a project</span>
+              <button className="np-modal-close" onClick={() => setBrowsing(false)}>
+                ✕
+              </button>
+            </div>
+            {projects === null && <div className="np-modal-hint">Reading your workspace…</div>}
+            {projects?.length === 0 && (
+              <div className="np-modal-hint">
+                No saved projects yet. Closing a session with ⤓ saves it here.
+              </div>
+            )}
+            {projects?.map((p) => (
+              <button
+                key={p.dir}
+                className="recover-item"
+                title={p.dir}
+                onClick={() => {
+                  setBrowsing(false)
+                  void openProject(p.dir).then((err) => {
+                    if (err) window.alert(err)
+                  })
+                }}
+              >
+                <span className="recover-meta">
+                  <b>{p.name}</b>
+                  <em>
+                    {new Date(p.savedAt).toLocaleString()} · {p.nodeCount} node
+                    {p.nodeCount === 1 ? '' : 's'}
+                    {p.assetCount > 0
+                      ? ` · ${p.assetCount} asset${p.assetCount === 1 ? '' : 's'} (${Math.round(p.assetBytes / 1048576)} MB)`
+                      : ''}
+                  </em>
+                </span>
+              </button>
+            ))}
+            <button
+              className="np-chip"
+              onClick={() => {
+                setBrowsing(false)
+                void bridge.sessions.openFile().then((r) => {
+                  if (!r) return // cancelled
+                  if (r.error || !r.sessions) {
+                    window.alert(r.error ?? 'Could not read that file.')
+                    return
+                  }
+                  if (importSessions(r.sessions) === 0) {
+                    window.alert('No usable sessions in that file.')
+                  }
+                })
+              }}
+            >
+              Open from a file instead…
+            </button>
+          </div>
+        </div>
+      )}
+
       <button
         className="rail-settings"
         onClick={() => openSettings('connectors')}

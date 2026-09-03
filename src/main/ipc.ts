@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { readFileSync } from 'node:fs'
+import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { IPC } from '@shared/ipc-channels'
 import type {
   ChatRealtyArticleDraftInput,
@@ -11,14 +12,28 @@ import type {
   ModelProviderDef,
   PersistedState,
   SecretRequest,
+  Session,
   TimelineExportSpec
 } from '@shared/types'
-import { assetPathForUrl, importFileAsset, importUrlAsset, mediaTypeForPath, saveImageAsset } from './asset-store'
+import { BUILD_STAMP, sourceIsNewerThanBuild } from './build-info'
+import { comfyState } from './comfyui-host'
+import { setUncommittedCount } from './close-guard'
+import { listGenerations } from './generation-log'
+import { listProjects, readProject, saveProject } from './project-store'
+import { workspaceRoot } from './workspace'
+import {
+  assetPathForUrl,
+  ensureThumbForUrl,
+  importFileAsset,
+  importUrlAsset,
+  mediaTypeForPath,
+  saveImageAsset
+} from './asset-store'
 import { runAgentPrompt } from './agent'
 import { runConversationTurn, runImproveShotPrompt, runShotBreakdown } from './conversations'
 import { cloneVoice, composeMusic, previewVoice, searchVoices, soundEffects, textToSpeech } from './elevenlabs-tools'
 import { listYapperVoices, synthesizeYapperSpeech } from './yapper-rest'
-import { exportTimeline } from './ffmpeg'
+import { exportTimeline, resolveFfmpeg } from './ffmpeg'
 import {
   deleteTrainedStyle,
   listTrainedStyles,
@@ -64,6 +79,8 @@ let handlersRegistered = false
 // over a destroyed window. Handlers still register exactly once — re-running
 // ipcMain.handle for the same channel throws.
 let mainWindow: BrowserWindow | null = null
+/** session id → project folder already logged, so autosave stays quiet. */
+const announcedProjects = new Map<string, string>()
 
 function isMainSender(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): boolean {
   return (
@@ -88,7 +105,115 @@ export function registerIpc(window: BrowserWindow): void {
   })
   ipcMain.on(IPC.windowClose, (e) => BrowserWindow.fromWebContents(e.sender)?.close())
 
-  ipcMain.handle(IPC.sessionsLoad, (e) => (isMainSender(e) ? loadState() : null))
+  ipcMain.handle(IPC.sessionsLoad, (e) => {
+    // Logged permanently: persistence has failed twice now (a harness clobber,
+    // then a load that came back empty), and "what did the main process actually
+    // hand the renderer at boot" is the one fact that settles it either way.
+    if (!isMainSender(e)) {
+      console.error('[sessions] load REFUSED — sender is not the main window')
+      return null
+    }
+    const state = loadState()
+    console.log(
+      `[sessions] load → ${state.sessions.length} session(s) from ${app.getPath('userData')}` +
+        `${state.sessions.length ? `: ${state.sessions.map((s) => s.name).join(', ')}` : ' (empty/unreadable)'}`
+    )
+    return state
+  })
+  // Open sessions from a store/backup file on disk (a previous sessions.json, a
+  // backup snapshot, later a Phase 23 project.json) — returns the sessions for
+  // the renderer to import; nothing is written here.
+  ipcMain.handle(IPC.sessionsOpenFile, async (e) => {
+    if (!isMainSender(e)) return null
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) return null
+    const picked = await dialog.showOpenDialog(win, {
+      title: 'Open a session',
+      // The workspace folder is where closed sessions live (Documents\Lyme Hype),
+      // so the picker lands among the user's own projects rather than in the
+      // app-data folder full of Electron internals.
+      defaultPath: workspaceRoot(),
+      filters: [{ name: 'Lyme Hype sessions', extensions: ['json'] }],
+      properties: ['openFile']
+    })
+    if (picked.canceled || picked.filePaths.length === 0) return null
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(picked.filePaths[0], 'utf-8'))
+      const asRecord = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+      const sessions = Array.isArray(parsed)
+        ? parsed
+        : // a project.json — one session, the Phase 23 shape
+          asRecord?.['session']
+          ? [asRecord['session']]
+          : // a sessions.json / backup — many
+            Array.isArray(asRecord?.['sessions'])
+            ? (asRecord['sessions'] as unknown[])
+            : null
+      if (!sessions || sessions.length === 0) {
+        return { sessions: null, error: 'No sessions found in that file.' }
+      }
+      return { sessions, error: null }
+    } catch (error) {
+      return { sessions: null, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  // Every finished generation, newest first — the recovery path for results
+  // whose renderer died before they landed (and for MCP-driven generations,
+  // which never had a canvas node to begin with).
+  ipcMain.handle(IPC.generationsRecent, (e) => (isMainSender(e) ? listGenerations() : null))
+
+  // Staged (uncommitted) take count, pushed by the renderer — read by the
+  // close guard so quitting can't quietly strand paid renders.
+  ipcMain.on(IPC.stagesCount, (e, count: number) => {
+    if (isMainSender(e)) setUncommittedCount(count)
+  })
+
+  // Boot facts for the startup console: what the app can actually do on this
+  // machine, checked rather than assumed.
+  ipcMain.handle(IPC.systemStatus, (e) => {
+    if (!isMainSender(e)) return null
+    const ffmpeg = resolveFfmpeg()
+    return {
+      ffmpeg: ffmpeg ? `${ffmpeg.source}` : null,
+      workspace: workspaceRoot(),
+      connectors: listConnectors().length,
+      projects: listProjects().length,
+      build: BUILD_STAMP,
+      stale: sourceIsNewerThanBuild()
+    }
+  })
+
+  // The user's own projects, for the in-app picker — no filesystem hunting.
+  ipcMain.handle(IPC.projectsList, (e) => (isMainSender(e) ? listProjects() : null))
+
+  // Open one project folder → its session, tagged with the folder it came from
+  // so a later close updates that same project.
+  ipcMain.handle(IPC.projectOpen, (e, dir: string) => {
+    if (!isMainSender(e)) return null
+    const project = readProject(dir)
+    if (!project) return { session: null, error: 'No readable project in that folder.' }
+    return { session: { ...project.session, projectDir: dir }, error: null }
+  })
+
+  // Closing a session saves it to the workspace as a project folder
+  // (Documents\Lyme Hype\<name>\project.json) so the file picker above can
+  // bring it back later. Nothing is deleted; the rail just stops showing it.
+  ipcMain.handle(IPC.sessionsCloseToProject, (e, session: Session) => {
+    if (!isMainSender(e)) return null
+    try {
+      const dir = saveProject(session)
+      // Sessions autosave to their project on every persist — announce a folder
+      // once rather than narrating every keystroke.
+      if (announcedProjects.get(session.id) !== dir) {
+        announcedProjects.set(session.id, dir)
+        console.log(`[projects] "${session.name}" → ${dir}`)
+      }
+      return { ok: true, dir, error: null }
+    } catch (error) {
+      return { ok: false, dir: null, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
   ipcMain.handle(IPC.sessionsSave, (e, state: PersistedState) => {
     if (!isMainSender(e)) return
     saveState(state)
@@ -154,6 +279,13 @@ export function registerIpc(window: BrowserWindow): void {
     const filePath = result.filePaths[0]
     const name = filePath.split(/[\\/]/).pop() ?? filePath
     return { name, path: filePath }
+  })
+
+  ipcMain.handle(IPC.comfyStatus, (e) => (isMainSender(e) ? comfyState() : null))
+
+  ipcMain.handle(IPC.mediaEnsureThumb, (e, assetUrl: string) => {
+    if (!isMainSender(e)) return null
+    return typeof assetUrl === 'string' ? ensureThumbForUrl(assetUrl) : null
   })
 
   ipcMain.handle(IPC.mediaImport, async (e, kind: string) => {

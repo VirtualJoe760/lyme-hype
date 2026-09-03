@@ -30,7 +30,14 @@ const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 // recommended successor, so it's tried first with 2.5 as an automatic
 // fallback in case the GA id differs.
 const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image'
+// Per-call choices (docs/connectors/reference/gemini.md "Models"): NB2 (default),
+// Lite (cheapest, 1K-only, object refs only), Pro (premium composition).
+const IMAGE_MODELS = ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image']
+// Fallback chain for id churn: the -preview id variant, then legacy 2.5
+// (which shuts down 2026-10-02 — drop it from this chain then).
 const IMAGE_MODEL_FALLBACK = 'gemini-2.5-flash-image'
+const IMAGE_ASPECTS = ['1:1', '3:2', '2:3', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9']
+const IMAGE_SIZES = ['0.5K', '1K', '2K', '4K']
 const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || 'veo-3.1-generate-preview'
 // The 3.1 family, callable per-request: lite is ~8x cheaper ($0.05/s vs
 // $0.40/s), 720p-only, and still supports frame interpolation — the right
@@ -95,29 +102,62 @@ function frameImage(path) {
   return { bytesBase64Encoded: readFileSync(path).toString('base64'), mimeType }
 }
 
+function refArray(value, cap) {
+  return Array.isArray(value) ? value.filter(Boolean).slice(0, cap) : []
+}
+
 async function generateImage(args) {
   const prompt = String(args.prompt || '').trim()
   if (!prompt) throw new Error('prompt is required')
-  // Reference-conditioned generation: image parts ride alongside the text
-  // (Nano Banana composes/edits from input images natively; the current guide
-  // says up to 3 input images work best — extras are dropped).
-  const refs = Array.isArray(args.reference_image_paths)
-    ? args.reference_image_paths.filter(Boolean).slice(0, MAX_REFERENCE_IMAGES)
-    : []
-  const requestParts = refs.map(inlineImagePart)
-  requestParts.push({ text: prompt })
+  const model = IMAGE_MODELS.includes(args.model) ? args.model : IMAGE_MODEL
+
+  // Typed reference images. generateContent has no structured reference-type
+  // field (that's Interactions-API territory) — the working pattern is inline
+  // image parts plus a text preamble telling the model each image's role.
+  // Caps per docs/connectors/reference/gemini.md: NB2 10 object + 4 character
+  // + 3 style; the flat legacy param counts as object refs.
+  const objectRefs = [...refArray(args.reference_image_paths, MAX_REFERENCE_IMAGES), ...refArray(args.object_reference_paths, MAX_REFERENCE_IMAGES)].slice(0, MAX_REFERENCE_IMAGES)
+  const characterRefs = refArray(args.character_reference_paths, 4)
+  const styleRefs = refArray(args.style_reference_paths, 3)
+  const allRefs = [...objectRefs, ...characterRefs, ...styleRefs]
+
+  const roleLines = []
+  let index = 1
+  if (objectRefs.length) {
+    roleLines.push(`Images ${index}-${index + objectRefs.length - 1} are OBJECT references: include/compose these subjects.`)
+    index += objectRefs.length
+  }
+  if (characterRefs.length) {
+    roleLines.push(`Images ${index}-${index + characterRefs.length - 1} are CHARACTER references: preserve this exact person's likeness and identity.`)
+    index += characterRefs.length
+  }
+  if (styleRefs.length) {
+    roleLines.push(`Images ${index}-${index + styleRefs.length - 1} are STYLE references: match their visual style, palette and rendering, not their content.`)
+  }
+
+  const requestParts = allRefs.map(inlineImagePart)
+  requestParts.push({ text: roleLines.length ? `${roleLines.join('\n')}\n\n${prompt}` : prompt })
+
+  const generationConfig = {}
+  const imageConfig = {}
+  if (IMAGE_ASPECTS.includes(args.aspect_ratio)) imageConfig.aspectRatio = args.aspect_ratio
+  if (IMAGE_SIZES.includes(args.image_size)) imageConfig.imageSize = args.image_size
+  if (Object.keys(imageConfig).length > 0) generationConfig.imageConfig = imageConfig
+  // Gemini 3.1 Flash Image only; other models reject it, so send selectively.
+  if ((args.thinking_level === 'minimal' || args.thinking_level === 'high') && model === 'gemini-3.1-flash-image') {
+    generationConfig.thinkingLevel = args.thinking_level
+  }
+  const body = { contents: [{ parts: requestParts }] }
+  if (Object.keys(generationConfig).length > 0) body.generationConfig = generationConfig
+
   let resp
   try {
-    resp = await api(`models/${IMAGE_MODEL}:generateContent`, {
-      contents: [{ parts: requestParts }]
-    })
+    resp = await api(`models/${model}:generateContent`, body)
   } catch (err) {
     // Model-id churn guard: if the preferred id isn't recognized on this
     // account yet, fall back to the still-live legacy model.
-    if (/404|not found|is not supported/i.test(String(err && err.message)) && IMAGE_MODEL !== IMAGE_MODEL_FALLBACK) {
-      resp = await api(`models/${IMAGE_MODEL_FALLBACK}:generateContent`, {
-        contents: [{ parts: requestParts }]
-      })
+    if (/404|not found|is not supported/i.test(String(err && err.message)) && model !== IMAGE_MODEL_FALLBACK) {
+      resp = await api(`models/${IMAGE_MODEL_FALLBACK}:generateContent`, body)
     } else {
       throw err
     }
@@ -145,11 +185,33 @@ async function generateVideo(args) {
   // Motion graphics reveal/loop mechanism.
   if (args.start_frame_path) instance.image = frameImage(String(args.start_frame_path))
   if (args.end_frame_path) instance.lastFrame = frameImage(String(args.end_frame_path))
+  // Style/asset reference images (≤3; standard + fast models only): keep a
+  // subject's appearance consistent across shots.
+  const videoRefs = refArray(args.reference_image_paths, 3)
+  if (videoRefs.length) {
+    if (model === 'veo-3.1-lite-generate-preview') {
+      throw new Error('referenceImages are not supported on veo-3.1-lite-generate-preview — use the default or fast model.')
+    }
+    const referenceType = args.reference_type === 'style' ? 'style' : 'asset'
+    instance.referenceImages = videoRefs.map((p) => ({ image: frameImage(String(p)), referenceType }))
+  }
   const body = { instances: [instance] }
   const parameters = {}
   if (args.aspectRatio) parameters.aspectRatio = String(args.aspectRatio)
-  // lastFrame interpolation requires an 8-second duration per current docs.
-  if (instance.lastFrame) parameters.durationSeconds = 8
+  if (['720p', '1080p', '4k'].includes(args.resolution)) {
+    if (args.resolution === '4k' && model === 'veo-3.1-lite-generate-preview') {
+      throw new Error('4k is not supported on veo-3.1-lite-generate-preview.')
+    }
+    parameters.resolution = args.resolution
+  }
+  if ([4, 6, 8].includes(Number(args.duration_seconds))) parameters.durationSeconds = Number(args.duration_seconds)
+  // 8 s is mandatory for lastFrame interpolation, referenceImages, and >720p.
+  if (instance.lastFrame || instance.referenceImages || (parameters.resolution && parameters.resolution !== '720p')) {
+    parameters.durationSeconds = 8
+  }
+  if (['allow_all', 'allow_adult'].includes(args.person_generation)) {
+    parameters.personGeneration = args.person_generation
+  }
   if (Object.keys(parameters).length > 0) body.parameters = parameters
   const op = await api(`models/${model}:predictLongRunning`, body)
   if (!op.name) throw new Error('No operation returned for video generation')
@@ -242,11 +304,23 @@ const TOOLS = [
       type: 'object',
       properties: {
         prompt: { type: 'string', description: 'What to draw' },
+        model: {
+          type: 'string',
+          enum: IMAGE_MODELS,
+          description:
+            'Image model (optional). gemini-3.1-flash-image = default all-rounder; -lite- = fastest/cheapest, 1K only, object refs only; gemini-3-pro-image = premium composition/reasoning.'
+        },
+        aspect_ratio: { type: 'string', enum: IMAGE_ASPECTS, description: 'Output aspect ratio (optional; a real API field, not prompt text)' },
+        image_size: { type: 'string', enum: IMAGE_SIZES, description: 'Output resolution tier (optional): 0.5K draft (3.1-flash only) → 4K (not on lite). Price scales with size.' },
+        thinking_level: { type: 'string', enum: ['minimal', 'high'], description: 'Composition reasoning depth (gemini-3.1-flash-image only, optional)' },
         reference_image_paths: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Absolute paths of reference images to condition on (optional)'
-        }
+          description: 'Absolute paths of reference images to condition on — treated as object references (optional)'
+        },
+        object_reference_paths: { type: 'array', items: { type: 'string' }, description: 'OBJECT refs — subjects/things to include (≤10, optional)' },
+        character_reference_paths: { type: 'array', items: { type: 'string' }, description: "CHARACTER refs — preserve this exact person's likeness (≤4; not on lite; optional)" },
+        style_reference_paths: { type: 'array', items: { type: 'string' }, description: 'STYLE refs — match visual style, not content (≤3; 3.1-flash only; optional)' }
       },
       required: ['prompt']
     }
@@ -266,7 +340,16 @@ const TOOLS = [
           description: 'Veo variant (optional). lite is ~8x cheaper (720p) and still supports start/end-frame interpolation — prefer it for overlays/reveals.'
         },
         start_frame_path: { type: 'string', description: 'Absolute path of the first-frame image (optional)' },
-        end_frame_path: { type: 'string', description: 'Absolute path of the last-frame image (optional)' }
+        end_frame_path: { type: 'string', description: 'Absolute path of the last-frame image (optional)' },
+        reference_image_paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Absolute paths of ≤3 reference images to keep subject appearance consistent (standard/fast models only; forces 8 s; optional)'
+        },
+        reference_type: { type: 'string', enum: ['asset', 'style'], description: 'How the reference images apply (default asset = subject consistency; style = visual style)' },
+        resolution: { type: 'string', enum: ['720p', '1080p', '4k'], description: '720p default; 1080p/4k force 8 s; 4k not on lite and bills higher (optional)' },
+        duration_seconds: { type: 'number', enum: [4, 6, 8], description: 'Clip length (optional; 8 forced for interpolation/refs/hi-res)' },
+        person_generation: { type: 'string', enum: ['allow_all', 'allow_adult'], description: 'People policy (optional): text-to-video allows allow_all; image-conditioned modes only allow_adult' }
       },
       required: ['prompt']
     }
